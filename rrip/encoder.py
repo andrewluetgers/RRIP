@@ -133,7 +133,10 @@ class RRIPEncoder:
         """Quantize and compress residuals based on quality setting."""
         # Quality-based quantization
         # Higher quality = less quantization = more detail preserved
-        quantization_step = max(1, int(101 - self.quality) // 2)
+        # Quality 100: step=1 (minimal quantization)
+        # Quality 50: step=25 (moderate quantization)
+        # Quality 0: step=50 (high quantization)
+        quantization_step = self._calculate_quantization_step(self.quality)
         
         # Quantize residuals
         quantized = (residuals / quantization_step).astype(np.int8)
@@ -147,6 +150,20 @@ class RRIPEncoder:
             'dtype': str(quantized.dtype),
             'shape': residuals.shape
         }
+    
+    def _calculate_quantization_step(self, quality):
+        """
+        Calculate quantization step based on quality setting.
+        
+        Args:
+            quality: Quality value 0-100
+            
+        Returns:
+            int: Quantization step size (1-50)
+        """
+        # Maps quality 0-100 to quantization step 50-1
+        # Linear mapping: higher quality = smaller step = less quantization
+        return max(1, int(101 - quality) // 2)
     
     def encode_image(self, image, tile_size=256):
         """

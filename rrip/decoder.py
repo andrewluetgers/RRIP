@@ -51,34 +51,37 @@ class RRIPDecoder:
         
         return Image.fromarray(reconstructed)
     
+    def _get_resample_method(self, interpolation):
+        """
+        Get PIL resample method from interpolation string.
+        
+        Args:
+            interpolation: Interpolation method string
+            
+        Returns:
+            PIL resample constant
+        """
+        resample_map = {
+            'bicubic': Image.BICUBIC,
+            'bilinear': Image.BILINEAR,
+            'nearest': Image.NEAREST
+        }
+        return resample_map.get(interpolation, Image.BICUBIC)
+    
     def _interpolate_prior(self, prior, target_shape, interpolation):
         """Interpolate prior to target resolution."""
+        resample = self._get_resample_method(interpolation)
+        
         if len(target_shape) == 3:
             # RGB image
             h, w, c = target_shape
             img = Image.fromarray(prior)
-            
-            if interpolation == 'bicubic':
-                resample = Image.BICUBIC
-            elif interpolation == 'bilinear':
-                resample = Image.BILINEAR
-            else:
-                resample = Image.NEAREST
-                
             img_large = img.resize((w, h), resample)
             return np.array(img_large)
         else:
             # Grayscale image
             h, w = target_shape
             img = Image.fromarray(prior)
-            
-            if interpolation == 'bicubic':
-                resample = Image.BICUBIC
-            elif interpolation == 'bilinear':
-                resample = Image.BILINEAR
-            else:
-                resample = Image.NEAREST
-                
             img_large = img.resize((w, h), resample)
             return np.array(img_large)
     
