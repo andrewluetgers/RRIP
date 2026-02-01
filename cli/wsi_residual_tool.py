@@ -1,0 +1,254 @@
+\
+#!/usr/bin/env python3
+"""
+wsi_residual_tool.py
+
+Build a DeepZoom pyramid with pyvips, then encode luma residual JPEGs for the two highest-res levels (L0/L1)
+conditioned on covering L2 tiles. Keeps all levels L2+ unchanged.
+
+Example:
+  python wsi_residual_tool.py build --slide /path/to/slide.svs --out out --tile 256 --q 90
+  python wsi_residual_tool.py encode --pyramid out/baseline_pyramid --out out --tile 256 --resq 32 --max-parents 200
+  python wsi_residual_tool.py pack --residuals out/residuals_q32 --out out/residual_packs
+
+Requires:
+  pip install pyvips Pillow numpy scikit-image requests tqdm openslide-python
+and system libs:
+  libvips (+ openslide support), openslide
+"""
+import argparse, pathlib, shutil, re, json, random, math
+import numpy as np
+from PIL import Image
+
+def import_pyvips():
+    import pyvips
+    return pyvips
+
+def dzsave(slide_path: str, out_prefix: pathlib.Path, tile_size=256, q=90):
+    pyvips = import_pyvips()
+    img = pyvips.Image.openslideload(slide_path) if hasattr(pyvips.Image, "openslideload") else pyvips.Image.new_from_file(slide_path, access="sequential")
+    # cleanup
+    for p in [out_prefix.with_suffix(".dzi"), out_prefix.parent / (out_prefix.name + "_files")]:
+        if p.exists():
+            if p.is_dir(): shutil.rmtree(p)
+            else: p.unlink()
+    img.dzsave(str(out_prefix), tile_size=tile_size, overlap=0, suffix=f".jpg[Q={q}]", depth="onepixel", layout="dz")
+
+def parse_levels(files_dir: pathlib.Path):
+    levels = sorted([int(p.name) for p in files_dir.iterdir() if p.is_dir()])
+    max_level = max(levels)
+    return levels, max_level, max_level, max_level-1, max_level-2  # L0,L1,L2 in DZ numbering
+
+def tile_path(files_dir: pathlib.Path, level:int, x:int, y:int):
+    return files_dir / str(level) / f"{x}_{y}.jpg"
+
+def load_rgb(p: pathlib.Path):
+    return np.array(Image.open(p).convert("RGB"))
+
+def save_gray_jpeg(arr_u8: np.ndarray, p: pathlib.Path, q:int):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(arr_u8.astype(np.uint8), mode="L").save(p, format="JPEG", quality=int(q), optimize=True)
+
+def rgb_to_ycbcr_bt601(rgb_u8):
+    rgb = rgb_u8.astype(np.float32)
+    R,G,B = rgb[...,0], rgb[...,1], rgb[...,2]
+    Y  = 0.299*R + 0.587*G + 0.114*B
+    Cb = -0.168736*R - 0.331264*G + 0.5*B + 128.0
+    Cr = 0.5*R - 0.418688*G - 0.081312*B + 128.0
+    return Y, Cb, Cr
+
+def ycbcr_to_rgb_bt601(Y, Cb, Cr):
+    Y = Y.astype(np.float32)
+    Cb = Cb.astype(np.float32) - 128.0
+    Cr = Cr.astype(np.float32) - 128.0
+    R = Y + 1.402*Cr
+    G = Y - 0.344136*Cb - 0.714136*Cr
+    B = Y + 1.772*Cb
+    return np.clip(np.stack([R,G,B], axis=-1), 0, 255).astype(np.uint8)
+
+def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, resq=32, max_parents=None, sample_prob=0.0):
+    files_dir = pyramid_prefix.parent / (pyramid_prefix.name + "_files")
+    levels, max_level, L0, L1, L2 = parse_levels(files_dir)
+    if max_level < 2:
+        raise ValueError("Need at least 3 DeepZoom levels (L0/L1/L2). Rebuild with depth='onepixel' or 'onetile'.")
+    out_res = out_dir / f"residuals_q{resq}"
+    if out_res.exists(): shutil.rmtree(out_res)
+    out_res.mkdir(parents=True, exist_ok=True)
+
+    baseline_bytes = sum(f.stat().st_size for lv in levels for f in (files_dir/str(lv)).glob("*.jpg"))
+    retained_bytes = sum(f.stat().st_size for lv in levels if lv <= L2 for f in (files_dir/str(lv)).glob("*.jpg"))
+
+    l2_tiles=[]
+    for f in (files_dir/str(L2)).glob("*.jpg"):
+        m=re.match(r"(\d+)_(\d+)\.jpg$", f.name)
+        if m: l2_tiles.append((int(m.group(1)), int(m.group(2))))
+    if max_parents:
+        random.shuffle(l2_tiles)
+        l2_tiles = l2_tiles[:max_parents]
+
+    UPSAMPLE = Image.Resampling.BILINEAR
+    residual_bytes_L1=0
+    residual_bytes_L0=0
+
+    for (x2,y2) in l2_tiles:
+        p2=tile_path(files_dir, L2, x2, y2)
+        if not p2.exists(): continue
+        l2=load_rgb(p2)
+        l1_pred = np.array(Image.fromarray(l2).resize((tile_size*2, tile_size*2), resample=UPSAMPLE))
+        recon_l1=[[None,None],[None,None]]
+        for dy in range(2):
+            for dx in range(2):
+                x1=x2*2+dx; y1=y2*2+dy
+                p1=tile_path(files_dir, L1, x1, y1)
+                if not p1.exists(): continue
+                gt=load_rgb(p1)
+                pred=l1_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
+                Yg,_,_=rgb_to_ycbcr_bt601(gt)
+                Yp,Cbp,Crp=rgb_to_ycbcr_bt601(pred)
+                Ry=Yg-Yp
+                enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
+                rp=out_res/"L1"/f"{x2}_{y2}"/f"{x1}_{y1}.jpg"
+                save_gray_jpeg(enc,rp,resq)
+                residual_bytes_L1 += rp.stat().st_size
+                r_dec=np.array(Image.open(rp).convert("L")).astype(np.float32)-128.0
+                Yhat=np.clip(Yp+r_dec,0,255)
+                recon_l1[dy][dx]=ycbcr_to_rgb_bt601(Yhat,Cbp,Crp)
+        if any(recon_l1[dy][dx] is None for dy in range(2) for dx in range(2)):
+            continue
+        l1_mosaic=np.concatenate([np.concatenate(row,axis=1) for row in recon_l1], axis=0)
+        l0_pred=np.array(Image.fromarray(l1_mosaic).resize((tile_size*4,tile_size*4), resample=UPSAMPLE))
+        for dy in range(4):
+            for dx in range(4):
+                x0=x2*4+dx; y0=y2*4+dy
+                p0=tile_path(files_dir, L0, x0, y0)
+                if not p0.exists(): continue
+                gt=load_rgb(p0)
+                pred=l0_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
+                Yg,_,_=rgb_to_ycbcr_bt601(gt)
+                Yp,Cbp,Crp=rgb_to_ycbcr_bt601(pred)
+                Ry=Yg-Yp
+                enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
+                rp=out_res/"L0"/f"{x2}_{y2}"/f"{x0}_{y0}.jpg"
+                save_gray_jpeg(enc,rp,resq)
+                residual_bytes_L0 += rp.stat().st_size
+
+    proposed_bytes = retained_bytes + residual_bytes_L1 + residual_bytes_L0
+    summary = {
+        "tile_size": tile_size,
+        "residual_jpeg_q_L": resq,
+        "dz_levels": {"L0": L0, "L1": L1, "L2": L2},
+        "baseline_bytes_all_levels": baseline_bytes,
+        "retained_bytes_L2plus": retained_bytes,
+        "residual_bytes_L1": residual_bytes_L1,
+        "residual_bytes_L0": residual_bytes_L0,
+        "proposed_bytes": proposed_bytes,
+        "compression_ratio": baseline_bytes/proposed_bytes,
+        "savings_pct": (1-proposed_bytes/baseline_bytes)*100.0
+    }
+    (out_dir/"summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+
+def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
+    out_dir.mkdir(parents=True, exist_ok=True)
+    l1_dir = residuals_dir / "L1"
+    l0_dir = residuals_dir / "L0"
+    if not l1_dir.exists() or not l0_dir.exists():
+        raise FileNotFoundError("Expected residuals/L1 and residuals/L0 directories")
+
+    parents = sorted({p.name for p in l1_dir.iterdir() if p.is_dir()} | {p.name for p in l0_dir.iterdir() if p.is_dir()})
+    magic = b"RRIP"
+    version = 1
+    tile_size = 256
+
+    for parent in parents:
+        try:
+            x2, y2 = [int(v) for v in parent.split("_")]
+        except Exception as exc:
+            raise ValueError(f"Invalid parent folder name: {parent}") from exc
+        l1_parent = l1_dir / parent
+        l0_parent = l0_dir / parent
+        entries = []
+
+        # L1: 4 entries
+        for dy in range(2):
+            for dx in range(2):
+                x1 = x2 * 2 + dx
+                y1 = y2 * 2 + dy
+                p = l1_parent / f"{x1}_{y1}.jpg"
+                if p.exists():
+                    entries.append((1, dy * 2 + dx, p.read_bytes()))
+
+        # L0: 16 entries
+        for dy in range(4):
+            for dx in range(4):
+                x0 = x2 * 4 + dx
+                y0 = y2 * 4 + dy
+                p = l0_parent / f"{x0}_{y0}.jpg"
+                if p.exists():
+                    entries.append((0, dy * 4 + dx, p.read_bytes()))
+
+        if not entries:
+            continue
+
+        index_offset = 24
+        entry_size = 16
+        index_size = len(entries) * entry_size
+        data_offset = index_offset + index_size
+        data = b"".join([e[2] for e in entries])
+
+        header = [
+            magic,
+            version.to_bytes(2, "little"),
+            tile_size.to_bytes(2, "little"),
+            len(entries).to_bytes(4, "little"),
+            index_offset.to_bytes(4, "little"),
+            data_offset.to_bytes(4, "little"),
+            (0).to_bytes(4, "little"),
+        ]
+
+        index = []
+        cursor = 0
+        for level_kind, idx, blob in entries:
+            index.append(bytes([level_kind, idx, 0, 0]))
+            index.append(cursor.to_bytes(4, "little"))
+            index.append(len(blob).to_bytes(4, "little"))
+            index.append((0).to_bytes(4, "little"))
+            cursor += len(blob)
+
+        out_path = out_dir / f"{parent}.pack"
+        out_path.write_bytes(b"".join(header) + b"".join(index) + data)
+
+def main():
+    ap=argparse.ArgumentParser()
+    sp=ap.add_subparsers(dest="cmd", required=True)
+
+    ap_b=sp.add_parser("build")
+    ap_b.add_argument("--slide", required=True)
+    ap_b.add_argument("--out", required=True)
+    ap_b.add_argument("--tile", type=int, default=256)
+    ap_b.add_argument("--q", type=int, default=90)
+
+    ap_e=sp.add_parser("encode")
+    ap_e.add_argument("--pyramid", required=True, help="Path prefix (without _files) e.g. out/baseline_pyramid")
+    ap_e.add_argument("--out", required=True)
+    ap_e.add_argument("--tile", type=int, default=256)
+    ap_e.add_argument("--resq", type=int, default=32)
+    ap_e.add_argument("--max-parents", type=int, default=200)
+
+    ap_p=sp.add_parser("pack")
+    ap_p.add_argument("--residuals", required=True, help="Path to residuals_qXX folder")
+    ap_p.add_argument("--out", required=True, help="Output folder for packfiles")
+
+    args=ap.parse_args()
+    out=pathlib.Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    if args.cmd=="build":
+        dzsave(args.slide, out/"baseline_pyramid", tile_size=args.tile, q=args.q)
+    elif args.cmd=="encode":
+        encode(pathlib.Path(args.pyramid), out, tile_size=args.tile, resq=args.resq, max_parents=args.max_parents)
+    elif args.cmd=="pack":
+        pack_residuals(pathlib.Path(args.residuals), pathlib.Path(args.out))
+
+if __name__=="__main__":
+    main()

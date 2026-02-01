@@ -1,0 +1,7 @@
+pyvips
+Pillow
+numpy
+scikit-image
+openslide-python
+requests
+tqdm

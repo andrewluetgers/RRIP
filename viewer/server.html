@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WSI Server Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+      html, body { height: 100%; margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
+      .bar { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; background: #fafafa; }
+      .bar input { flex: 1; min-width: 220px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+      #osd { width: 100%; height: calc(100% - 48px); }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <label for="dzi">DZI URL:</label>
+      <input id="dzi" type="text" value="http://localhost:3007/dzi/demo_out.dzi" />
+      <button id="load">Load</button>
+    </div>
+    <div id="osd"></div>
+    <script>
+      const viewer = OpenSeadragon({
+        id: "osd",
+        prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+        showNavigator: true,
+        tileSources: []
+      });
+
+      function load() {
+        const url = document.getElementById("dzi").value.trim();
+        if (url) viewer.open(url);
+      }
+
+      document.getElementById("load").addEventListener("click", load);
+      load();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WSI DeepZoom Viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fafafa;
+      }
+      .bar input {
+        flex: 1;
+        min-width: 240px;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+      }
+      .bar button {
+        padding: 6px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+      #openseadragon {
+        height: calc(100% - 52px);
+        width: 100%;
+      }
+      .note {
+        color: #6b7280;
+        font-size: 12px;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  </head>
+  <body>
+    <div class="bar">
+      <label for="dzi">DZI:</label>
+      <input id="dzi" type="text" value="../data/demo_out/baseline_pyramid.dzi" />
+      <button id="load">Load</button>
+      <span class="note">Example: data/demo_out/baseline_pyramid.dzi</span>
+    </div>
+    <div id="openseadragon"></div>
+    <script>
+      function getQueryParam(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name);
+      }
+
+      const viewer = OpenSeadragon({
+        id: "openseadragon",
+        prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+        showNavigator: true,
+        sequenceMode: false,
+        tileSources: []
+      });
+
+      function normalizePath(path) {
+        if (!path) return path;
+        if (path.startsWith("data/")) return "../" + path;
+        return path;
+      }
+
+      function loadDzi(path) {
+        const normalized = normalizePath(path);
+        if (!normalized) return;
+        viewer.open(normalized);
+      }
+
+      const input = document.getElementById("dzi");
+      const initial = getQueryParam("dzi");
+      if (initial) input.value = initial;
+      loadDzi(input.value);
+
+      document.getElementById("load").addEventListener("click", () => {
+        loadDzi(input.value.trim());
+      });
+    </script>
+  </body>
+</html>
