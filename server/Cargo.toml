@@ -22,5 +22,9 @@ sysinfo = "0.30"
 crossbeam = "0.8"
 parking_lot = "0.12"
 
+[dev-dependencies]
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "test-util"] }
+
 [profile.release]
 debug = true
