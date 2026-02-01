@@ -114,13 +114,28 @@ jobs:
           RUSTFLAGS=-C target-cpu=native -C opt-level=3 -C lto=fat
 
   benchmark:
-    name: Performance Benchmark
+    name: Performance Benchmark - ${{ matrix.arch }}
     needs: build-multi-arch
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-latest  # Will use QEMU for ARM64
+            platform: linux/arm64
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+
+    - name: Set up QEMU
+      if: matrix.arch == 'arm64'
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: arm64
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
@@ -129,36 +144,122 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Pull AMD64 image
+    - name: Pull ${{ matrix.arch }} image
       run: |
-        docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker pull --platform ${{ matrix.platform }} \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-    - name: Run performance tests
+    - name: Run performance tests on ${{ matrix.arch }}
       run: |
+        # Create results file
+        RESULTS_FILE="perf-results-${{ matrix.arch }}.txt"
+        echo "=== Performance Test Results for ${{ matrix.arch }} ===" > $RESULTS_FILE
+        echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $RESULTS_FILE
+        echo "Git SHA: ${{ github.sha }}" >> $RESULTS_FILE
+        echo "Platform: ${{ matrix.platform }}" >> $RESULTS_FILE
+        echo "" >> $RESULTS_FILE
+
         # Start the server
-        docker run -d --name rrip-server \
+        docker run -d --name rrip-server-${{ matrix.arch }} \
+          --platform ${{ matrix.platform }} \
           -p 8080:8080 \
           -v ${{ github.workspace }}/data:/data \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
           --timing-breakdown
 
         # Wait for server to be ready
-        sleep 5
+        sleep 10  # Extra time for QEMU if ARM64
 
-        # Run load tests
-        docker run --rm --network host \
-          -v ${{ github.workspace }}/server:/workspace \
-          williamyeh/wrk \
-          -t12 -c400 -d30s \
-          --latency \
-          http://localhost:8080/tiles/demo_out/14/100_100.jpg
+        # Check if server is healthy
+        for i in {1..10}; do
+          if curl -f http://localhost:8080/healthz; then
+            echo "Server is ready" | tee -a $RESULTS_FILE
+            break
+          fi
+          echo "Waiting for server... attempt $i"
+          sleep 2
+        done
 
-        # Collect logs
-        docker logs rrip-server
+        # Warm up cache
+        echo "=== Warming up cache ===" | tee -a $RESULTS_FILE
+        for i in {1..5}; do
+          curl -s http://localhost:8080/tiles/demo_out/14/100_100.jpg > /dev/null
+        done
+
+        # Run timing tests and log results
+        echo "" >> $RESULTS_FILE
+        echo "=== Individual Request Timings ===" | tee -a $RESULTS_FILE
+
+        # Collect timing data
+        TIMES=""
+        for i in {1..20}; do
+          TIME=$(curl -s -o /dev/null -w "%{time_total}" http://localhost:8080/tiles/demo_out/14/100_100.jpg)
+          TIMES="$TIMES $TIME"
+          echo "Request $i: ${TIME}s" >> $RESULTS_FILE
+        done
+
+        # Calculate statistics
+        echo "" >> $RESULTS_FILE
+        echo "=== Statistics ===" | tee -a $RESULTS_FILE
+        echo "$TIMES" | awk '{
+          min = max = sum = $1;
+          for (i = 1; i <= NF; i++) {
+            sum += $i;
+            if ($i < min) min = $i;
+            if ($i > max) max = $i;
+          }
+          avg = sum / NF;
+          print "Min: " min "s";
+          print "Max: " max "s";
+          print "Avg: " avg "s";
+          print "Samples: " NF;
+        }' | tee -a $RESULTS_FILE
+
+        # If wrk is available, run load test (only on native arch)
+        if [ "${{ matrix.arch }}" = "amd64" ]; then
+          echo "" >> $RESULTS_FILE
+          echo "=== Load Test Results (wrk) ===" | tee -a $RESULTS_FILE
+          docker run --rm --network host \
+            williamyeh/wrk \
+            -t4 -c100 -d30s \
+            --latency \
+            http://localhost:8080/tiles/demo_out/14/100_100.jpg 2>&1 | tee -a $RESULTS_FILE || true
+        fi
+
+        # Collect server timing breakdown
+        echo "" >> $RESULTS_FILE
+        echo "=== Server Timing Breakdown ===" | tee -a $RESULTS_FILE
+        docker logs rrip-server-${{ matrix.arch }} 2>&1 | grep -E "total_family_gen_ms|l2_decode_ms|parallel_chroma_ms|l0_resize_ms|l0_residual_ms" | tail -20 | tee -a $RESULTS_FILE
+
+        # Check SIMD features
+        echo "" >> $RESULTS_FILE
+        echo "=== CPU Features ===" | tee -a $RESULTS_FILE
+        if [ "${{ matrix.arch }}" = "amd64" ]; then
+          docker exec rrip-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'flags' | head -1 | grep -o -E 'avx2|sse2|sse4_1|sse4_2'" | tr ' ' '\n' | sort -u | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
+        elif [ "${{ matrix.arch }}" = "arm64" ]; then
+          docker exec rrip-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'Features' | head -1" | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
+        fi
+
+        # Memory usage
+        echo "" >> $RESULTS_FILE
+        echo "=== Resource Usage ===" | tee -a $RESULTS_FILE
+        docker stats --no-stream rrip-server-${{ matrix.arch }} | tee -a $RESULTS_FILE
 
         # Cleanup
-        docker stop rrip-server
-        docker rm rrip-server
+        docker stop rrip-server-${{ matrix.arch }}
+        docker rm rrip-server-${{ matrix.arch }}
+
+        # Final summary
+        echo "" >> $RESULTS_FILE
+        echo "=== Test Completed Successfully ===" | tee -a $RESULTS_FILE
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: perf-results-${{ matrix.arch }}
+        path: |
+          perf-*.txt
+        retention-days: 7
 
   deploy:
     name: Deploy to Production
