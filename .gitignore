@@ -75,6 +75,11 @@ data/
 *.tiff
 *.svs
 
+# Test data for CI (keep structure but not actual files)
+server/test-data/*
+!server/test-data/.gitkeep
+server/test-data.tar.gz
+
 # Logs
 *.log
 logs/

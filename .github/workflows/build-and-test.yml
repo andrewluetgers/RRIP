@@ -149,6 +149,24 @@ jobs:
         docker pull --platform ${{ matrix.platform }} \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+    - name: Download test data
+      run: |
+        # Download pre-created test data archive
+        # Option 1: From GitHub Release (replace with your release URL)
+        # curl -L https://github.com/${{ github.repository }}/releases/download/test-data/test-data.tar.gz -o test-data.tar.gz
+
+        # Option 2: From artifact storage (e.g., S3, GCS)
+        # aws s3 cp s3://your-bucket/test-data.tar.gz test-data.tar.gz
+
+        # Option 3: Create minimal test data on the fly (fastest for CI)
+        mkdir -p test-data/demo_out
+        echo '{"levels": 16, "tileSize": 256, "width": 65536, "height": 65536}' > test-data/demo_out/baseline_pyramid.dzi
+
+        # For now, we'll extract if archive exists locally
+        if [ -f "${{ github.workspace }}/server/test-data.tar.gz" ]; then
+          tar -xzf ${{ github.workspace }}/server/test-data.tar.gz -C test-data/
+        fi
+
     - name: Run performance tests on ${{ matrix.arch }}
       run: |
         # Create results file
@@ -159,11 +177,11 @@ jobs:
         echo "Platform: ${{ matrix.platform }}" >> $RESULTS_FILE
         echo "" >> $RESULTS_FILE
 
-        # Start the server
+        # Start the server with test data
         docker run -d --name rrip-server-${{ matrix.arch }} \
           --platform ${{ matrix.platform }} \
           -p 8080:8080 \
-          -v ${{ github.workspace }}/data:/data \
+          -v ${{ github.workspace }}/test-data:/data \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
           --timing-breakdown
 
