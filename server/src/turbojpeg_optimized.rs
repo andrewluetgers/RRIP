@@ -137,7 +137,7 @@ pub fn apply_residual_fast(
 ) {
     // Use chunks for better auto-vectorization
     let chunks = len / 8;
-    let remainder = len % 8;
+    let _remainder = len % 8;
 
     // Process 8 pixels at a time for SIMD
     for i in 0..chunks {
@@ -228,7 +228,7 @@ pub unsafe fn apply_residual_neon(
     len: usize,
 ) {
     let chunks = len / 16;
-    let remainder = len % 16;
+    let _remainder = len % 16;
 
     let offset_128 = vdupq_n_u8(128);
 

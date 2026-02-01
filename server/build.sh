@@ -110,7 +110,8 @@ export TURBOJPEG_INCLUDE_DIR
 
 # Set Rust flags for optimization
 if [ "$BUILD_MODE" = "release" ]; then
-    export RUSTFLAGS="-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1"
+    # Use conservative optimization flags to avoid conflicts
+    export RUSTFLAGS="-C target-cpu=native -C opt-level=3"
     export CARGO_PROFILE_RELEASE_DEBUG=true
     BUILD_FLAGS="--release"
 else

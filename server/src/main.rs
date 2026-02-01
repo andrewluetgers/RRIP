@@ -13,9 +13,8 @@ use axum::routing::get;
 use axum::Router;
 use bytes::Bytes;
 use clap::Parser;
-use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{DynamicImage, GrayImage, RgbImage};
+use image::{DynamicImage, RgbImage};
 use moka::sync::Cache;
 use memmap2::Mmap;
 use sysinfo::System;
@@ -27,7 +26,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 mod fast_upsample_ycbcr;
-use fast_upsample_ycbcr::{YCbCrPlanes, upsample_2x_channel, upsample_2x_nearest, upsample_4x_nearest};
+use fast_upsample_ycbcr::{upsample_2x_channel, upsample_2x_nearest, upsample_4x_nearest};
 
 mod turbojpeg_optimized;
 use turbojpeg_optimized::{load_luma_turbo, decode_luma_turbo, encode_jpeg_turbo, load_rgb_turbo};

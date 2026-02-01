@@ -46,7 +46,7 @@ pub fn upsample_2x_channel(src: &[u8], src_width: usize, src_height: usize) -> V
 pub fn upsample_2x_nearest(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
     let dst_width = src_width * 2;
     let dst_height = src_height * 2;
-    let mut dst = vec![0u8; dst_width * dst_height];
+    let dst = vec![0u8; dst_width * dst_height];
 
     // Each source pixel becomes 2x2 block
     (0..src_height).into_par_iter().for_each(|src_y| {
@@ -112,7 +112,7 @@ pub fn upsample_4x_channel(src: &[u8], src_width: usize, src_height: usize) -> V
 pub fn upsample_4x_nearest(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
     let dst_width = src_width * 4;
     let dst_height = src_height * 4;
-    let mut dst = vec![0u8; dst_width * dst_height];
+    let dst = vec![0u8; dst_width * dst_height];
 
     // Each source pixel becomes 4x4 block
     (0..src_height).into_par_iter().for_each(|src_y| {
