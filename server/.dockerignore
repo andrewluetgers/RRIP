@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+*.md
+docs/
+
+# Test data
+tests/
+benches/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Local development
+.env
+.env.local
+*.log
+flamegraph.svg
+
+# Scripts
+*.sh
+
+# MacOS
+.DS_Store

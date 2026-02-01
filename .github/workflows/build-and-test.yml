@@ -1,0 +1,173 @@
+name: Build and Test Multi-Arch
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test-native:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust: [stable]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        override: true
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libturbojpeg0-dev pkg-config
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: server/target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run tests
+      working-directory: ./server
+      run: |
+        cargo test --verbose
+        cargo test --release
+
+    - name: Run clippy
+      working-directory: ./server
+      run: cargo clippy -- -D warnings
+
+  build-multi-arch:
+    name: Build Multi-Arch Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Depot CLI
+      uses: depot/setup-action@v1
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push multi-platform image with Depot
+      uses: depot/build-push-action@v1
+      with:
+        context: ./server
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        # Depot will handle caching automatically
+        project: ${{ secrets.DEPOT_PROJECT_ID }}
+        token: ${{ secrets.DEPOT_TOKEN }}
+        # Build args for optimization
+        build-args: |
+          RUSTFLAGS=-C target-cpu=native -C opt-level=3 -C lto=fat
+
+  benchmark:
+    name: Performance Benchmark
+    needs: build-multi-arch
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Pull AMD64 image
+      run: |
+        docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    - name: Run performance tests
+      run: |
+        # Start the server
+        docker run -d --name rrip-server \
+          -p 8080:8080 \
+          -v ${{ github.workspace }}/data:/data \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+          --timing-breakdown
+
+        # Wait for server to be ready
+        sleep 5
+
+        # Run load tests
+        docker run --rm --network host \
+          -v ${{ github.workspace }}/server:/workspace \
+          williamyeh/wrk \
+          -t12 -c400 -d30s \
+          --latency \
+          http://localhost:8080/tiles/demo_out/14/100_100.jpg
+
+        # Collect logs
+        docker logs rrip-server
+
+        # Cleanup
+        docker stop rrip-server
+        docker rm rrip-server
+
+  deploy:
+    name: Deploy to Production
+    needs: [test-native, build-multi-arch, benchmark]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy notification
+      run: |
+        echo "Ready to deploy ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        # Add your deployment steps here (K8s, ECS, etc.)

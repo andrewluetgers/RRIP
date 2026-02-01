@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  rrip-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - TARGETARCH=${TARGETARCH:-amd64}
+        - BUILDARCH=${BUILDARCH:-amd64}
+    image: rrip-tile-server:latest
+    container_name: rrip-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../data:/data:ro  # Read-only mount of tile data
+      - ./cache:/cache     # Persistent cache directory
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - RUST_BACKTRACE=1
+    command:
+      - "--slides-root"
+      - "/data"
+      - "--port"
+      - "8080"
+      - "--timing-breakdown"
+      - "--cache-entries"
+      - "4096"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+
+  # Optional: Metrics exporter for Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rrip-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rrip-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -257,6 +257,100 @@ pub unsafe fn apply_residual_neon(
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+
+/// AVX2-optimized residual application for x86_64 processors
+#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+pub unsafe fn apply_residual_avx2(
+    y_pred: &[u8],
+    residual: &[u8],
+    output: &mut [u8],
+    len: usize,
+) {
+    let chunks = len / 32;
+    let remainder = len % 32;
+
+    let offset_128 = _mm256_set1_epi8(128i8);
+
+    for i in 0..chunks {
+        let offset = i * 32;
+
+        // Load 32 pixels
+        let pred = _mm256_loadu_si256(y_pred.as_ptr().add(offset) as *const __m256i);
+        let res = _mm256_loadu_si256(residual.as_ptr().add(offset) as *const __m256i);
+
+        // Subtract 128 from residual using saturated subtraction
+        let res_adjusted = _mm256_subs_epu8(res, offset_128 as __m256i);
+
+        // Add prediction and residual with saturation
+        let result = _mm256_adds_epu8(pred, res_adjusted);
+
+        // Store result
+        _mm256_storeu_si256(output.as_mut_ptr().add(offset) as *mut __m256i, result);
+    }
+
+    // Handle remainder with SSE2 (16 bytes at a time)
+    let sse_offset = chunks * 32;
+    let sse_chunks = remainder / 16;
+
+    if sse_chunks > 0 {
+        let offset_128_sse = _mm_set1_epi8(128i8);
+        let offset = sse_offset;
+
+        let pred = _mm_loadu_si128(y_pred.as_ptr().add(offset) as *const __m128i);
+        let res = _mm_loadu_si128(residual.as_ptr().add(offset) as *const __m128i);
+        let res_adjusted = _mm_subs_epu8(res, offset_128_sse as __m128i);
+        let result = _mm_adds_epu8(pred, res_adjusted);
+        _mm_storeu_si128(output.as_mut_ptr().add(offset) as *mut __m128i, result);
+    }
+
+    // Handle final remainder with scalar code
+    for i in (chunks * 32 + sse_chunks * 16)..len {
+        let pred = y_pred[i] as i16;
+        let res = residual[i] as i16 - 128;
+        output[i] = (pred + res).clamp(0, 255) as u8;
+    }
+}
+
+/// SSE2-optimized residual application for older x86_64 processors
+#[cfg(all(target_arch = "x86_64", not(target_feature = "avx2")))]
+pub unsafe fn apply_residual_sse2(
+    y_pred: &[u8],
+    residual: &[u8],
+    output: &mut [u8],
+    len: usize,
+) {
+    let chunks = len / 16;
+    let remainder = len % 16;
+
+    let offset_128 = _mm_set1_epi8(128i8);
+
+    for i in 0..chunks {
+        let offset = i * 16;
+
+        // Load 16 pixels
+        let pred = _mm_loadu_si128(y_pred.as_ptr().add(offset) as *const __m128i);
+        let res = _mm_loadu_si128(residual.as_ptr().add(offset) as *const __m128i);
+
+        // Subtract 128 from residual using saturated subtraction
+        let res_adjusted = _mm_subs_epu8(res, offset_128 as __m128i);
+
+        // Add prediction and residual with saturation
+        let result = _mm_adds_epu8(pred, res_adjusted);
+
+        // Store result
+        _mm_storeu_si128(output.as_mut_ptr().add(offset) as *mut __m128i, result);
+    }
+
+    // Handle remainder with scalar code
+    for i in (chunks * 16)..len {
+        let pred = y_pred[i] as i16;
+        let res = residual[i] as i16 - 128;
+        output[i] = (pred + res).clamp(0, 255) as u8;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
