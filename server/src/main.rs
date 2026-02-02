@@ -13,8 +13,7 @@ use axum::routing::get;
 use axum::Router;
 use bytes::Bytes;
 use clap::Parser;
-use image::imageops::FilterType;
-use image::{DynamicImage, RgbImage};
+use image::RgbImage;
 use moka::sync::Cache;
 use memmap2::Mmap;
 use sysinfo::System;
@@ -29,7 +28,7 @@ mod fast_upsample_ycbcr;
 use fast_upsample_ycbcr::{upsample_2x_channel, upsample_2x_nearest, upsample_4x_nearest};
 
 mod turbojpeg_optimized;
-use turbojpeg_optimized::{load_luma_turbo, decode_luma_turbo, encode_jpeg_turbo, load_rgb_turbo};
+use turbojpeg_optimized::{load_luma_turbo, decode_luma_turbo, encode_jpeg_turbo, encode_luma_turbo, load_rgb_turbo, apply_residual_fast};
 
 #[derive(Parser, Debug)]
 #[command(name = "rrip-tile-server")]
@@ -38,7 +37,7 @@ struct Args {
     slides_root: PathBuf,
     #[arg(long, default_value = "residuals_q32")]
     residuals_dir: String,
-    #[arg(long, default_value_t = 90)]
+    #[arg(long, default_value_t = 95)]
     tile_quality: u8,
     #[arg(long, default_value_t = 2048)]
     cache_entries: usize,
@@ -66,6 +65,8 @@ struct Args {
     max_inflight_families: usize,
     #[arg(long, default_value_t = false)]
     prewarm_on_l2: bool,
+    #[arg(long, default_value_t = false)]
+    grayscale_only: bool,
 }
 
 #[derive(Clone)]
@@ -82,6 +83,7 @@ struct AppState {
     inflight: Arc<InflightFamilies>,
     inflight_limit: Arc<Semaphore>,
     prewarm_on_l2: bool,
+    grayscale_only: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -390,6 +392,7 @@ async fn async_main(args: Args) -> Result<()> {
         inflight,
         inflight_limit,
         prewarm_on_l2: args.prewarm_on_l2,
+        grayscale_only: args.grayscale_only,
     };
 
     let metrics = state.metrics.clone();
@@ -669,6 +672,7 @@ async fn serve_tile(
             y2,
             quality,
             timing,
+            state.grayscale_only,
             &writer,
             &write_root,
             &buffer_pool,
@@ -764,6 +768,7 @@ async fn serve_tile(
 fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
     let cache = state.cache.clone();
     let quality = state.tile_quality;
+    let grayscale_only = state.grayscale_only;
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
@@ -784,6 +789,7 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
                 y2,
                 quality,
                 false,
+                grayscale_only,
                 &writer,
                 &write_root,
                 &buffer_pool,
@@ -1055,6 +1061,7 @@ fn generate_family(
     y2: u32,
     quality: u8,
     timing: bool,
+    grayscale_only: bool,
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
@@ -1080,16 +1087,19 @@ fn generate_family(
     // Compute L1 and L0 chroma upsampling in parallel
     let ((l1_y, l1_cb, l1_cr), (l0_cb, l0_cr)) = rayon::join(
         || {
-            // L2 → L1 upsampling (2x)
+            // L2 → L1 upsampling (2x) - use bilinear for all channels for better quality
             let l1_y = upsample_2x_channel(&l2_y, l2_width as usize, l2_height as usize);
-            let l1_cb = upsample_2x_nearest(&l2_cb, l2_width as usize, l2_height as usize);
-            let l1_cr = upsample_2x_nearest(&l2_cr, l2_width as usize, l2_height as usize);
+            let l1_cb = upsample_2x_channel(&l2_cb, l2_width as usize, l2_height as usize);  // Changed to bilinear
+            let l1_cr = upsample_2x_channel(&l2_cr, l2_width as usize, l2_height as usize);  // Changed to bilinear
             (l1_y, l1_cb, l1_cr)
         },
         || {
-            // L2 → L0 chroma direct (4x for chroma only, using nearest neighbor)
-            let l0_cb = upsample_4x_nearest(&l2_cb, l2_width as usize, l2_height as usize);
-            let l0_cr = upsample_4x_nearest(&l2_cr, l2_width as usize, l2_height as usize);
+            // L2 → L0 chroma direct (4x) - use proper 4x bilinear for quality
+            // First upsample 2x, then 2x again for smoother results
+            let l0_cb_2x = upsample_2x_channel(&l2_cb, l2_width as usize, l2_height as usize);
+            let l0_cr_2x = upsample_2x_channel(&l2_cr, l2_width as usize, l2_height as usize);
+            let l0_cb = upsample_2x_channel(&l0_cb_2x, (l2_width * 2) as usize, (l2_height * 2) as usize);
+            let l0_cr = upsample_2x_channel(&l0_cr_2x, (l2_width * 2) as usize, (l2_height * 2) as usize);
             (l0_cb, l0_cr)
         }
     );
@@ -1173,7 +1183,21 @@ fn generate_family(
             };
             let res_ms = if timing { res_start.elapsed().as_millis() } else { 0 };
             let enc_start = Instant::now();
-            let bytes = encode_jpeg_from_rgb_bytes(buf, tile_size, tile_size, quality)?;
+            let bytes = if grayscale_only {
+                // Extract Y channel only for grayscale output
+                let mut y_bytes = Vec::with_capacity((tile_size * tile_size) as usize);
+                for i in 0..(tile_size * tile_size) as usize {
+                    let r = buf[i * 3] as f32;
+                    let g = buf[i * 3 + 1] as f32;
+                    let b = buf[i * 3 + 2] as f32;
+                    // BT.601 conversion to Y
+                    let y = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
+                    y_bytes.push(y);
+                }
+                encode_luma_turbo(&y_bytes, tile_size, tile_size, quality)?
+            } else {
+                encode_jpeg_from_rgb_bytes(buf, tile_size, tile_size, quality)?
+            };
             let enc_ms = if timing { enc_start.elapsed().as_millis() } else { 0 };
             Ok((idx, x1, y1, Bytes::from(bytes), used_residual, res_ms, enc_ms))
         })
@@ -1208,30 +1232,36 @@ fn generate_family(
     // Build L1 YCbCr mosaic from reconstructed tiles
     let l1_mosaic_w = tile_size * 2;
     let l1_mosaic_size = (l1_mosaic_w * l1_mosaic_w) as usize;
+    let mut l1_mosaic_rgb = vec![0u8; l1_mosaic_size * 3]; // RGB mosaic first
+
+    // Use optimized copy_tile_into_mosaic for RGB tiles
+    for idx in 0..4 {
+        let dx = (idx % 2) as u32;
+        let dy = (idx / 2) as u32;
+        copy_tile_into_mosaic(
+            &l1_tile_bufs[idx],
+            &mut l1_mosaic_rgb,
+            l1_mosaic_w,
+            tile_size,
+            dx,
+            dy,
+        );
+    }
+
+    // Convert the entire mosaic to YCbCr at once
     let mut l1_mosaic_y = vec![0u8; l1_mosaic_size];
     let mut l1_mosaic_cb = vec![0u8; l1_mosaic_size];
     let mut l1_mosaic_cr = vec![0u8; l1_mosaic_size];
 
-    // Convert RGB tiles to YCbCr and copy into mosaic
-    for idx in 0..4 {
-        let dx = (idx % 2) as u32;
-        let dy = (idx / 2) as u32;
-        let tile_offset = ((dy * tile_size * l1_mosaic_w) + (dx * tile_size)) as usize;
-
-        // Extract YCbCr from the RGB tile buffer
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let src_idx = ((y * tile_size + x) * 3) as usize;
-                let dst_idx = tile_offset + (y * l1_mosaic_w + x) as usize;
-                let r = l1_tile_bufs[idx][src_idx];
-                let g = l1_tile_bufs[idx][src_idx + 1];
-                let b = l1_tile_bufs[idx][src_idx + 2];
-                let (yy, cb, cr) = rgb_to_ycbcr(r, g, b);
-                l1_mosaic_y[dst_idx] = yy;
-                l1_mosaic_cb[dst_idx] = cb;
-                l1_mosaic_cr[dst_idx] = cr;
-            }
-        }
+    for i in 0..l1_mosaic_size {
+        let src_idx = i * 3;
+        let r = l1_mosaic_rgb[src_idx];
+        let g = l1_mosaic_rgb[src_idx + 1];
+        let b = l1_mosaic_rgb[src_idx + 2];
+        let (yy, cb, cr) = rgb_to_ycbcr(r, g, b);
+        l1_mosaic_y[i] = yy;
+        l1_mosaic_cb[i] = cb;
+        l1_mosaic_cr[i] = cr;
     }
 
     for buf in l1_tile_bufs.drain(..) {
@@ -1313,7 +1343,21 @@ fn generate_family(
                     false
                 };
                 let enc_start = Instant::now();
-                let bytes = encode_jpeg_from_rgb_bytes(&buf, tile_size, tile_size, quality)?;
+                let bytes = if grayscale_only {
+                    // Extract Y channel only for grayscale output
+                    let mut y_bytes = Vec::with_capacity((tile_size * tile_size) as usize);
+                    for i in 0..(tile_size * tile_size) as usize {
+                        let r = buf[i * 3] as f32;
+                        let g = buf[i * 3 + 1] as f32;
+                        let b = buf[i * 3 + 2] as f32;
+                        // BT.601 conversion to Y
+                        let y = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
+                        y_bytes.push(y);
+                    }
+                    encode_luma_turbo(&y_bytes, tile_size, tile_size, quality)?
+                } else {
+                    encode_jpeg_from_rgb_bytes(&buf, tile_size, tile_size, quality)?
+                };
                 let enc_ms = if timing { enc_start.elapsed().as_millis() } else { 0 };
                 (used_residual, bytes, enc_ms)
             };
@@ -1380,11 +1424,7 @@ fn load_luma(path: &Path) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-fn resize_rgb(img: &RgbImage, width: u32, height: u32) -> RgbImage {
-    DynamicImage::ImageRgb8(img.clone())
-        .resize_exact(width, height, FilterType::Triangle)
-        .to_rgb8()
-}
+// Removed resize_rgb - now using optimized YCbCr upsampling functions
 
 fn encode_jpeg_from_rgb_bytes(
     bytes: &[u8],
@@ -1413,8 +1453,10 @@ fn apply_residual_into(
         return Err(anyhow!("output buffer size mismatch"));
     }
 
-    // Optimized with chunking for better auto-vectorization
-    // Process 8 pixels at a time when possible
+    // Create a temporary buffer for the reconstructed Y values
+    let mut y_reconstructed = vec![0u8; (tile_size * tile_size) as usize];
+
+    // First pass: Apply residual using SIMD optimization
     for y in 0..tile_size {
         let py = y0 + y;
         if py >= height {
@@ -1424,82 +1466,68 @@ fn apply_residual_into(
         let row_offset = (y * tile_size) as usize;
         let plane_row_offset = (py * width) as usize;
 
-        // Process main chunks of 8 pixels
-        let mut x = 0;
-        while x + 8 <= tile_size {
+        // Gather Y prediction values for this row
+        let mut y_pred_row = vec![0u8; tile_size as usize];
+        for x in 0..tile_size {
             let px = x0 + x;
-            if px + 8 <= width {
-                // Process 8 pixels at once for better SIMD utilization
-                for dx in 0..8 {
-                    let x_pos = x + dx;
-                    let px_pos = px + dx;
-                    let idx = plane_row_offset + px_pos as usize;
-                    let residual_idx = row_offset + x_pos as usize;
-
-                    // Apply residual with optimized arithmetic
-                    let y_pred = y_plane[idx] as i16;
-                    let res = residual[residual_idx] as i16 - 128;
-                    let y_recon = ((y_pred + res).max(0).min(255)) as u8;
-
-                    // Get chroma values
-                    let cb_pred = cb_plane[idx];
-                    let cr_pred = cr_plane[idx];
-
-                    // Convert to RGB using optimized function
-                    let (r_out, g_out, b_out) = ycbcr_to_rgb(y_recon, cb_pred, cr_pred);
-
-                    // Write output
-                    let out_idx = (residual_idx * 3) as usize;
-                    out[out_idx] = r_out;
-                    out[out_idx + 1] = g_out;
-                    out[out_idx + 2] = b_out;
-                }
-                x += 8;
-            } else {
-                // Handle remaining pixels
-                let px_pos = px;
-                if px_pos < width {
-                    let idx = plane_row_offset + px_pos as usize;
-                    let residual_idx = row_offset + x as usize;
-
-                    let y_pred = y_plane[idx] as i16;
-                    let res = residual[residual_idx] as i16 - 128;
-                    let y_recon = ((y_pred + res).max(0).min(255)) as u8;
-
-                    let cb_pred = cb_plane[idx];
-                    let cr_pred = cr_plane[idx];
-
-                    let (r_out, g_out, b_out) = ycbcr_to_rgb(y_recon, cb_pred, cr_pred);
-                    let out_idx = (residual_idx * 3) as usize;
-                    out[out_idx] = r_out;
-                    out[out_idx + 1] = g_out;
-                    out[out_idx + 2] = b_out;
-                }
-                x += 1;
+            if px < width {
+                y_pred_row[x as usize] = y_plane[plane_row_offset + px as usize];
             }
         }
 
-        // Process remaining pixels
-        while x < tile_size {
+        // Apply residual using SIMD for the entire row
+        let residual_row_start = row_offset;
+        let residual_row_end = residual_row_start + tile_size as usize;
+        let residual_row = &residual[residual_row_start..residual_row_end];
+
+        // Use SIMD-optimized residual application
+        apply_residual_fast(
+            &y_pred_row,
+            residual_row,
+            &mut y_reconstructed[residual_row_start..residual_row_end],
+            tile_size as usize,
+        );
+    }
+
+    // Second pass: Convert YCbCr to RGB
+    for y in 0..tile_size {
+        let py = y0 + y;
+        if py >= height {
+            continue;
+        }
+
+        let row_offset = (y * tile_size) as usize;
+        let plane_row_offset = (py * width) as usize;
+
+        for x in 0..tile_size {
             let px = x0 + x;
             if px < width {
                 let idx = plane_row_offset + px as usize;
                 let residual_idx = row_offset + x as usize;
 
-                let y_pred = y_plane[idx] as i16;
-                let res = residual[residual_idx] as i16 - 128;
-                let y_recon = ((y_pred + res).max(0).min(255)) as u8;
+                // Get reconstructed Y value
+                let y_recon = y_reconstructed[residual_idx];
 
+                // Get chroma values
                 let cb_pred = cb_plane[idx];
                 let cr_pred = cr_plane[idx];
 
+                // Convert to RGB
                 let (r_out, g_out, b_out) = ycbcr_to_rgb(y_recon, cb_pred, cr_pred);
+
+                // Write output
                 let out_idx = (residual_idx * 3) as usize;
                 out[out_idx] = r_out;
                 out[out_idx + 1] = g_out;
                 out[out_idx + 2] = b_out;
+            } else {
+                // Handle pixels outside the image bounds
+                let residual_idx = row_offset + x as usize;
+                let out_idx = (residual_idx * 3) as usize;
+                out[out_idx] = 0;
+                out[out_idx + 1] = 0;
+                out[out_idx + 2] = 0;
             }
-            x += 1;
         }
     }
     Ok(())

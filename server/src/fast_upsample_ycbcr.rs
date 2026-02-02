@@ -5,40 +5,60 @@ use rayon::prelude::*;
 
 /// Fast 2x upsampling for a single channel (Y, Cb, or Cr)
 /// Uses bilinear interpolation optimized for 2x scaling
+/// Automatically uses NEON on ARM processors when available
 pub fn upsample_2x_channel(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
-    let dst_width = src_width * 2;
-    let dst_height = src_height * 2;
-    let mut dst = vec![0u8; dst_width * dst_height];
+    // TEMPORARY: Disable NEON version as it's doing nearest-neighbor horizontally
+    // instead of proper bilinear interpolation, causing jaggies
+    // TODO: Fix NEON implementation to do proper bilinear
+    // #[cfg(target_arch = "aarch64")]
+    // {
+    //     unsafe { return upsample_2x_channel_neon(src, src_width, src_height); }
+    // }
 
-    // Process in parallel by destination rows
-    dst.par_chunks_mut(dst_width)
-        .enumerate()
-        .for_each(|(dst_y, dst_row)| {
-            let src_y = dst_y >> 1;
-            let y_frac = (dst_y & 1) as u16;
-            let src_y_next = (src_y + 1).min(src_height - 1);
+    // Use correct bilinear implementation for all architectures
+    {
+        let dst_width = src_width * 2;
+        let dst_height = src_height * 2;
+        let mut dst = vec![0u8; dst_width * dst_height];
 
-            for dst_x in 0..dst_width {
-                let src_x = dst_x >> 1;
-                let x_frac = (dst_x & 1) as u16;
-                let src_x_next = (src_x + 1).min(src_width - 1);
+        // Process in parallel by destination rows
+        dst.par_chunks_mut(dst_width)
+            .enumerate()
+            .for_each(|(dst_y, dst_row)| {
+                let src_y = dst_y >> 1;
+                // For 2x scaling, fraction is either 0 or 128 (0.5 in 8-bit fixed point)
+                let y_frac = ((dst_y & 1) * 128) as u32;
+                let src_y_next = (src_y + 1).min(src_height - 1);
 
-                // Get 4 source pixels
-                let p00 = src[src_y * src_width + src_x] as u16;
-                let p10 = src[src_y * src_width + src_x_next] as u16;
-                let p01 = src[src_y_next * src_width + src_x] as u16;
-                let p11 = src[src_y_next * src_width + src_x_next] as u16;
+                for dst_x in 0..dst_width {
+                    let src_x = dst_x >> 1;
+                    // For 2x scaling, fraction is either 0 or 128 (0.5 in 8-bit fixed point)
+                    let x_frac = ((dst_x & 1) * 128) as u32;
+                    let src_x_next = (src_x + 1).min(src_width - 1);
 
-                // Fast bilinear with bit shifts
-                // When frac is 0: takes p00
-                // When frac is 1: averages pixels
-                let top = p00 + ((p10.saturating_sub(p00)) * x_frac);
-                let bottom = p01 + ((p11.saturating_sub(p01)) * x_frac);
-                dst_row[dst_x] = (top + ((bottom.saturating_sub(top)) * y_frac)) as u8;
-            }
-        });
+                    // Get 4 source pixels
+                    let p00 = src[src_y * src_width + src_x] as u32;
+                    let p10 = src[src_y * src_width + src_x_next] as u32;
+                    let p01 = src[src_y_next * src_width + src_x] as u32;
+                    let p11 = src[src_y_next * src_width + src_x_next] as u32;
 
-    dst
+                    // Proper bilinear interpolation with 8-bit fixed point
+                    // frac = 0: weight = 256/0
+                    // frac = 128: weight = 128/128 (equal blend)
+                    let w_x0 = 256 - x_frac;
+                    let w_x1 = x_frac;
+                    let w_y0 = 256 - y_frac;
+                    let w_y1 = y_frac;
+
+                    // Compute weighted average
+                    let value = (p00 * w_x0 * w_y0 + p10 * w_x1 * w_y0 +
+                                p01 * w_x0 * w_y1 + p11 * w_x1 * w_y1) >> 16;
+                    dst_row[dst_x] = value.min(255) as u8;
+                }
+            });
+
+        dst
+    }
 }
 
 /// Ultra-fast nearest neighbor 2x upsampling for chroma channels
@@ -73,6 +93,7 @@ pub fn upsample_2x_nearest(src: &[u8], src_width: usize, src_height: usize) -> V
 }
 
 /// Fast 4x upsampling for luma channel
+#[allow(dead_code)]
 pub fn upsample_4x_channel(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
     let dst_width = src_width * 4;
     let dst_height = src_height * 4;
@@ -140,6 +161,7 @@ pub fn upsample_4x_nearest(src: &[u8], src_width: usize, src_height: usize) -> V
 /// Apply residual to luma channel with clamping
 /// residual is assumed to be offset by 128 (JPEG standard)
 #[inline]
+#[allow(dead_code)]
 pub fn apply_residual(prediction: &[u8], residual: &[u8]) -> Vec<u8> {
     prediction.par_iter()
         .zip(residual.par_iter())
@@ -151,6 +173,7 @@ pub fn apply_residual(prediction: &[u8], residual: &[u8]) -> Vec<u8> {
 }
 
 /// Structure to hold YCbCr planes
+#[allow(dead_code)]
 pub struct YCbCrPlanes {
     pub y: Vec<u8>,
     pub cb: Vec<u8>,
@@ -159,6 +182,7 @@ pub struct YCbCrPlanes {
     pub height: usize,
 }
 
+#[allow(dead_code)]
 impl YCbCrPlanes {
     /// Upsample YCbCr planes by 2x
     /// Uses high quality for Y, fast nearest for Cb/Cr
@@ -265,18 +289,24 @@ pub unsafe fn upsample_2x_channel_neon(src: &[u8], src_width: usize, src_height:
             let row0 = vld1_u8(src.as_ptr().add(src_y * src_width + src_x));
             let row1 = vld1_u8(src.as_ptr().add(src_y_next * src_width + src_x));
 
-            // Duplicate each pixel horizontally
-            let row0_dup = vzip1_u8(row0, row0);
-            let row1_dup = vzip1_u8(row1, row1);
+            // Duplicate each pixel horizontally using ZIP instructions
+            // vzip1 interleaves low elements, vzip2 interleaves high elements
+            let row0_dup_low = vzip1_u8(row0, row0);   // First 4 pixels duplicated
+            let row0_dup_high = vzip2_u8(row0, row0);  // Last 4 pixels duplicated
+            let row1_dup_low = vzip1_u8(row1, row1);   // First 4 pixels duplicated
+            let row1_dup_high = vzip2_u8(row1, row1);  // Last 4 pixels duplicated
 
             // Average vertically for intermediate row
-            let avg = vrhadd_u8(row0_dup, row1_dup);
+            let avg_low = vrhadd_u8(row0_dup_low, row1_dup_low);
+            let avg_high = vrhadd_u8(row0_dup_high, row1_dup_high);
 
-            // Store results
+            // Store results - combine low and high halves
+            // For dst_y0 row: store duplicated row0 pixels
             vst1q_u8(dst.as_mut_ptr().add(dst_y0 * dst_width + src_x * 2),
-                     vcombine_u8(row0_dup, vdup_n_u8(0)));
+                     vcombine_u8(row0_dup_low, row0_dup_high));
+            // For dst_y1 row: store averaged pixels
             vst1q_u8(dst.as_mut_ptr().add(dst_y1 * dst_width + src_x * 2),
-                     vcombine_u8(avg, vdup_n_u8(0)));
+                     vcombine_u8(avg_low, avg_high));
 
             src_x += 8;
         }

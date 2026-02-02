@@ -5,8 +5,6 @@ use anyhow::{Result, Context};
 use turbojpeg::{Compressor, Decompressor, Image, PixelFormat, Subsamp};
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
-use parking_lot::Mutex;
 
 // Thread-local TurboJPEG instances for best performance
 thread_local! {
@@ -89,8 +87,9 @@ pub fn encode_jpeg_turbo(pixels: &[u8], width: u32, height: u32, quality: u8) ->
         // Set quality (1-100 scale)
         compressor.set_quality(quality as i32);
 
-        // Use 4:2:0 subsampling for better compression
-        compressor.set_subsamp(Subsamp::Sub2x2);
+        // Use 4:4:4 subsampling (no subsampling) for better quality
+        // This preserves full chroma resolution at the cost of larger file size
+        compressor.set_subsamp(Subsamp::None);
 
         let image = Image {
             pixels,
@@ -106,6 +105,7 @@ pub fn encode_jpeg_turbo(pixels: &[u8], width: u32, height: u32, quality: u8) ->
 }
 
 /// Fast grayscale JPEG encoding
+#[allow(dead_code)]
 pub fn encode_luma_turbo(pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
     COMPRESSOR.with(|comp| {
         let mut compressor = comp.borrow_mut();
@@ -127,7 +127,7 @@ pub fn encode_luma_turbo(pixels: &[u8], width: u32, height: u32, quality: u8) ->
     })
 }
 
-/// Optimized residual application with SIMD support
+/// Optimized residual application with automatic SIMD support
 #[inline(always)]
 pub fn apply_residual_fast(
     y_pred: &[u8],
@@ -135,92 +135,57 @@ pub fn apply_residual_fast(
     output: &mut [u8],
     len: usize,
 ) {
-    // Use chunks for better auto-vectorization
-    let chunks = len / 8;
-    let _remainder = len % 8;
-
-    // Process 8 pixels at a time for SIMD
-    for i in 0..chunks {
-        let offset = i * 8;
-        for j in 0..8 {
-            let idx = offset + j;
-            let pred = y_pred[idx] as i16;
-            let res = residual[idx] as i16 - 128;
-            output[idx] = (pred + res).clamp(0, 255) as u8;
-        }
+    // Use platform-specific SIMD when available
+    #[cfg(target_arch = "aarch64")]
+    {
+        unsafe { return apply_residual_neon(y_pred, residual, output, len); }
     }
 
-    // Handle remainder
-    for i in (chunks * 8)..len {
-        let pred = y_pred[i] as i16;
-        let res = residual[i] as i16 - 128;
-        output[i] = (pred + res).clamp(0, 255) as u8;
-    }
-}
-
-/// Pool of reusable buffers to reduce allocations
-pub struct BufferPool {
-    pools: Vec<Arc<Mutex<Vec<Vec<u8>>>>>,
-    sizes: Vec<usize>,
-}
-
-impl BufferPool {
-    pub fn new() -> Self {
-        // Common buffer sizes for tiles
-        let sizes = vec![
-            256 * 256,       // Grayscale tile
-            256 * 256 * 3,   // RGB tile
-            512 * 512,       // L1 grayscale mosaic
-            512 * 512 * 3,   // L1 RGB mosaic
-            1024 * 1024,     // L0 grayscale mosaic
-            1024 * 1024 * 3, // L0 RGB mosaic
-        ];
-
-        let pools = sizes.iter()
-            .map(|_| Arc::new(Mutex::new(Vec::with_capacity(32))))
-            .collect();
-
-        BufferPool { pools, sizes }
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    {
+        unsafe { return apply_residual_avx2(y_pred, residual, output, len); }
     }
 
-    pub fn get(&self, size: usize) -> Vec<u8> {
-        // Find the appropriate pool
-        for (i, &pool_size) in self.sizes.iter().enumerate() {
-            if size <= pool_size {
-                if let Some(mut buf) = self.pools[i].lock().pop() {
-                    buf.resize(size, 0);
-                    return buf;
-                }
-                return vec![0u8; size];
+    #[cfg(all(target_arch = "x86_64", not(target_feature = "avx2")))]
+    {
+        unsafe { return apply_residual_sse2(y_pred, residual, output, len); }
+    }
+
+    // Fallback to optimized scalar code
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        // Use chunks for better auto-vectorization
+        let chunks = len / 8;
+        let _remainder = len % 8;
+
+        // Process 8 pixels at a time for SIMD
+        for i in 0..chunks {
+            let offset = i * 8;
+            for j in 0..8 {
+                let idx = offset + j;
+                let pred = y_pred[idx] as i16;
+                let res = residual[idx] as i16 - 128;
+                output[idx] = (pred + res).clamp(0, 255) as u8;
             }
         }
 
-        // Fallback for unusual sizes
-        vec![0u8; size]
-    }
-
-    pub fn put(&self, mut buf: Vec<u8>) {
-        let capacity = buf.capacity();
-
-        // Find matching pool
-        for (i, &pool_size) in self.sizes.iter().enumerate() {
-            if capacity <= pool_size * 2 {  // Allow some overhead
-                buf.clear();
-                let mut pool = self.pools[i].lock();
-                if pool.len() < 32 {  // Limit pool size
-                    pool.push(buf);
-                }
-                return;
-            }
+        // Handle remainder
+        for i in (chunks * 8)..len {
+            let pred = y_pred[i] as i16;
+            let res = residual[i] as i16 - 128;
+            output[i] = (pred + res).clamp(0, 255) as u8;
         }
     }
 }
+
+// BufferPool removed - using the one from main.rs instead
 
 #[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
 
 /// NEON-optimized residual application for ARM processors
 #[cfg(target_arch = "aarch64")]
+#[allow(dead_code)]
 pub unsafe fn apply_residual_neon(
     y_pred: &[u8],
     residual: &[u8],
@@ -230,8 +195,6 @@ pub unsafe fn apply_residual_neon(
     let chunks = len / 16;
     let _remainder = len % 16;
 
-    let offset_128 = vdupq_n_u8(128);
-
     for i in 0..chunks {
         let offset = i * 16;
 
@@ -239,14 +202,30 @@ pub unsafe fn apply_residual_neon(
         let pred = vld1q_u8(y_pred.as_ptr().add(offset));
         let res = vld1q_u8(residual.as_ptr().add(offset));
 
-        // Subtract 128 from residual
-        let res_adjusted = vqsubq_u8(res, offset_128);
+        // Convert to signed 16-bit for proper arithmetic
+        // Split into low and high halves for 16-bit processing
+        let pred_low = vmovl_u8(vget_low_u8(pred));
+        let pred_high = vmovl_u8(vget_high_u8(pred));
+        let res_low = vmovl_u8(vget_low_u8(res));
+        let res_high = vmovl_u8(vget_high_u8(res));
 
-        // Add prediction and residual with saturation
-        let result = vqaddq_u8(pred, res_adjusted);
+        // Subtract 128 from residual (now in 16-bit, can handle negative)
+        let offset_128_16 = vdupq_n_s16(128);
+        let res_adjusted_low = vsubq_s16(vreinterpretq_s16_u16(res_low), offset_128_16);
+        let res_adjusted_high = vsubq_s16(vreinterpretq_s16_u16(res_high), offset_128_16);
+
+        // Add prediction and residual
+        let result_low = vaddq_s16(vreinterpretq_s16_u16(pred_low), res_adjusted_low);
+        let result_high = vaddq_s16(vreinterpretq_s16_u16(pred_high), res_adjusted_high);
+
+        // Saturate to unsigned 8-bit range
+        let result_u8 = vcombine_u8(
+            vqmovun_s16(result_low),
+            vqmovun_s16(result_high)
+        );
 
         // Store result
-        vst1q_u8(output.as_mut_ptr().add(offset), result);
+        vst1q_u8(output.as_mut_ptr().add(offset), result_u8);
     }
 
     // Handle remainder with scalar code
@@ -271,7 +250,8 @@ pub unsafe fn apply_residual_avx2(
     let chunks = len / 32;
     let remainder = len % 32;
 
-    let offset_128 = _mm256_set1_epi8(128i8);
+    let offset_128 = _mm256_set1_epi16(128);
+    let zero = _mm256_setzero_si256();
 
     for i in 0..chunks {
         let offset = i * 32;
@@ -280,11 +260,25 @@ pub unsafe fn apply_residual_avx2(
         let pred = _mm256_loadu_si256(y_pred.as_ptr().add(offset) as *const __m256i);
         let res = _mm256_loadu_si256(residual.as_ptr().add(offset) as *const __m256i);
 
-        // Subtract 128 from residual using saturated subtraction
-        let res_adjusted = _mm256_subs_epu8(res, offset_128 as __m256i);
+        // Convert to 16-bit for proper signed arithmetic
+        // Process low 16 bytes
+        let pred_lo = _mm256_unpacklo_epi8(pred, zero);
+        let res_lo = _mm256_unpacklo_epi8(res, zero);
 
-        // Add prediction and residual with saturation
-        let result = _mm256_adds_epu8(pred, res_adjusted);
+        // Process high 16 bytes
+        let pred_hi = _mm256_unpackhi_epi8(pred, zero);
+        let res_hi = _mm256_unpackhi_epi8(res, zero);
+
+        // Subtract 128 from residual (now in 16-bit, can handle negative)
+        let res_adjusted_lo = _mm256_sub_epi16(res_lo, offset_128);
+        let res_adjusted_hi = _mm256_sub_epi16(res_hi, offset_128);
+
+        // Add prediction and residual
+        let result_lo = _mm256_add_epi16(pred_lo, res_adjusted_lo);
+        let result_hi = _mm256_add_epi16(pred_hi, res_adjusted_hi);
+
+        // Pack back to 8-bit with unsigned saturation
+        let result = _mm256_packus_epi16(result_lo, result_hi);
 
         // Store result
         _mm256_storeu_si256(output.as_mut_ptr().add(offset) as *mut __m256i, result);
@@ -295,13 +289,27 @@ pub unsafe fn apply_residual_avx2(
     let sse_chunks = remainder / 16;
 
     if sse_chunks > 0 {
-        let offset_128_sse = _mm_set1_epi8(128i8);
+        let offset_128_sse = _mm_set1_epi16(128);
+        let zero_sse = _mm_setzero_si128();
         let offset = sse_offset;
 
         let pred = _mm_loadu_si128(y_pred.as_ptr().add(offset) as *const __m128i);
         let res = _mm_loadu_si128(residual.as_ptr().add(offset) as *const __m128i);
-        let res_adjusted = _mm_subs_epu8(res, offset_128_sse as __m128i);
-        let result = _mm_adds_epu8(pred, res_adjusted);
+
+        // Convert to 16-bit for proper signed arithmetic
+        let pred_lo = _mm_unpacklo_epi8(pred, zero_sse);
+        let res_lo = _mm_unpacklo_epi8(res, zero_sse);
+        let pred_hi = _mm_unpackhi_epi8(pred, zero_sse);
+        let res_hi = _mm_unpackhi_epi8(res, zero_sse);
+
+        // Subtract 128 and add
+        let res_adjusted_lo = _mm_sub_epi16(res_lo, offset_128_sse);
+        let res_adjusted_hi = _mm_sub_epi16(res_hi, offset_128_sse);
+        let result_lo = _mm_add_epi16(pred_lo, res_adjusted_lo);
+        let result_hi = _mm_add_epi16(pred_hi, res_adjusted_hi);
+
+        // Pack back to 8-bit with unsigned saturation
+        let result = _mm_packus_epi16(result_lo, result_hi);
         _mm_storeu_si128(output.as_mut_ptr().add(offset) as *mut __m128i, result);
     }
 
@@ -324,7 +332,8 @@ pub unsafe fn apply_residual_sse2(
     let chunks = len / 16;
     let remainder = len % 16;
 
-    let offset_128 = _mm_set1_epi8(128i8);
+    let offset_128 = _mm_set1_epi16(128);
+    let zero = _mm_setzero_si128();
 
     for i in 0..chunks {
         let offset = i * 16;
@@ -333,11 +342,22 @@ pub unsafe fn apply_residual_sse2(
         let pred = _mm_loadu_si128(y_pred.as_ptr().add(offset) as *const __m128i);
         let res = _mm_loadu_si128(residual.as_ptr().add(offset) as *const __m128i);
 
-        // Subtract 128 from residual using saturated subtraction
-        let res_adjusted = _mm_subs_epu8(res, offset_128 as __m128i);
+        // Convert to 16-bit for proper signed arithmetic
+        let pred_lo = _mm_unpacklo_epi8(pred, zero);
+        let res_lo = _mm_unpacklo_epi8(res, zero);
+        let pred_hi = _mm_unpackhi_epi8(pred, zero);
+        let res_hi = _mm_unpackhi_epi8(res, zero);
 
-        // Add prediction and residual with saturation
-        let result = _mm_adds_epu8(pred, res_adjusted);
+        // Subtract 128 from residual (now in 16-bit, can handle negative)
+        let res_adjusted_lo = _mm_sub_epi16(res_lo, offset_128);
+        let res_adjusted_hi = _mm_sub_epi16(res_hi, offset_128);
+
+        // Add prediction and residual
+        let result_lo = _mm_add_epi16(pred_lo, res_adjusted_lo);
+        let result_hi = _mm_add_epi16(pred_hi, res_adjusted_hi);
+
+        // Pack back to 8-bit with unsigned saturation
+        let result = _mm_packus_epi16(result_lo, result_hi);
 
         // Store result
         _mm_storeu_si128(output.as_mut_ptr().add(offset) as *mut __m128i, result);
@@ -367,16 +387,4 @@ mod tests {
         assert_eq!(output[255], 110);
     }
 
-    #[test]
-    fn test_buffer_pool() {
-        let pool = BufferPool::new();
-
-        let buf1 = pool.get(256 * 256);
-        assert_eq!(buf1.len(), 256 * 256);
-
-        pool.put(buf1);
-
-        let buf2 = pool.get(256 * 256);
-        assert_eq!(buf2.len(), 256 * 256);
-    }
 }
