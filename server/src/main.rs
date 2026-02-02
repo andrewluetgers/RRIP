@@ -37,6 +37,8 @@ struct Args {
     slides_root: PathBuf,
     #[arg(long, default_value = "residuals_q32")]
     residuals_dir: String,
+    #[arg(long, default_value = "residual_packs")]
+    pack_dir: String,
     #[arg(long, default_value_t = 95)]
     tile_quality: u8,
     #[arg(long, default_value_t = 2048)]
@@ -54,8 +56,6 @@ struct Args {
     #[arg(long, default_value_t = 128)]
     buffer_pool_size: usize,
     #[arg(long)]
-    residual_pack_dir: Option<PathBuf>,
-    #[arg(long)]
     rayon_threads: Option<usize>,
     #[arg(long, default_value_t = 8)]
     tokio_workers: usize,
@@ -67,6 +67,9 @@ struct Args {
     prewarm_on_l2: bool,
     #[arg(long, default_value_t = false)]
     grayscale_only: bool,
+    /// Cache directory for saving reconstructed tiles to disk
+    #[arg(long)]
+    cache_dir: Option<String>,
 }
 
 #[derive(Clone)]
@@ -84,6 +87,7 @@ struct AppState {
     inflight_limit: Arc<Semaphore>,
     prewarm_on_l2: bool,
     grayscale_only: bool,
+    cache_dir: Option<PathBuf>,
 }
 
 #[derive(serde::Deserialize)]
@@ -97,6 +101,7 @@ struct Slide {
     dzi_path: PathBuf,
     files_dir: PathBuf,
     residuals_dir: PathBuf,
+    pack_dir: PathBuf,
     tile_size: u32,
     max_level: u32,
     l0: u32,
@@ -336,7 +341,7 @@ fn main() -> Result<()> {
 }
 
 async fn async_main(args: Args) -> Result<()> {
-    let slides = discover_slides(&args.slides_root, &args.residuals_dir)?;
+    let slides = discover_slides(&args.slides_root, &args.residuals_dir, &args.pack_dir)?;
     if slides.is_empty() {
         return Err(anyhow!(
             "No slides found under {}",
@@ -373,6 +378,17 @@ async fn async_main(args: Args) -> Result<()> {
     } else {
         None
     };
+
+    // Create cache directory if specified
+    if let Some(ref cache_dir_str) = args.cache_dir {
+        let cache_path = PathBuf::from(cache_dir_str);
+        if let Err(err) = fs::create_dir_all(&cache_path) {
+            info!("Failed to create cache directory {}: {}", cache_path.display(), err);
+        } else {
+            info!("Cache directory enabled: {}", cache_path.display());
+        }
+    }
+
     let cache = Cache::builder()
         .max_capacity(args.cache_entries as u64)
         .time_to_idle(Duration::from_secs(300))  // Expire items after 5 min of inactivity
@@ -388,11 +404,12 @@ async fn async_main(args: Args) -> Result<()> {
         write_generated_dir,
         metrics: Arc::new(Mutex::new(Metrics::default())),
         buffer_pool: Arc::new(BufferPool::new(args.buffer_pool_size)),
-        pack_dir: args.residual_pack_dir.clone(),
+        pack_dir: None,  // Now using per-slide pack_dir
         inflight,
         inflight_limit,
         prewarm_on_l2: args.prewarm_on_l2,
         grayscale_only: args.grayscale_only,
+        cache_dir: args.cache_dir.map(PathBuf::from),
     };
 
     let metrics = state.metrics.clone();
@@ -651,7 +668,7 @@ async fn serve_tile(
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
-    let pack_dir = state.pack_dir.clone();
+    let pack_dir = Some(slide.pack_dir.clone());
     let inflight = state.inflight.clone();
     let inflight_limit = state.inflight_limit.clone();
     let permit = inflight_limit.acquire_owned().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -677,6 +694,7 @@ async fn serve_tile(
             &write_root,
             &buffer_pool,
             pack_dir.as_deref(),
+            state.cache_dir.as_deref(),
         );
         match result {
             Ok(result) => {
@@ -772,7 +790,8 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
-    let pack_dir = state.pack_dir.clone();
+    let pack_dir = Some(slide.pack_dir.clone());
+    let cache_dir = state.cache_dir.clone();
     let inflight = state.inflight.clone();
     let inflight_limit = state.inflight_limit.clone();
     tokio::spawn(async move {
@@ -794,6 +813,7 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
                 &write_root,
                 &buffer_pool,
                 pack_dir.as_deref(),
+                cache_dir.as_deref(),
             );
             if let Ok(result) = result {
                 for (k, v) in result.tiles.iter() {
@@ -833,7 +853,46 @@ async fn viewer(
         id: "osd",
         prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
         showNavigator: true,
-        tileSources: "/dzi/{slide_id}.dzi"
+        tileSources: "/dzi/{slide_id}.dzi",
+
+        // Optimized settings for direct control
+        animationTime: 0.55,          // Faster but smooth
+        springStiffness: 13,          // Stiff for direct drag
+        visibilityRatio: 1.0,         // Load tiles when in view
+        constrainDuringPan: false,    // Smooth panning
+        immediateRender: false,       // Wait for tiles
+        blendTime: 0.15,              // Quick fade-in
+
+        // Responsive gesture settings
+        gestureSettingsMouse: {{
+          flickEnabled: true,
+          flickMinSpeed: 180,
+          flickMomentum: 0.14,
+          dragToPan: true,
+          scrollToZoom: true,
+          clickToZoom: true,
+          dblClickToZoom: true,
+          pinchToZoom: true
+        }},
+
+        gestureSettingsTouch: {{
+          flickEnabled: true,
+          flickMinSpeed: 120,
+          flickMomentum: 0.14,
+          dragToPan: true,
+          scrollToZoom: false,
+          clickToZoom: false,
+          dblClickToZoom: true,
+          pinchToZoom: true
+        }},
+
+        // Other optimizations
+        maxZoomPixelRatio: 2,
+        pixelsPerWheelLine: 60,
+        zoomPerScroll: 1.2,
+        zoomPerClick: 2.0,
+        minZoomImageRatio: 0.5,
+        maxZoomLevel: 40
       }});
     </script>
   </body>
@@ -1003,7 +1062,7 @@ fn decode_luma_from_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-fn discover_slides(root: &Path, residuals_dir: &str) -> Result<HashMap<String, Slide>> {
+fn discover_slides(root: &Path, residuals_dir: &str, pack_dir: &str) -> Result<HashMap<String, Slide>> {
     let mut slides = HashMap::new();
     for entry in fs::read_dir(root).with_context(|| format!("reading {}", root.display()))? {
         let entry = entry?;
@@ -1027,6 +1086,7 @@ fn discover_slides(root: &Path, residuals_dir: &str) -> Result<HashMap<String, S
             dzi_path,
             files_dir,
             residuals_dir: slide_root.join(residuals_dir),
+            pack_dir: slide_root.join(pack_dir),
             tile_size,
             max_level,
             l0,
@@ -1072,6 +1132,7 @@ fn generate_family(
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
     pack_dir: Option<&Path>,
+    cache_dir: Option<&Path>,
 ) -> Result<FamilyResult> {
     let total_start = Instant::now();
     let l2_path = baseline_tile_path(slide, slide.l2, x2, y2);
@@ -1415,6 +1476,30 @@ fn generate_family(
     } else {
         None
     };
+
+    // Save tiles to cache directory if specified
+    if let Some(cache_dir) = cache_dir {
+        for (tile_key, tile_data) in &out {
+            let tile_path = cache_dir
+                .join(&slide.slide_id)
+                .join(format!("{}", tile_key.level))
+                .join(format!("{}_{}.jpg", tile_key.x, tile_key.y));
+
+            // Create parent directories if needed
+            if let Some(parent) = tile_path.parent() {
+                if let Err(err) = fs::create_dir_all(parent) {
+                    info!("Failed to create cache dir {}: {}", parent.display(), err);
+                    continue;
+                }
+            }
+
+            // Write tile to disk
+            if let Err(err) = fs::write(&tile_path, tile_data) {
+                info!("Failed to write cached tile {}: {}", tile_path.display(), err);
+            }
+        }
+    }
+
     Ok(FamilyResult { tiles: out, stats })
 }
 
