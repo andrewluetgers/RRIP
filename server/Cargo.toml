@@ -21,6 +21,11 @@ memmap2 = "0.9"
 sysinfo = "0.30"
 crossbeam = "0.8"
 parking_lot = "0.12"
+lz4_flex = "0.11"
+
+[[bin]]
+name = "test_pack_compression"
+path = "src/simple_pack_compression_test.rs"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }

@@ -18,6 +18,12 @@ and system libs:
 """
 import argparse, pathlib, shutil, re, json, random, math
 import numpy as np
+try:
+    import lz4.frame
+    HAS_LZ4 = True
+except ImportError:
+    HAS_LZ4 = False
+    print("Warning: lz4 not installed. Pack files will not be compressed. Install with: pip install lz4")
 from PIL import Image
 
 def import_pyvips():
@@ -215,8 +221,20 @@ def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
             index.append((0).to_bytes(4, "little"))
             cursor += len(blob)
 
-        out_path = out_dir / f"{parent}.pack"
-        out_path.write_bytes(b"".join(header) + b"".join(index) + data)
+        # Assemble the uncompressed pack file
+        pack_data = b"".join(header) + b"".join(index) + data
+
+        # Compress with LZ4 if available (fastest setting)
+        if HAS_LZ4:
+            compressed_data = lz4.frame.compress(pack_data, compression_level=0)  # 0 = fastest
+            compression_ratio = len(pack_data) / len(compressed_data)
+            savings = 100 * (1 - len(compressed_data) / len(pack_data))
+            print(f"  {parent}.cpack: {len(pack_data)//1024}KB → {len(compressed_data)//1024}KB (ratio: {compression_ratio:.2f}x, savings: {savings:.1f}%)")
+            out_path = out_dir / f"{parent}.cpack"  # .cpack for compressed
+            out_path.write_bytes(compressed_data)
+        else:
+            out_path = out_dir / f"{parent}.pack"
+            out_path.write_bytes(pack_data)
 
 def main():
     ap=argparse.ArgumentParser()
