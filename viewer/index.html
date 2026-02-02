@@ -65,7 +65,10 @@
         prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
         showNavigator: true,
         sequenceMode: false,
-        tileSources: []
+        tileSources: [],
+        maxZoomPixelRatio: 2,
+        maxZoomLevel: 40,
+        constrainDuringPan: false
       });
 
       function normalizePath(path) {

@@ -1,0 +1,452 @@
+[
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 55.940371666854986,
+    "ssim": 0.9972657277266216,
+    "bpp": 1.0,
+    "decode_ms": 6.33692741394043
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 56.53898758310551,
+    "ssim": 0.9978516593038439,
+    "bpp": 1.0,
+    "decode_ms": 7.470130920410156
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 1.0,
+    "decode_ms": 6.992101669311523
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 42.222832873970695,
+    "ssim": 0.9658779772907337,
+    "bpp": 1.0,
+    "decode_ms": 6.031990051269531
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 28.691570853404173,
+    "ssim": 0.9781979681129699,
+    "bpp": 1.0,
+    "decode_ms": 1.4688968658447266
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 36.15981604662997,
+    "ssim": 0.8965096458546133,
+    "bpp": 1.0,
+    "decode_ms": 6.35218620300293
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 44.12318566886629,
+    "ssim": 0.9786615685473586,
+    "bpp": 1.0,
+    "decode_ms": 7.133960723876953
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 48.83572567058438,
+    "ssim": 0.9890160650772865,
+    "bpp": 1.0,
+    "decode_ms": 6.839990615844727
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 29.19608859131547,
+    "ssim": 0.9704732577513556,
+    "bpp": 1.0,
+    "decode_ms": 7.5531005859375
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 36.12197597930918,
+    "ssim": 0.9821493933193596,
+    "bpp": 1.0,
+    "decode_ms": 6.922006607055664
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 45.05546500653872,
+    "ssim": 0.9793346942839468,
+    "bpp": 1.0,
+    "decode_ms": 6.673097610473633
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 29.243864410821065,
+    "ssim": 0.9699922935208616,
+    "bpp": 1.0,
+    "decode_ms": 7.207155227661133
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 31.25225832929292,
+    "ssim": 0.9873191499990219,
+    "bpp": 1.0,
+    "decode_ms": 7.0819854736328125
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 1.0,
+    "decode_ms": 7.581949234008789
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 35.090894626274284,
+    "ssim": 0.9818803512943095,
+    "bpp": 1.0,
+    "decode_ms": 7.071256637573242
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 32.329645627349564,
+    "ssim": 0.9682969702965784,
+    "bpp": 1.0,
+    "decode_ms": 6.668806076049805
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 36.87998508792585,
+    "ssim": 0.977680857290669,
+    "bpp": 1.0,
+    "decode_ms": 7.021188735961914
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 61.57535593791329,
+    "ssim": 0.9992441496741771,
+    "bpp": 1.0,
+    "decode_ms": 7.3909759521484375
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 46.859586166682625,
+    "ssim": 0.9856375213781926,
+    "bpp": 1.0,
+    "decode_ms": 6.719827651977539
+  },
+  {
+    "method": "RRIP",
+    "quality": 32,
+    "level": 16,
+    "file_size_kb": 8.0,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 1.0,
+    "decode_ms": 7.302045822143555
+  },
+  {
+    "method": "JPEG",
+    "quality": 95,
+    "level": 16,
+    "file_size_kb": 1.8291015625,
+    "psnr_db": 78.97166531668641,
+    "ssim": 0.9999859663881281,
+    "bpp": 0.2286376953125,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 95,
+    "level": 16,
+    "file_size_kb": 1.8818359375,
+    "psnr_db": 68.42572389905463,
+    "ssim": 0.999931248106649,
+    "bpp": 0.2352294921875,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 95,
+    "level": 16,
+    "file_size_kb": 1.6123046875,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 0.2015380859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 95,
+    "level": 16,
+    "file_size_kb": 5.3505859375,
+    "psnr_db": 54.683620467100766,
+    "ssim": 0.9988356044324646,
+    "bpp": 0.6688232421875,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 95,
+    "level": 16,
+    "file_size_kb": 20.7080078125,
+    "psnr_db": 43.90291685500145,
+    "ssim": 0.9998491935392188,
+    "bpp": 2.5885009765625,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 90,
+    "level": 16,
+    "file_size_kb": 1.765625,
+    "psnr_db": 79.99471576563404,
+    "ssim": 0.9999963056367193,
+    "bpp": 0.220703125,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 90,
+    "level": 16,
+    "file_size_kb": 1.7978515625,
+    "psnr_db": 69.2284250915485,
+    "ssim": 0.999952136910239,
+    "bpp": 0.2247314453125,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 90,
+    "level": 16,
+    "file_size_kb": 1.6123046875,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 0.2015380859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 90,
+    "level": 16,
+    "file_size_kb": 4.1181640625,
+    "psnr_db": 53.447386805600054,
+    "ssim": 0.998915030357017,
+    "bpp": 0.5147705078125,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 90,
+    "level": 16,
+    "file_size_kb": 15.8955078125,
+    "psnr_db": 42.20979470947757,
+    "ssim": 0.9998109578476556,
+    "bpp": 1.9869384765625,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 80,
+    "level": 16,
+    "file_size_kb": 1.6943359375,
+    "psnr_db": 69.04193229151178,
+    "ssim": 0.9999057859568107,
+    "bpp": 0.2117919921875,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 80,
+    "level": 16,
+    "file_size_kb": 1.7060546875,
+    "psnr_db": 64.28345299479092,
+    "ssim": 0.999826314066814,
+    "bpp": 0.2132568359375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 80,
+    "level": 16,
+    "file_size_kb": 1.6123046875,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 0.2015380859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 80,
+    "level": 16,
+    "file_size_kb": 3.1650390625,
+    "psnr_db": 49.87287074424505,
+    "ssim": 0.9969020571460864,
+    "bpp": 0.3956298828125,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 80,
+    "level": 16,
+    "file_size_kb": 11.5419921875,
+    "psnr_db": 39.995452092914896,
+    "ssim": 0.999648897807849,
+    "bpp": 1.4427490234375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 70,
+    "level": 16,
+    "file_size_kb": 1.6767578125,
+    "psnr_db": 64.43263333958592,
+    "ssim": 0.9996306196619804,
+    "bpp": 0.2095947265625,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 70,
+    "level": 16,
+    "file_size_kb": 1.6953125,
+    "psnr_db": 60.91657282886647,
+    "ssim": 0.9993819205390025,
+    "bpp": 0.2119140625,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 70,
+    "level": 16,
+    "file_size_kb": 1.6123046875,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 0.2015380859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 70,
+    "level": 16,
+    "file_size_kb": 2.8740234375,
+    "psnr_db": 48.51995734765919,
+    "ssim": 0.9926953137133484,
+    "bpp": 0.3592529296875,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 70,
+    "level": 16,
+    "file_size_kb": 10.23046875,
+    "psnr_db": 38.05777514212657,
+    "ssim": 0.9989055374871414,
+    "bpp": 1.27880859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 60,
+    "level": 16,
+    "file_size_kb": 1.6669921875,
+    "psnr_db": 48.2672273758066,
+    "ssim": 0.9983511038408243,
+    "bpp": 0.2083740234375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 60,
+    "level": 16,
+    "file_size_kb": 1.638671875,
+    "psnr_db": 59.1738779032558,
+    "ssim": 0.9989469776466401,
+    "bpp": 0.204833984375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 60,
+    "level": 16,
+    "file_size_kb": 1.6123046875,
+    "psnr_db": 100.0,
+    "ssim": 1.0,
+    "bpp": 0.2015380859375,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 60,
+    "level": 16,
+    "file_size_kb": 2.4267578125,
+    "psnr_db": 45.78996234445533,
+    "ssim": 0.9829919444220815,
+    "bpp": 0.3033447265625,
+    "decode_ms": 0
+  },
+  {
+    "method": "JPEG",
+    "quality": 60,
+    "level": 16,
+    "file_size_kb": 8.7412109375,
+    "psnr_db": 36.15114941749036,
+    "ssim": 0.9975836557629304,
+    "bpp": 1.0926513671875,
+    "decode_ms": 0
+  }
+]

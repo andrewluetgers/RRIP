@@ -2,29 +2,107 @@
 
 This is a Rust HTTP server that serves DeepZoom tiles and reconstructs L1/L0 tiles on demand from L2 + residuals.
 
-## Data layout
+## Core Parameters
 
-The server scans `--slides-root` for slide folders. Each slide folder should contain:
+### --slides-root (Required)
+Root directory containing all slide folders. The server recursively scans this directory at startup for valid slide structures.
 
-```
-baseline_pyramid.dzi
-baseline_pyramid_files/{level}/{x}_{y}.jpg
-residuals_q32/L1/{x2}_{y2}/{x1}_{y1}.jpg
-residuals_q32/L0/{x2}_{y2}/{x0}_{y0}.jpg
+```bash
+--slides-root /path/to/slides  # e.g., --slides-root ../data
 ```
 
-Optional packfiles:
+### --cache-dir
+Directory where RocksDB stores the persistent warm cache. This is a key-value database that caches reconstructed tiles across server restarts.
+
+```bash
+--cache-dir /var/cache/rrip  # Default: /tmp/rrip-cache
+```
+
+**How it works:**
+- RocksDB creates SST (Sorted String Table) files in this directory
+- Keys: `tile:{slide_id}:{level}:{x}:{y}`
+- Values: Compressed JPEG bytes of reconstructed tiles
+- Survives server restarts - tiles don't need re-reconstruction
+- Can be shared between multiple server instances (read-only)
+- Typical size: 10-50GB depending on usage patterns
+
+**Cache directory structure:**
+```
+/var/cache/rrip/
+├── 000003.log          # Write-ahead log
+├── 000004.sst          # Sorted String Table files
+├── 000005.sst          # (immutable tile data)
+├── CURRENT             # Points to current manifest
+├── IDENTITY            # DB identity file
+├── LOCK                # Process lock
+├── LOG                 # RocksDB logs
+├── MANIFEST-000002     # DB metadata
+└── OPTIONS-000006      # Configuration
+```
+
+### --pack-dir
+Subdirectory name within each slide folder containing pre-generated pack files. Pack files bundle all residuals for a tile family into a single file for faster I/O.
+
+```bash
+--pack-dir residual_packs  # Default: looks for this name
+```
+
+**Pack file format:**
+- One pack per L2 tile coordinate: `{x2}_{y2}.pack`
+- Contains: 1 L2 + 4 L1 residuals + 16 L0 residuals
+- Reduces 21 file reads to 1 seek operation
+- ~100-400KB per pack file
+
+## Data Layout
+
+The server expects this directory structure under `--slides-root`:
 
 ```
-residual_packs/{x2}_{y2}.pack
+<slides-root>/
+├── slide1/
+│   ├── baseline_pyramid.dzi          # DZI manifest
+│   ├── baseline_pyramid_files/        # Standard pyramid tiles
+│   │   ├── 0/                        # Lowest resolution
+│   │   │   └── 0_0.jpg
+│   │   ├── ...
+│   │   └── 14/                       # Highest resolution (L0)
+│   │       ├── 0_0.jpg
+│   │       └── ...
+│   ├── residuals_q32/                # Individual residual tiles
+│   │   ├── L1/{x2}_{y2}/{x1}_{y1}.jpg
+│   │   └── L0/{x2}_{y2}/{x0}_{y0}.jpg
+│   └── residual_packs/               # Optional pack files
+│       ├── 0_0.pack                  # Bundle for L2 tile (0,0)
+│       ├── 0_1.pack
+│       └── ...
+└── slide2/
+    └── (same structure)
 ```
 
-## Run
+## Quick Start
 
-From the repo root:
+```bash
+# Build with optimizations
+./build.sh --release
 
-```
-cargo run --manifest-path server/Cargo.toml -- --slides-root data --port 3007
+# Run with essential parameters
+./run-server.sh \
+  --slides-root ../data \
+  --port 3007 \
+  --cache-dir /tmp/rrip-cache \
+  --pack-dir residual_packs
+
+# Full production config
+cargo run --release --manifest-path server/Cargo.toml -- \
+  --slides-root /data/slides \
+  --port 3007 \
+  --cache-dir /var/cache/rrip \
+  --pack-dir residual_packs \
+  --hot-cache-mb 1024 \
+  --warm-cache-gb 10 \
+  --rayon-threads 16 \
+  --max-inflight-families 32 \
+  --timing-breakdown
 ```
 
 ## Install Rust

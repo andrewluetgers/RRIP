@@ -18,6 +18,12 @@ and system libs:
 """
 import argparse, pathlib, shutil, re, json, random, math
 import numpy as np
+try:
+    import lz4.frame
+    HAS_LZ4 = True
+except ImportError:
+    HAS_LZ4 = False
+    print("Warning: lz4 not installed. Pack files will not be compressed. Install with: pip install lz4")
 from PIL import Image
 
 def import_pyvips():
@@ -215,8 +221,23 @@ def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
             index.append((0).to_bytes(4, "little"))
             cursor += len(blob)
 
+        # Assemble the uncompressed pack file
+        pack_data = b"".join(header) + b"".join(index) + data
+
+        # Always compress with LZ4 (it's required now)
+        if not HAS_LZ4:
+            raise ImportError("LZ4 is required. Install with: pip install lz4")
+
+        # Use lz4.block for compatibility with Rust lz4_flex
+        import lz4.block
+        # Prepend size for lz4_flex::decompress_size_prepended
+        compressed_data = len(pack_data).to_bytes(4, 'little') + lz4.block.compress(pack_data, mode='fast', compression=0, store_size=False)
+        compression_ratio = len(pack_data) / len(compressed_data)
+        savings = 100 * (1 - len(compressed_data) / len(pack_data))
+        print(f"  {parent}.pack: {len(pack_data)//1024}KB → {len(compressed_data)//1024}KB (ratio: {compression_ratio:.2f}x, savings: {savings:.1f}%)")
+
         out_path = out_dir / f"{parent}.pack"
-        out_path.write_bytes(b"".join(header) + b"".join(index) + data)
+        out_path.write_bytes(compressed_data)
 
 def main():
     ap=argparse.ArgumentParser()
@@ -233,7 +254,7 @@ def main():
     ap_e.add_argument("--out", required=True)
     ap_e.add_argument("--tile", type=int, default=256)
     ap_e.add_argument("--resq", type=int, default=32)
-    ap_e.add_argument("--max-parents", type=int, default=200)
+    ap_e.add_argument("--max-parents", type=int, default=None)
 
     ap_p=sp.add_parser("pack")
     ap_p.add_argument("--residuals", required=True, help="Path to residuals_qXX folder")

@@ -24,7 +24,47 @@
         id: "osd",
         prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
         showNavigator: true,
-        tileSources: []
+        tileSources: [],
+
+        // Remove elastic/springy behavior for more direct control
+        animationTime: 0.6,           // Smoother momentum, still responsive (default: 1.2)
+        springStiffness: 12,          // Stiffer spring for direct drag (default: 6.5)
+        visibilityRatio: 1.0,         // Load tiles when fully in view (default: 0.5)
+        constrainDuringPan: false,    // Don't constrain during pan for smoother feel
+        immediateRender: false,       // Wait for tiles before rendering (default: false)
+        blendTime: 0.15,              // Quick fade-in to hide tile loading (default: 0)
+
+        // Gesture settings for more responsive dragging
+        gestureSettingsMouse: {
+          flickEnabled: true,         // Keep momentum scrolling
+          flickMinSpeed: 180,         // Higher threshold to trigger momentum
+          flickMomentum: 0.15,        // Natural momentum decay
+          dragToPan: true,
+          scrollToZoom: true,
+          clickToZoom: true,
+          dblClickToZoom: true,
+          pinchToZoom: true
+        },
+
+        // Touch settings (for mobile)
+        gestureSettingsTouch: {
+          flickEnabled: true,
+          flickMinSpeed: 120,
+          flickMomentum: 0.15,
+          dragToPan: true,
+          scrollToZoom: false,
+          clickToZoom: false,
+          dblClickToZoom: true,
+          pinchToZoom: true
+        },
+
+        // Other optimizations
+        maxZoomPixelRatio: 2,         // Limit over-zooming
+        pixelsPerWheelLine: 60,       // More responsive scroll zoom
+        zoomPerScroll: 1.2,           // Zoom amount per scroll
+        zoomPerClick: 2.0,            // Zoom amount per click
+        minZoomImageRatio: 0.5,       // Allow zooming out more
+        maxZoomLevel: 40              // Maximum zoom level
       });
 
       function load() {
