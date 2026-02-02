@@ -228,7 +228,10 @@ def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
         if not HAS_LZ4:
             raise ImportError("LZ4 is required. Install with: pip install lz4")
 
-        compressed_data = lz4.frame.compress(pack_data, compression_level=0)  # 0 = fastest
+        # Use lz4.block for compatibility with Rust lz4_flex
+        import lz4.block
+        # Prepend size for lz4_flex::decompress_size_prepended
+        compressed_data = len(pack_data).to_bytes(4, 'little') + lz4.block.compress(pack_data, mode='fast', compression=0, store_size=False)
         compression_ratio = len(pack_data) / len(compressed_data)
         savings = 100 * (1 - len(compressed_data) / len(pack_data))
         print(f"  {parent}.pack: {len(pack_data)//1024}KB → {len(compressed_data)//1024}KB (ratio: {compression_ratio:.2f}x, savings: {savings:.1f}%)")
@@ -251,7 +254,7 @@ def main():
     ap_e.add_argument("--out", required=True)
     ap_e.add_argument("--tile", type=int, default=256)
     ap_e.add_argument("--resq", type=int, default=32)
-    ap_e.add_argument("--max-parents", type=int, default=200)
+    ap_e.add_argument("--max-parents", type=int, default=None)
 
     ap_p=sp.add_parser("pack")
     ap_p.add_argument("--residuals", required=True, help="Path to residuals_qXX folder")
