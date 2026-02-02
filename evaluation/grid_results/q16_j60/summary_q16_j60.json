@@ -1,0 +1,17 @@
+{
+  "tile_size": 256,
+  "quantization_levels": 16,
+  "residual_jpeg_quality": 60,
+  "dz_levels": {
+    "L0": 16,
+    "L1": 15,
+    "L2": 14
+  },
+  "baseline_bytes_all_levels": 701276993,
+  "retained_bytes_L2plus": 62128167,
+  "residual_bytes_L1": 2862339,
+  "residual_bytes_L0": 10212842,
+  "proposed_bytes": 75203348,
+  "compression_ratio": 9.325076763869609,
+  "savings_pct": 89.27622768882138
+}

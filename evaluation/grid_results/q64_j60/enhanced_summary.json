@@ -1,0 +1,19 @@
+{
+  "tile_size": 256,
+  "quantization_levels": 64,
+  "residual_jpeg_quality": 60,
+  "dz_levels": {
+    "L0": 16,
+    "L1": 15,
+    "L2": 14
+  },
+  "baseline_bytes_all_levels": 701276993,
+  "retained_bytes_L2plus": 62128167,
+  "residual_bytes_L1": 1137427,
+  "residual_bytes_L0": 4552949,
+  "proposed_bytes": 67818543,
+  "compression_ratio": 10.34049040245527,
+  "savings_pct": 90.329278776154,
+  "generation_time_seconds": 6.578851699829102,
+  "config_name": "q64_j60"
+}

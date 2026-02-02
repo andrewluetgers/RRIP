@@ -1,7 +1,7 @@
 [project]
-name = "rrip-wsi-tools"
+name = "origami-wsi-tools"
 version = "0.1.0"
-description = "WSI residual pyramid CLI tools."
+description = "WSI residual pyramid CLI tools for ORIGAMI."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

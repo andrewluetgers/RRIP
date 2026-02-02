@@ -1,0 +1,19 @@
+{
+  "tile_size": 256,
+  "quantization_levels": 32,
+  "residual_jpeg_quality": 90,
+  "dz_levels": {
+    "L0": 16,
+    "L1": 15,
+    "L2": 14
+  },
+  "baseline_bytes_all_levels": 701276993,
+  "retained_bytes_L2plus": 62128167,
+  "residual_bytes_L1": 5139602,
+  "residual_bytes_L0": 18679660,
+  "proposed_bytes": 85947429,
+  "compression_ratio": 8.15937138736285,
+  "savings_pct": 87.74415389954194,
+  "generation_time_seconds": 7.423753023147583,
+  "config_name": "q32_j90"
+}

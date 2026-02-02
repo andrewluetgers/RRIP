@@ -1,0 +1,173 @@
+{
+  "q16_j30": {
+    "tile_size": 256,
+    "quantization_levels": 16,
+    "residual_jpeg_quality": 30,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 1815842,
+    "residual_bytes_L0": 6524048,
+    "proposed_bytes": 70468057,
+    "compression_ratio": 9.951700427897423,
+    "savings_pct": 89.95146601080637,
+    "generation_time_seconds": 7.281160354614258,
+    "config_name": "q16_j30"
+  },
+  "q16_j60": {
+    "tile_size": 256,
+    "quantization_levels": 16,
+    "residual_jpeg_quality": 60,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 2862339,
+    "residual_bytes_L0": 10212842,
+    "proposed_bytes": 75203348,
+    "compression_ratio": 9.325076763869609,
+    "savings_pct": 89.27622768882138,
+    "generation_time_seconds": 7.915045261383057,
+    "config_name": "q16_j60"
+  },
+  "q16_j90": {
+    "tile_size": 256,
+    "quantization_levels": 16,
+    "residual_jpeg_quality": 90,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 7081200,
+    "residual_bytes_L0": 24452914,
+    "proposed_bytes": 93662281,
+    "compression_ratio": 7.487293556303631,
+    "savings_pct": 86.64403909797166,
+    "generation_time_seconds": 6.842213869094849,
+    "config_name": "q16_j90"
+  },
+  "q32_j30": {
+    "tile_size": 256,
+    "quantization_levels": 32,
+    "residual_jpeg_quality": 30,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 914276,
+    "residual_bytes_L0": 3588961,
+    "proposed_bytes": 66631404,
+    "compression_ratio": 10.524721841370775,
+    "savings_pct": 90.4985612439734,
+    "generation_time_seconds": 6.460349798202515,
+    "config_name": "q32_j30"
+  },
+  "q32_j60": {
+    "tile_size": 256,
+    "quantization_levels": 32,
+    "residual_jpeg_quality": 60,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 1906278,
+    "residual_bytes_L0": 7151098,
+    "proposed_bytes": 71185543,
+    "compression_ratio": 9.851396272976382,
+    "savings_pct": 89.8491546549282,
+    "generation_time_seconds": 6.329389810562134,
+    "config_name": "q32_j60"
+  },
+  "q32_j90": {
+    "tile_size": 256,
+    "quantization_levels": 32,
+    "residual_jpeg_quality": 90,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 5139602,
+    "residual_bytes_L0": 18679660,
+    "proposed_bytes": 85947429,
+    "compression_ratio": 8.15937138736285,
+    "savings_pct": 87.74415389954194,
+    "generation_time_seconds": 7.423753023147583,
+    "config_name": "q32_j90"
+  },
+  "q64_j30": {
+    "tile_size": 256,
+    "quantization_levels": 64,
+    "residual_jpeg_quality": 30,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 405632,
+    "residual_bytes_L0": 1840704,
+    "proposed_bytes": 64374503,
+    "compression_ratio": 10.8937072958839,
+    "savings_pct": 90.82038857076836,
+    "generation_time_seconds": 6.455478191375732,
+    "config_name": "q64_j30"
+  },
+  "q64_j60": {
+    "tile_size": 256,
+    "quantization_levels": 64,
+    "residual_jpeg_quality": 60,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 1137427,
+    "residual_bytes_L0": 4552949,
+    "proposed_bytes": 67818543,
+    "compression_ratio": 10.34049040245527,
+    "savings_pct": 90.329278776154,
+    "generation_time_seconds": 6.578851699829102,
+    "config_name": "q64_j60"
+  },
+  "q64_j90": {
+    "tile_size": 256,
+    "quantization_levels": 64,
+    "residual_jpeg_quality": 90,
+    "dz_levels": {
+      "L0": 16,
+      "L1": 15,
+      "L2": 14
+    },
+    "baseline_bytes_all_levels": 701276993,
+    "retained_bytes_L2plus": 62128167,
+    "residual_bytes_L1": 2851169,
+    "residual_bytes_L0": 10045579,
+    "proposed_bytes": 75024915,
+    "compression_ratio": 9.347254748639168,
+    "savings_pct": 89.30167170050024,
+    "generation_time_seconds": 6.096307992935181,
+    "config_name": "q64_j90"
+  }
+}

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RRIP (Residual-Pyramid Image Processor) is a high-performance Rust tile server for serving Deep Zoom Image (DZI) pyramids with dynamic reconstruction of high-resolution tiles using residual compression techniques. The project is designed to efficiently serve whole-slide images (WSI) with reduced storage requirements.
+ORIGAMI (Residual-Pyramid Image Processor) is a high-performance Rust tile server for serving Deep Zoom Image (DZI) pyramids with dynamic reconstruction of high-resolution tiles using residual compression techniques. The project is designed to efficiently serve whole-slide images (WSI) with reduced storage requirements.
 
 This project also includes Python-based CLI tools managed with UV (Python package and project manager) for preprocessing whole-slide images and generating residual pyramids.
 

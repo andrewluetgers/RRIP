@@ -1,14 +1,14 @@
-# RRIP: Residual Reconstruction from Interpolated Priors
+# ORIGAMI: Optimized Residual Image Generation Across Multiscale Interpolation
 
-[![Build and Test](https://github.com/andrewluetgers/RRIP/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/andrewluetgers/RRIP/actions/workflows/build-and-test.yml)
+[![Build and Test](https://github.com/andrewluetgers/ORIGAMI/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/andrewluetgers/ORIGAMI/actions/workflows/build-and-test.yml)
 
 A high-performance tile server for gigapixel whole-slide images (WSI) that achieves 82% storage reduction on top of standard JPEG compression through intelligent residual encoding while maintaining diagnostic quality.
 
 ## 🎯 Overview
 
-RRIP is a serving-oriented compression system designed for pathology and satellite imagery that leverages a key insight: **the finest two pyramid levels (L0 and L1) typically account for 80-95% of storage in tiled image pyramids**.
+ORIGAMI is a serving-oriented compression system designed for pathology and satellite imagery that leverages a key insight: **the finest two pyramid levels (L0 and L1) typically account for 80-95% of storage in tiled image pyramids**.
 
-Instead of storing these levels as full-quality JPEG tiles, RRIP:
+Instead of storing these levels as full-quality JPEG tiles, ORIGAMI:
 - Keeps conventional high-quality tiles for L2 and coarser levels
 - Stores L0/L1 as compact residuals relative to interpolated predictions
 - Reconstructs tiles on-demand with optimized CPU operations
@@ -17,7 +17,7 @@ Instead of storing these levels as full-quality JPEG tiles, RRIP:
 ### Key Features
 
 - **82% storage reduction beyond JPEG** (5.5× additional compression on top of JPEG Q90)
-- **~33× total compression from raw pixels** (JPEG provides ~6×, RRIP adds 5.5×)
+- **~33× total compression from raw pixels** (JPEG provides ~6×, ORIGAMI adds 5.5×)
 - **4-7ms family generation** (20 tiles), 0.35ms amortized per tile
 - **49.8 dB PSNR relative to JPEG Q90** (minimal additional quality loss)
 - **0.98 SSIM** structural similarity to JPEG baseline
@@ -43,8 +43,8 @@ apt-get install libvips-dev openslide-tools  # For WSI processing
 
 ```bash
 # Clone the repository
-git clone https://github.com/andrewluetgers/RRIP.git
-cd RRIP
+git clone https://github.com/andrewluetgers/ORIGAMI.git
+cd ORIGAMI
 
 # Quick start with example data
 ./quick_start.sh  # Downloads sample, generates pyramids, starts server
@@ -108,7 +108,7 @@ python3 -m http.server 8000
 open http://localhost:8000/baseline_viewer.html
 ```
 
-### Step 5: Start RRIP Tile Server
+### Step 5: Start ORIGAMI Tile Server
 
 ```bash
 # Build the server
@@ -133,7 +133,7 @@ cd server
 ### Step 6: Access Viewers and APIs
 
 ```bash
-# RRIP reconstructed view (with residuals)
+# ORIGAMI reconstructed view (with residuals)
 open http://localhost:3007/viewer/demo_out
 
 # Direct tile access
@@ -213,7 +213,7 @@ curl http://localhost:3007/metrics
 
 ### How It Works
 
-RRIP implements a hierarchical reconstruction strategy:
+ORIGAMI implements a hierarchical reconstruction strategy:
 
 ```
 L2 (Base) → Upsample 2x → L1 Prediction → Add Residual → L1 Reconstructed
@@ -237,7 +237,7 @@ L2 (Base) → Upsample 2x → L1 Prediction → Add Residual → L1 Reconstructe
 ## 📁 Project Structure
 
 ```
-RRIP/
+ORIGAMI/
 ├── server/                 # High-performance Rust tile server
 │   ├── src/
 │   │   ├── main.rs        # Server core with tile reconstruction
@@ -359,7 +359,7 @@ docker-compose up
 
 ## 📈 Evaluation Results
 
-RRIP has been evaluated using JPEG Q90 compressed tiles as the baseline (not raw pixels). This reflects real-world deployment where WSI systems already use JPEG compression.
+ORIGAMI has been evaluated using JPEG Q90 compressed tiles as the baseline (not raw pixels). This reflects real-world deployment where WSI systems already use JPEG compression.
 
 ### Compression Comparison
 
@@ -367,14 +367,14 @@ RRIP has been evaluated using JPEG Q90 compressed tiles as the baseline (not raw
 |--------|-----------|------------------|-------------|----------------------|--------------|
 | Raw pixels | ~196 KB | - | - | - | 1× |
 | JPEG Q90 (baseline) | 25 KB | Reference | Reference | - | ~8× |
-| **RRIP** | **8 KB** | **49.8 dB** | **0.98** | **3.1×** | **~25×** |
+| **ORIGAMI** | **8 KB** | **49.8 dB** | **0.98** | **3.1×** | **~25×** |
 | JPEG Q60 (recompressed) | 3.2 KB | 57.9 dB | 0.996 | 7.8× | ~61× |
 
 **Important Notes:**
-- RRIP achieves 82% reduction FROM already-compressed JPEG Q90 tiles
+- ORIGAMI achieves 82% reduction FROM already-compressed JPEG Q90 tiles
 - Quality metrics (PSNR, SSIM) are relative to JPEG Q90, not raw pixels
-- Total compression from raw is approximately 25-33× (6× from JPEG × 5.5× from RRIP)
-- RRIP optimizes for serving efficiency with family generation, not just maximum compression
+- Total compression from raw is approximately 25-33× (6× from JPEG × 5.5× from ORIGAMI)
+- ORIGAMI optimizes for serving efficiency with family generation, not just maximum compression
 
 ### Running the Evaluation
 
@@ -415,7 +415,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## 📚 Research
 
-RRIP is based on research in multi-resolution image compression and perceptual coding. The method exploits:
+ORIGAMI is based on research in multi-resolution image compression and perceptual coding. The method exploits:
 
 1. **Pyramid byte dominance**: L0+L1 comprise majority of storage
 2. **Perceptual redundancy**: Chroma can be subsampled more aggressively
@@ -438,4 +438,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 - **Author**: Andrew Luetgers
 - **GitHub**: [@andrewluetgers](https://github.com/andrewluetgers)
-- **Issues**: [GitHub Issues](https://github.com/andrewluetgers/RRIP/issues)
+- **Issues**: [GitHub Issues](https://github.com/andrewluetgers/ORIGAMI/issues)
