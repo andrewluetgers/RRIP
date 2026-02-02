@@ -856,8 +856,8 @@ async fn viewer(
         tileSources: "/dzi/{slide_id}.dzi",
 
         // Optimized settings for direct control
-        animationTime: 0.55,          // Faster but smooth
-        springStiffness: 13,          // Stiff for direct drag
+        animationTime: 0.6,           // Balanced momentum, responsive drag
+        springStiffness: 12,          // Stiff for direct drag
         visibilityRatio: 1.0,         // Load tiles when in view
         constrainDuringPan: false,    // Smooth panning
         immediateRender: false,       // Wait for tiles
@@ -867,7 +867,7 @@ async fn viewer(
         gestureSettingsMouse: {{
           flickEnabled: true,
           flickMinSpeed: 180,
-          flickMomentum: 0.14,
+          flickMomentum: 0.15,
           dragToPan: true,
           scrollToZoom: true,
           clickToZoom: true,
@@ -878,7 +878,7 @@ async fn viewer(
         gestureSettingsTouch: {{
           flickEnabled: true,
           flickMinSpeed: 120,
-          flickMomentum: 0.14,
+          flickMomentum: 0.15,
           dragToPan: true,
           scrollToZoom: false,
           clickToZoom: false,

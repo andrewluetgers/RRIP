@@ -8,8 +8,8 @@ OpenSeadragon's default settings create an elastic, springy feeling when draggin
 
 ```javascript
 // Core animation settings - direct drag, smooth momentum
-animationTime: 0.55,         // Default: 1.2 - Tighter but smooth
-springStiffness: 13,         // Default: 6.5 - Stiffer spring for snappy drag
+animationTime: 0.6,          // Default: 1.2 - Balanced for smooth momentum
+springStiffness: 12,         // Default: 6.5 - Stiff spring for direct drag
 constrainDuringPan: false,   // Default: false - Don't constrain during drag
 immediateRender: false,      // Default: false - Wait for tiles
 blendTime: 0.15,            // Default: 0 - Quick fade to hide tile loading
@@ -18,7 +18,7 @@ blendTime: 0.15,            // Default: 0 - Quick fade to hide tile loading
 gestureSettingsMouse: {
     flickEnabled: true,      // Keep momentum scrolling
     flickMinSpeed: 180,      // Default: 120 - Higher threshold (less accidental)
-    flickMomentum: 0.14,     // Default: 0.25 - Tighter, natural decay
+    flickMomentum: 0.15,     // Default: 0.25 - Slower, natural decay
     dragToPan: true,
     scrollToZoom: true,
     clickToZoom: true,
@@ -79,24 +79,24 @@ viewer.springStiffness = 8;
 viewer.gestureSettingsMouse.flickMomentum = 0.3;
 
 // Reset to our optimized defaults
-viewer.animationTime = 0.55;
-viewer.springStiffness = 13;
+viewer.animationTime = 0.6;
+viewer.springStiffness = 12;
 viewer.gestureSettingsMouse.flickEnabled = true;
 viewer.gestureSettingsMouse.flickMinSpeed = 180;
-viewer.gestureSettingsMouse.flickMomentum = 0.14;
+viewer.gestureSettingsMouse.flickMomentum = 0.15;
 ```
 
 ## Comparison with Default Settings
 
 | Setting | Default | Our Config | Effect |
 |---------|---------|------------|--------|
-| animationTime | 1.2s | 0.55s | 2.2× faster, balanced momentum |
-| springStiffness | 6.5 | 13 | 100% stiffer (very direct) |
+| animationTime | 1.2s | 0.6s | 2× faster but smooth |
+| springStiffness | 6.5 | 12 | 85% stiffer (direct drag) |
 | constrainDuringPan | false | false | Smooth edge panning |
 | immediateRender | false | false | Wait for tiles to load |
 | blendTime | 0 | 0.15s | Smooth tile fade-in |
 | flickMinSpeed | 120 | 180 | 50% higher threshold |
-| flickMomentum | 0.25 | 0.14 | 44% tighter decay |
+| flickMomentum | 0.25 | 0.15 | 40% slower decay |
 
 ## Platform Differences
 

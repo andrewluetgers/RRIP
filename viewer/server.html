@@ -27,8 +27,8 @@
         tileSources: [],
 
         // Remove elastic/springy behavior for more direct control
-        animationTime: 0.55,          // 10% tighter - still smooth (default: 1.2)
-        springStiffness: 13,          // 10% stiffer for snappier drag (default: 6.5)
+        animationTime: 0.6,           // Smoother momentum, still responsive (default: 1.2)
+        springStiffness: 12,          // Stiffer spring for direct drag (default: 6.5)
         visibilityRatio: 1.0,         // Load tiles when fully in view (default: 0.5)
         constrainDuringPan: false,    // Don't constrain during pan for smoother feel
         immediateRender: false,       // Wait for tiles before rendering (default: false)
@@ -38,7 +38,7 @@
         gestureSettingsMouse: {
           flickEnabled: true,         // Keep momentum scrolling
           flickMinSpeed: 180,         // Higher threshold to trigger momentum
-          flickMomentum: 0.14,        // Slightly tighter momentum decay
+          flickMomentum: 0.15,        // Natural momentum decay
           dragToPan: true,
           scrollToZoom: true,
           clickToZoom: true,
@@ -50,7 +50,7 @@
         gestureSettingsTouch: {
           flickEnabled: true,
           flickMinSpeed: 120,
-          flickMomentum: 0.14,
+          flickMomentum: 0.15,
           dragToPan: true,
           scrollToZoom: false,
           clickToZoom: false,
