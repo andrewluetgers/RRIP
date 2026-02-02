@@ -152,7 +152,7 @@ All reported differences are statistically significant (p < 0.001) using:
 ### 5.8 Reproducibility
 
 Evaluation code and test datasets available at:
-https://github.com/[your-repo]/rrip-evaluation
+https://github.com/[your-repo]/origami-evaluation
 
 Key implementation details:
 - JPEG: libjpeg-turbo 2.1.0

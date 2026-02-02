@@ -1,4 +1,4 @@
-# RRIP Paper Formatting Guide
+# ORIGAMI Paper Formatting Guide
 
 ## Quick Start
 
@@ -125,7 +125,7 @@ Create a figure from your evaluation results:
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.45\textwidth]{rd_curves.png}
-\caption{Rate-distortion curves comparing RRIP to JPEG recompression}
+\caption{Rate-distortion curves comparing ORIGAMI to JPEG recompression}
 \label{fig:rd_curves}
 \end{figure}
 ```
@@ -136,7 +136,7 @@ Create a figure from your evaluation results:
 \begin{figure*}[ht]  % figure* spans both columns
 \centering
 \includegraphics[width=0.9\textwidth]{architecture.png}
-\caption{RRIP architecture: L2 baseline + residual reconstruction}
+\caption{ORIGAMI architecture: L2 baseline + residual reconstruction}
 \label{fig:architecture}
 \end{figure*}
 ```

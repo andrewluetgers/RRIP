@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RRIP Compression Evaluation Framework
-Compares RRIP against JPEG and JPEG 2000 using JPEG source images
+ORIGAMI Compression Evaluation Framework
+Compares ORIGAMI against JPEG and JPEG 2000 using JPEG source images
 
 Usage: python compare_compression.py --input-dir /path/to/jpeg/tiles --output-dir results/
 """
@@ -171,12 +171,12 @@ class CompressionTester:
         finally:
             os.unlink(tmp_path)
 
-    def simulate_rrip(self, residual_quality: int = 30) -> Tuple[int, float, float]:
+    def simulate_origami(self, residual_quality: int = 30) -> Tuple[int, float, float]:
         """
-        Simulate RRIP compression
-        This is a simplified version - replace with actual RRIP implementation
+        Simulate ORIGAMI compression
+        This is a simplified version - replace with actual ORIGAMI implementation
         """
-        # For now, we'll simulate RRIP by:
+        # For now, we'll simulate ORIGAMI by:
         # 1. Downsampling by 4x (to simulate L2)
         # 2. Upsampling back
         # 3. Computing residual
@@ -290,13 +290,13 @@ def run_compression_comparison(image_path: str, output_dir: str):
                 print(f"  Rate {rate}: {result.file_size} bytes, "
                       f"PSNR={result.psnr:.2f}dB, MS-SSIM={result.ms_ssim:.4f}")
 
-    # Test RRIP simulation
-    print("\nTesting RRIP compression (simulated)...")
+    # Test ORIGAMI simulation
+    print("\nTesting ORIGAMI compression (simulated)...")
     for residual_q in [50, 40, 30, 20, 10]:
-        size, enc_time, dec_time, decoded = tester.simulate_rrip(residual_q)
+        size, enc_time, dec_time, decoded = tester.simulate_origami(residual_q)
 
         result = CompressionResult(
-            method='RRIP',
+            method='ORIGAMI',
             quality=residual_q,
             file_size=size,
             encode_time=enc_time,
@@ -354,7 +354,7 @@ def plot_rd_curves(results: List[CompressionResult], output_path: str):
     print(f"\nR-D curves saved to {output_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Compare compression methods for RRIP evaluation')
+    parser = argparse.ArgumentParser(description='Compare compression methods for ORIGAMI evaluation')
     parser.add_argument('--input', type=str, required=True,
                        help='Input image or directory of images')
     parser.add_argument('--output-dir', type=str, default='compression_results',

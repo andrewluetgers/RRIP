@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple RRIP Evaluation without OpenCV dependency
+Simple ORIGAMI Evaluation without OpenCV dependency
 Uses PIL/Pillow only for image operations
 """
 
@@ -62,9 +62,9 @@ def calculate_simple_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
 
     return float(ssim)
 
-def test_rrip(slide_id: str, level: int, tiles: List[Tuple[int, int]],
+def test_origami(slide_id: str, level: int, tiles: List[Tuple[int, int]],
               data_dir: Path) -> List[TestResult]:
-    """Test RRIP compression"""
+    """Test ORIGAMI compression"""
     results = []
 
     for x, y in tiles[:20]:  # Limit for speed
@@ -89,12 +89,12 @@ def test_rrip(slide_id: str, level: int, tiles: List[Tuple[int, int]],
             # Estimate size (simplified)
             if level >= 15:  # L16/L15 use reconstruction
                 # Approximate: L14 baseline + residual
-                size_kb = 8.0  # ~8KB average for RRIP tiles
+                size_kb = 8.0  # ~8KB average for ORIGAMI tiles
             else:
                 size_kb = orig_path.stat().st_size / 1024
 
             results.append(TestResult(
-                method="RRIP",
+                method="ORIGAMI",
                 quality=32,
                 level=level,
                 file_size_kb=size_kb,
@@ -149,16 +149,16 @@ def test_jpeg(level: int, tiles: List[Tuple[int, int]], data_dir: Path,
 def main():
     """Run evaluation"""
     print("="*60)
-    print("RRIP EVALUATION (Simplified)")
+    print("ORIGAMI EVALUATION (Simplified)")
     print("="*60)
 
     SLIDE_ID = "demo_out"
-    DATA_DIR = Path("/Users/andrewluetgers/projects/dev/RRIP/data") / SLIDE_ID
+    DATA_DIR = Path("/Users/andrewluetgers/projects/dev/ORIGAMI/data") / SLIDE_ID
 
     all_results = []
 
-    # Test L16 (highest res = L0 in RRIP)
-    print("\nTesting Level 16 (L0 in RRIP)...")
+    # Test L16 (highest res = L0 in ORIGAMI)
+    print("\nTesting Level 16 (L0 in ORIGAMI)...")
     level_dir = DATA_DIR / "baseline_pyramid_files" / "16"
     tiles = []
     for tile_path in list(level_dir.glob("*.jpg"))[:30]:
@@ -170,10 +170,10 @@ def main():
 
     print(f"  Testing {len(tiles)} tiles...")
 
-    # Test RRIP
-    rrip_results = test_rrip(SLIDE_ID, 16, tiles, DATA_DIR)
-    all_results.extend(rrip_results)
-    print(f"  RRIP: {len(rrip_results)} results")
+    # Test ORIGAMI
+    origami_results = test_origami(SLIDE_ID, 16, tiles, DATA_DIR)
+    all_results.extend(origami_results)
+    print(f"  ORIGAMI: {len(origami_results)} results")
 
     # Test JPEG
     jpeg_results = test_jpeg(16, tiles, DATA_DIR, [95, 90, 80, 70, 60])
@@ -185,15 +185,15 @@ def main():
     print("RESULTS SUMMARY")
     print("="*60)
 
-    # RRIP summary
-    rrip = [r for r in all_results if r.method == "RRIP"]
-    if rrip:
-        print(f"\nRRIP (n={len(rrip)}):")
-        print(f"  Avg size: {np.mean([r.file_size_kb for r in rrip]):.1f} KB")
-        print(f"  Avg PSNR: {np.mean([r.psnr_db for r in rrip]):.2f} dB")
-        print(f"  Avg SSIM: {np.mean([r.ssim for r in rrip]):.4f}")
-        print(f"  Avg BPP: {np.mean([r.bpp for r in rrip]):.3f}")
-        print(f"  Avg decode: {np.mean([r.decode_ms for r in rrip]):.1f} ms")
+    # ORIGAMI summary
+    origami = [r for r in all_results if r.method == "ORIGAMI"]
+    if origami:
+        print(f"\nORIGAMI (n={len(origami)}):")
+        print(f"  Avg size: {np.mean([r.file_size_kb for r in origami]):.1f} KB")
+        print(f"  Avg PSNR: {np.mean([r.psnr_db for r in origami]):.2f} dB")
+        print(f"  Avg SSIM: {np.mean([r.ssim for r in origami]):.4f}")
+        print(f"  Avg BPP: {np.mean([r.bpp for r in origami]):.3f}")
+        print(f"  Avg decode: {np.mean([r.decode_ms for r in origami]):.1f} ms")
 
     # JPEG by quality
     for q in [95, 90, 80, 70, 60]:
@@ -207,16 +207,16 @@ def main():
 
     # Simple R-D plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle('RRIP vs JPEG: Rate-Distortion Performance', fontsize=14, fontweight='bold')
+    fig.suptitle('ORIGAMI vs JPEG: Rate-Distortion Performance', fontsize=14, fontweight='bold')
 
-    # RRIP point
-    if rrip:
-        rrip_bpp = np.mean([r.bpp for r in rrip])
-        rrip_psnr = np.mean([r.psnr_db for r in rrip])
-        rrip_ssim = np.mean([r.ssim for r in rrip])
+    # ORIGAMI point
+    if origami:
+        origami_bpp = np.mean([r.bpp for r in origami])
+        origami_psnr = np.mean([r.psnr_db for r in origami])
+        origami_ssim = np.mean([r.ssim for r in origami])
 
-        ax1.plot(rrip_bpp, rrip_psnr, 'ro', markersize=12, label='RRIP')
-        ax2.plot(rrip_bpp, rrip_ssim, 'ro', markersize=12, label='RRIP')
+        ax1.plot(origami_bpp, origami_psnr, 'ro', markersize=12, label='ORIGAMI')
+        ax2.plot(origami_bpp, origami_ssim, 'ro', markersize=12, label='ORIGAMI')
 
     # JPEG curve
     jpeg_points = []
@@ -266,30 +266,30 @@ def main():
     print(f"Results saved to {output_dir / 'results.json'}")
 
     # Calculate BD-Rate approximation
-    if rrip and jpeg_points:
-        # Find JPEG points bracketing RRIP PSNR
-        rrip_psnr = np.mean([r.psnr_db for r in rrip])
-        rrip_bpp = np.mean([r.bpp for r in rrip])
+    if origami and jpeg_points:
+        # Find JPEG points bracketing ORIGAMI PSNR
+        origami_psnr = np.mean([r.psnr_db for r in origami])
+        origami_bpp = np.mean([r.bpp for r in origami])
 
         # Simple linear interpolation
         for i in range(len(jpeg_points) - 1):
-            if jpeg_points[i]['psnr'] > rrip_psnr > jpeg_points[i+1]['psnr']:
-                # Interpolate BPP at RRIP PSNR
+            if jpeg_points[i]['psnr'] > origami_psnr > jpeg_points[i+1]['psnr']:
+                # Interpolate BPP at ORIGAMI PSNR
                 psnr_range = jpeg_points[i]['psnr'] - jpeg_points[i+1]['psnr']
-                psnr_offset = jpeg_points[i]['psnr'] - rrip_psnr
+                psnr_offset = jpeg_points[i]['psnr'] - origami_psnr
                 ratio = psnr_offset / psnr_range
 
-                jpeg_bpp_at_rrip_psnr = (jpeg_points[i]['bpp'] +
+                jpeg_bpp_at_origami_psnr = (jpeg_points[i]['bpp'] +
                                          ratio * (jpeg_points[i+1]['bpp'] - jpeg_points[i]['bpp']))
 
-                bd_rate = (rrip_bpp - jpeg_bpp_at_rrip_psnr) / jpeg_bpp_at_rrip_psnr * 100
+                bd_rate = (origami_bpp - jpeg_bpp_at_origami_psnr) / jpeg_bpp_at_origami_psnr * 100
                 print(f"\n" + "="*60)
                 print(f"BD-Rate (approximate): {bd_rate:.1f}%")
-                print(f"At PSNR {rrip_psnr:.1f} dB:")
-                print(f"  JPEG needs {jpeg_bpp_at_rrip_psnr:.3f} bpp")
-                print(f"  RRIP uses {rrip_bpp:.3f} bpp")
+                print(f"At PSNR {origami_psnr:.1f} dB:")
+                print(f"  JPEG needs {jpeg_bpp_at_origami_psnr:.3f} bpp")
+                print(f"  ORIGAMI uses {origami_bpp:.3f} bpp")
                 if bd_rate < 0:
-                    print(f"  RRIP is {-bd_rate:.1f}% more efficient")
+                    print(f"  ORIGAMI is {-bd_rate:.1f}% more efficient")
                 break
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate publication-quality figures for RRIP paper
+Generate publication-quality figures for ORIGAMI paper
 """
 
 import json
@@ -38,19 +38,19 @@ def create_rd_curves(results, output_path="figures/rd_curves.pdf"):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.5))
 
     # Group results by method
-    origami_data = [r for r in results if r['method'] == 'RRIP']
+    origami_data = [r for r in results if r['method'] == 'ORIGAMI']
     jpeg_data = [r for r in results if r['method'] == 'JPEG']
 
-    # RRIP point
+    # ORIGAMI point
     if origami_data:
         origami_bpp = np.mean([r['bpp'] for r in origami_data])
         origami_psnr = np.mean([r['psnr_db'] for r in origami_data])
         origami_ssim = np.mean([r['ssim'] for r in origami_data])
 
         ax1.plot(origami_bpp, origami_psnr, 'r^', markersize=10,
-                label='RRIP', markeredgewidth=1.5, markeredgecolor='darkred')
+                label='ORIGAMI', markeredgewidth=1.5, markeredgecolor='darkred')
         ax2.plot(origami_bpp, origami_ssim, 'r^', markersize=10,
-                label='RRIP', markeredgewidth=1.5, markeredgecolor='darkred')
+                label='ORIGAMI', markeredgewidth=1.5, markeredgecolor='darkred')
 
     # JPEG curve - group by quality
     jpeg_by_quality = {}
@@ -110,9 +110,9 @@ def create_rd_curves(results, output_path="figures/rd_curves.pdf"):
     ax2.set_xlim(left=0)
     ax2.set_ylim([0.94, 1.0])
 
-    # Add RRIP annotation
+    # Add ORIGAMI annotation
     if origami_data:
-        ax1.annotate('RRIP\n(Our Method)',
+        ax1.annotate('ORIGAMI\n(Our Method)',
                     xy=(origami_bpp, origami_psnr),
                     xytext=(origami_bpp+0.3, origami_psnr-3),
                     arrowprops=dict(arrowstyle='->', color='red', lw=1),
@@ -135,7 +135,7 @@ def create_storage_comparison(output_path="figures/storage_comparison.pdf"):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3))
 
     # Storage sizes for 100k x 100k image
-    methods = ['Raw\nPixels', 'JPEG\nQ90', 'RRIP', 'JPEG Q60\n(Recomp.)']
+    methods = ['Raw\nPixels', 'JPEG\nQ90', 'ORIGAMI', 'JPEG Q60\n(Recomp.)']
     sizes_gb = [30, 4.87, 0.88, 0.49]
     colors = ['gray', 'blue', 'red', 'lightblue']
 
@@ -159,7 +159,7 @@ def create_storage_comparison(output_path="figures/storage_comparison.pdf"):
                 ha='center', va='bottom', fontsize=8, fontweight='bold')
 
     # Cost comparison (right plot)
-    scenarios = ['JPEG\nPyramid', 'With\nRRIP']
+    scenarios = ['JPEG\nPyramid', 'With\nORIGAMI']
     costs = [318, 57]
     colors2 = ['blue', 'red']
 
@@ -180,7 +180,7 @@ def create_storage_comparison(output_path="figures/storage_comparison.pdf"):
     ax2.text(1.15, (costs[0] + costs[1])/2, '$261K\nSavings',
             ha='left', va='center', color='green', fontweight='bold')
 
-    plt.suptitle('RRIP Storage Efficiency', fontsize=11, fontweight='bold')
+    plt.suptitle('ORIGAMI Storage Efficiency', fontsize=11, fontweight='bold')
     plt.tight_layout()
 
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -220,7 +220,7 @@ def create_performance_timeline(output_path="figures/performance_timeline.pdf"):
     ax.set_xlim(0, 8)
     ax.set_ylim(-0.5, len(operations)-0.5)
     ax.grid(True, axis='x', alpha=0.3)
-    ax.set_title('RRIP Family Generation Timeline (20 tiles)', fontsize=11)
+    ax.set_title('ORIGAMI Family Generation Timeline (20 tiles)', fontsize=11)
 
     # Add total time annotation
     ax.text(7.5, len(operations)-1, 'Total: 4-7ms\n(0.35ms/tile)',
@@ -246,7 +246,7 @@ def create_architecture_diagram():
 def main():
     """Generate all figures for the paper"""
 
-    print("Generating figures for RRIP paper...")
+    print("Generating figures for ORIGAMI paper...")
     print("=" * 50)
 
     # Load evaluation results if they exist
@@ -260,8 +260,8 @@ def main():
 
         # Create synthetic data for demonstration
         synthetic_results = [
-            # RRIP
-            {'method': 'RRIP', 'bpp': 1.0, 'psnr_db': 49.81, 'ssim': 0.9803},
+            # ORIGAMI
+            {'method': 'ORIGAMI', 'bpp': 1.0, 'psnr_db': 49.81, 'ssim': 0.9803},
             # JPEG at different qualities
             {'method': 'JPEG', 'quality': 95, 'bpp': 0.785, 'psnr_db': 69.20, 'ssim': 0.9997},
             {'method': 'JPEG', 'quality': 90, 'bpp': 0.630, 'psnr_db': 68.98, 'ssim': 0.9997},

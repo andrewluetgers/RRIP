@@ -1,7 +1,7 @@
-# RRIP Paper Improvement Plan
+# ORIGAMI Paper Improvement Plan
 
 ## Executive Summary
-This document outlines comprehensive improvements needed for the RRIP paper based on review feedback. The paper needs significant restructuring, additional technical depth, proper baselines, and formatting fixes to meet IEEE standards.
+This document outlines comprehensive improvements needed for the ORIGAMI paper based on review feedback. The paper needs significant restructuring, additional technical depth, proper baselines, and formatting fixes to meet IEEE standards.
 
 ## 1. Formatting and Layout Issues
 
@@ -79,7 +79,7 @@ This document outlines comprehensive improvements needed for the RRIP paper base
 4. **JPEG Q60** - quality tradeoff baseline (with visual validation)
 5. **JPEG 2000** - industry standard alternative
 6. **HTJ2K** - modern JPEG 2000 variant
-7. **RRIP** - our method
+7. **ORIGAMI** - our method
 
 **Required Implementation**:
 - Implement JPEG 2000 tile server for fair comparison
@@ -155,7 +155,7 @@ Total L0+L1: 94%
 - Complexity of implementation
 - If JPEG 2000 performs well, acknowledge and differentiate
 
-### 5.3 Why RRIP Over Standards?
+### 5.3 Why ORIGAMI Over Standards?
 - Specific optimizations for WSI use case
 - Exploitation of viewing patterns
 - Storage vs quality tradeoffs
@@ -181,7 +181,7 @@ Total L0+L1: 94%
 ### 7.1 Required Figures
 1. **Pyramid structure diagram** showing levels and tile counts
 2. **Compression pipeline flowchart**
-3. **Visual quality comparison** (3x3 grid: Original, JPEG Q60, RRIP)
+3. **Visual quality comparison** (3x3 grid: Original, JPEG Q60, ORIGAMI)
 4. **Performance graphs**:
    - Throughput vs connections
    - Latency distribution
@@ -199,7 +199,7 @@ Total L0+L1: 94%
 ### COMPLETED WORK
 
 #### Compression Implementation
-✅ **RRIP Server Implementation**
+✅ **ORIGAMI Server Implementation**
 - Full Rust server with TurboJPEG optimization
 - YCbCr native processing (no RGB conversion)
 - SIMD/NEON optimizations for ARM processors
@@ -340,7 +340,7 @@ After collecting the 3×3 grid data:
   - JPEG Q90, Q80, Q60
   - JPEG 2000 with realistic serving
   - HTJ2K
-  - RRIP Q32, Q70, and other settings
+  - ORIGAMI Q32, Q70, and other settings
 - [ ] Resource usage comparison (CPU, RAM, I/O)
 - [ ] Scalability testing (concurrent connections)
 - [ ] Latency percentiles (P50, P95, P99)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install missing LaTeX packages for the RRIP paper
+# Script to install missing LaTeX packages for the ORIGAMI paper
 
 echo "=========================================="
 echo "LaTeX Package Installation Script"

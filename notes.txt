@@ -49,14 +49,14 @@ One thing to watch with Apple Silicon: The unified memory architecture means you
 
 first run
 
-2026-01-31T19:40:03.036884Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1352
-2026-01-31T19:40:03.036988Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=55 y=183 ms=1352
-2026-01-31T19:40:03.089620Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=13 y2=46 tiles=20 ms=1324
-2026-01-31T19:40:03.089766Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=55 y=184 ms=1325
-2026-01-31T19:40:03.157078Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1407
-2026-01-31T19:40:03.157195Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=55 y=182 ms=1408
-2026-01-31T19:40:03.160869Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1387
-2026-01-31T19:40:03.160980Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=55 y=181 ms=1387
+2026-01-31T19:40:03.036884Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1352
+2026-01-31T19:40:03.036988Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=55 y=183 ms=1352
+2026-01-31T19:40:03.089620Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=13 y2=46 tiles=20 ms=1324
+2026-01-31T19:40:03.089766Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=55 y=184 ms=1325
+2026-01-31T19:40:03.157078Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1407
+2026-01-31T19:40:03.157195Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=55 y=182 ms=1408
+2026-01-31T19:40:03.160869Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=13 y2=45 tiles=20 ms=1387
+2026-01-31T19:40:03.160980Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=55 y=181 ms=1387
 
 
 1400 ms
@@ -67,115 +67,115 @@ first run
 
 second run parallelism and libjeg-turbo-linked
 
-2026-01-31T19:58:56.577629Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=19 y2=35 tiles=20 ms=1576
-2026-01-31T19:58:56.577693Z  INFO rrip_tile_server: family_residuals slide_id=demo_out x2=21 y2=37 l1=0 l0=0
-2026-01-31T19:58:56.577841Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=40 y=78 ms=1576
-2026-01-31T19:58:56.577949Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=39 y=71 ms=1576
-2026-01-31T19:58:56.579322Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=21 y2=37 l2_decode_ms=14 l1_resize_ms=160 l1_residual_ms=95 l1_encode_ms=101 l0_resize_ms=795 l0_residual_ms=212 l0_encode_ms=418 total_ms=1571 l1_residuals=0 l0_residuals=0
-2026-01-31T19:58:56.579370Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=21 y2=37 tiles=20 ms=1573
-2026-01-31T19:58:56.579642Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=21 y2=37 l2_decode_ms=17 l1_resize_ms=163 l1_residual_ms=69 l1_encode_ms=78 l0_resize_ms=795 l0_residual_ms=296 l0_encode_ms=549 total_ms=1567 l1_residuals=0 l0_residuals=0
-2026-01-31T19:58:56.579660Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=21 y2=37 tiles=20 ms=1570
-2026-01-31T19:58:56.579851Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=42 y=75 ms=1575
-2026-01-31T19:58:56.579872Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=19 y2=35 l2_decode_ms=15 l1_resize_ms=160 l1_residual_ms=74 l1_encode_ms=89 l0_resize_ms=816 l0_residual_ms=174 l0_encode_ms=542 total_ms=1575 l1_residuals=0 l0_residuals=0
+2026-01-31T19:58:56.577629Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=19 y2=35 tiles=20 ms=1576
+2026-01-31T19:58:56.577693Z  INFO origami_tile_server: family_residuals slide_id=demo_out x2=21 y2=37 l1=0 l0=0
+2026-01-31T19:58:56.577841Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=40 y=78 ms=1576
+2026-01-31T19:58:56.577949Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=39 y=71 ms=1576
+2026-01-31T19:58:56.579322Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=21 y2=37 l2_decode_ms=14 l1_resize_ms=160 l1_residual_ms=95 l1_encode_ms=101 l0_resize_ms=795 l0_residual_ms=212 l0_encode_ms=418 total_ms=1571 l1_residuals=0 l0_residuals=0
+2026-01-31T19:58:56.579370Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=21 y2=37 tiles=20 ms=1573
+2026-01-31T19:58:56.579642Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=21 y2=37 l2_decode_ms=17 l1_resize_ms=163 l1_residual_ms=69 l1_encode_ms=78 l0_resize_ms=795 l0_residual_ms=296 l0_encode_ms=549 total_ms=1567 l1_residuals=0 l0_residuals=0
+2026-01-31T19:58:56.579660Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=21 y2=37 tiles=20 ms=1570
+2026-01-31T19:58:56.579851Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=42 y=75 ms=1575
+2026-01-31T19:58:56.579872Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=19 y2=35 l2_decode_ms=15 l1_resize_ms=160 l1_residual_ms=74 l1_encode_ms=89 l0_resize_ms=816 l0_residual_ms=174 l0_encode_ms=542 total_ms=1575 l1_residuals=0 l0_residuals=0
 
 
 
-2026-01-31T19:59:04.945659Z  INFO rrip_tile_server: family_residuals slide_id=demo_out x2=22 y2=35 l1=0 l0=0
-2026-01-31T19:59:04.946630Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=22 y2=35 l2_decode_ms=88 l1_resize_ms=668 l1_residual_ms=58 l1_encode_ms=110 l0_resize_ms=770 l0_residual_ms=422 l0_encode_ms=672 total_ms=1914 l1_residuals=0 l0_residuals=0
-2026-01-31T19:59:04.946662Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=22 y2=35 tiles=20 ms=1915
+2026-01-31T19:59:04.945659Z  INFO origami_tile_server: family_residuals slide_id=demo_out x2=22 y2=35 l1=0 l0=0
+2026-01-31T19:59:04.946630Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=22 y2=35 l2_decode_ms=88 l1_resize_ms=668 l1_residual_ms=58 l1_encode_ms=110 l0_resize_ms=770 l0_residual_ms=422 l0_encode_ms=672 total_ms=1914 l1_residuals=0 l0_residuals=0
+2026-01-31T19:59:04.946662Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=22 y2=35 tiles=20 ms=1915
 
 
 
-2026-01-31T19:59:50.640712Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=23 y2=39 tiles=20 ms=1359
-2026-01-31T19:59:50.640731Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=76 ms=1551
-2026-01-31T19:59:50.640968Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=79 ms=1362
-2026-01-31T19:59:50.641070Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=23 y2=38 l2_decode_ms=11 l1_resize_ms=175 l1_residual_ms=51 l1_encode_ms=81 l0_resize_ms=748 l0_residual_ms=298 l0_encode_ms=521 total_ms=1518 l1_residuals=0 l0_residuals=0
-2026-01-31T19:59:50.641096Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=23 y2=38 tiles=20 ms=1519
-2026-01-31T19:59:50.641169Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=77 ms=1519
-2026-01-31T19:59:50.641338Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=23 y2=37 l2_decode_ms=13 l1_resize_ms=186 l1_residual_ms=72 l1_encode_ms=127 l0_resize_ms=704 l0_residual_ms=305 l0_encode_ms=473 total_ms=1417 l1_residuals=0 l0_residuals=0
+2026-01-31T19:59:50.640712Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=23 y2=39 tiles=20 ms=1359
+2026-01-31T19:59:50.640731Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=76 ms=1551
+2026-01-31T19:59:50.640968Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=79 ms=1362
+2026-01-31T19:59:50.641070Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=23 y2=38 l2_decode_ms=11 l1_resize_ms=175 l1_residual_ms=51 l1_encode_ms=81 l0_resize_ms=748 l0_residual_ms=298 l0_encode_ms=521 total_ms=1518 l1_residuals=0 l0_residuals=0
+2026-01-31T19:59:50.641096Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=23 y2=38 tiles=20 ms=1519
+2026-01-31T19:59:50.641169Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=77 ms=1519
+2026-01-31T19:59:50.641338Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=23 y2=37 l2_decode_ms=13 l1_resize_ms=186 l1_residual_ms=72 l1_encode_ms=127 l0_resize_ms=704 l0_residual_ms=305 l0_encode_ms=473 total_ms=1417 l1_residuals=0 l0_residuals=0
 
 
-2026-01-31T19:59:50.640712Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=23 y2=39 tiles=20 ms=1359
-2026-01-31T19:59:50.640731Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=76 ms=1551
-2026-01-31T19:59:50.640968Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=79 ms=1362
-2026-01-31T19:59:50.641070Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=23 y2=38 l2_decode_ms=11 l1_resize_ms=175 l1_residual_ms=51 l1_encode_ms=81 l0_resize_ms=748 l0_residual_ms=298 l0_encode_ms=521 total_ms=1518 l1_residuals=0 l0_residuals=0
-2026-01-31T19:59:50.641096Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=23 y2=38 tiles=20 ms=1519
-2026-01-31T19:59:50.641169Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=46 y=77 ms=1519
-2026-01-31T19:59:50.641338Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=23 y2=37 l2_decode_ms=13 l1_resize_ms=186 l1_residual_ms=72 l1_encode_ms=127 l0_resize_ms=704 l0_residual_ms=305 l0_encode_ms=473 total_ms=1417 l1_residuals=0 l0_residuals=0
+2026-01-31T19:59:50.640712Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=23 y2=39 tiles=20 ms=1359
+2026-01-31T19:59:50.640731Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=76 ms=1551
+2026-01-31T19:59:50.640968Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=79 ms=1362
+2026-01-31T19:59:50.641070Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=23 y2=38 l2_decode_ms=11 l1_resize_ms=175 l1_residual_ms=51 l1_encode_ms=81 l0_resize_ms=748 l0_residual_ms=298 l0_encode_ms=521 total_ms=1518 l1_residuals=0 l0_residuals=0
+2026-01-31T19:59:50.641096Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=23 y2=38 tiles=20 ms=1519
+2026-01-31T19:59:50.641169Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=46 y=77 ms=1519
+2026-01-31T19:59:50.641338Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=23 y2=37 l2_decode_ms=13 l1_resize_ms=186 l1_residual_ms=72 l1_encode_ms=127 l0_resize_ms=704 l0_residual_ms=305 l0_encode_ms=473 total_ms=1417 l1_residuals=0 l0_residuals=0
 
 
 
 third run memory pools
 
 
-2026-01-31T20:15:29.169773Z  INFO rrip_tile_server: family_residuals slide_id=demo_out x2=16 y2=39 l1=0 l0=0
-2026-01-31T20:15:29.170192Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=15 l1_resize_ms=160 l1_residual_ms=100 l1_encode_ms=169 l0_resize_ms=808 l0_residual_ms=875 l0_encode_ms=512 total_ms=1772 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.170206Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1773
-2026-01-31T20:15:29.170270Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=16 y2=39 l2_decode_ms=17 l1_resize_ms=161 l1_residual_ms=74 l1_encode_ms=98 l0_resize_ms=785 l0_residual_ms=1595 l0_encode_ms=882 total_ms=1779 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.170280Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=39 tiles=20 ms=1780
-2026-01-31T20:15:29.170317Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=18 y2=41 l2_decode_ms=16 l1_resize_ms=161 l1_residual_ms=149 l1_encode_ms=126 l0_resize_ms=823 l0_residual_ms=842 l0_encode_ms=544 total_ms=1775 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.170323Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=32 y=83 ms=1773
-2026-01-31T20:15:29.170326Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=18 y2=41 tiles=20 ms=1776
-2026-01-31T20:15:29.170347Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=79 ms=1780
-2026-01-31T20:15:29.170377Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=36 y=82 ms=1776
-2026-01-31T20:15:29.171492Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=20 l1_resize_ms=161 l1_residual_ms=177 l1_encode_ms=129 l0_resize_ms=814 l0_residual_ms=819 l0_encode_ms=373 total_ms=1781 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.172528Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1783
-2026-01-31T20:15:29.173161Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=82 ms=1785
-2026-01-31T20:15:29.173565Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=16 l1_resize_ms=187 l1_residual_ms=96 l1_encode_ms=168 l0_resize_ms=802 l0_residual_ms=750 l0_encode_ms=412 total_ms=1777 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.173599Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1781
-2026-01-31T20:15:29.173802Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=16 l1_resize_ms=160 l1_residual_ms=96 l1_encode_ms=119 l0_resize_ms=750 l0_residual_ms=1081 l0_encode_ms=672 total_ms=1779 l1_residuals=0 l0_residuals=0
-2026-01-31T20:15:29.173816Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1783
-2026-01-31T20:15:29.173925Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=83 ms=1781
-2026-01-31T20:15:29.174039Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=32 y=82 ms=1784
-2026-01-31T20:15:29.174100Z  INFO rrip_tile_server: tile cache_hit slide_id=demo_out level=15 x=32 y=79 ms=0
+2026-01-31T20:15:29.169773Z  INFO origami_tile_server: family_residuals slide_id=demo_out x2=16 y2=39 l1=0 l0=0
+2026-01-31T20:15:29.170192Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=15 l1_resize_ms=160 l1_residual_ms=100 l1_encode_ms=169 l0_resize_ms=808 l0_residual_ms=875 l0_encode_ms=512 total_ms=1772 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.170206Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1773
+2026-01-31T20:15:29.170270Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=16 y2=39 l2_decode_ms=17 l1_resize_ms=161 l1_residual_ms=74 l1_encode_ms=98 l0_resize_ms=785 l0_residual_ms=1595 l0_encode_ms=882 total_ms=1779 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.170280Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=39 tiles=20 ms=1780
+2026-01-31T20:15:29.170317Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=18 y2=41 l2_decode_ms=16 l1_resize_ms=161 l1_residual_ms=149 l1_encode_ms=126 l0_resize_ms=823 l0_residual_ms=842 l0_encode_ms=544 total_ms=1775 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.170323Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=32 y=83 ms=1773
+2026-01-31T20:15:29.170326Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=18 y2=41 tiles=20 ms=1776
+2026-01-31T20:15:29.170347Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=79 ms=1780
+2026-01-31T20:15:29.170377Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=36 y=82 ms=1776
+2026-01-31T20:15:29.171492Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=20 l1_resize_ms=161 l1_residual_ms=177 l1_encode_ms=129 l0_resize_ms=814 l0_residual_ms=819 l0_encode_ms=373 total_ms=1781 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.172528Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1783
+2026-01-31T20:15:29.173161Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=82 ms=1785
+2026-01-31T20:15:29.173565Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=16 l1_resize_ms=187 l1_residual_ms=96 l1_encode_ms=168 l0_resize_ms=802 l0_residual_ms=750 l0_encode_ms=412 total_ms=1777 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.173599Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1781
+2026-01-31T20:15:29.173802Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=16 y2=41 l2_decode_ms=16 l1_resize_ms=160 l1_residual_ms=96 l1_encode_ms=119 l0_resize_ms=750 l0_residual_ms=1081 l0_encode_ms=672 total_ms=1779 l1_residuals=0 l0_residuals=0
+2026-01-31T20:15:29.173816Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=41 tiles=20 ms=1783
+2026-01-31T20:15:29.173925Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=83 ms=1781
+2026-01-31T20:15:29.174039Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=32 y=82 ms=1784
+2026-01-31T20:15:29.174100Z  INFO origami_tile_server: tile cache_hit slide_id=demo_out level=15 x=32 y=79 ms=0
 
 
-2026-01-31T20:15:34.648230Z  INFO rrip_tile_server: metrics tiles_total=94 baseline=0 cache_hit=69 generated=25 residual_view=0 tile_avg_ms=468 tile_max_ms=2360 families=25 family_avg_ms=1759 family_max_ms=2357
+2026-01-31T20:15:34.648230Z  INFO origami_tile_server: metrics tiles_total=94 baseline=0 cache_hit=69 generated=25 residual_view=0 tile_avg_ms=468 tile_max_ms=2360 families=25 family_avg_ms=1759 family_max_ms=2357
 
 
 
 
 fourth pack files
 
-2026-01-31T20:35:39.120822Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=67 y=192 ms=1831
-2026-01-31T20:35:39.121441Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1836
-2026-01-31T20:35:39.121485Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=97 ms=1836
-2026-01-31T20:35:39.121515Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1820
-2026-01-31T20:35:39.121553Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=67 y=194 ms=1824
-2026-01-31T20:35:39.121609Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1836
-2026-01-31T20:35:39.121665Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=16 x=67 y=193 ms=1837
-2026-01-31T20:35:39.121678Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=47 tiles=20 ms=1832
-2026-01-31T20:35:39.121701Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=95 ms=1832
-2026-01-31T20:35:39.121715Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1832
-2026-01-31T20:35:39.121747Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=33 y=96 ms=1832	
+2026-01-31T20:35:39.120822Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=67 y=192 ms=1831
+2026-01-31T20:35:39.121441Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1836
+2026-01-31T20:35:39.121485Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=97 ms=1836
+2026-01-31T20:35:39.121515Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1820
+2026-01-31T20:35:39.121553Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=67 y=194 ms=1824
+2026-01-31T20:35:39.121609Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1836
+2026-01-31T20:35:39.121665Z  INFO origami_tile_server: tile generated slide_id=demo_out level=16 x=67 y=193 ms=1837
+2026-01-31T20:35:39.121678Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=47 tiles=20 ms=1832
+2026-01-31T20:35:39.121701Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=95 ms=1832
+2026-01-31T20:35:39.121715Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=16 y2=48 tiles=20 ms=1832
+2026-01-31T20:35:39.121747Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=33 y=96 ms=1832	
 
 
-2026-01-31T20:36:03.622060Z  INFO rrip_tile_server: metrics tiles_total=78 baseline=4 cache_hit=56 generated=18 residual_view=0 tile_avg_ms=474 tile_max_ms=2604 families=18 family_avg_ms=2052 family_max_ms=2604
-
-
-
-
-2026-01-31T21:59:08.756202Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=42 y2=39 tiles=20 ms=1661
-2026-01-31T21:59:08.756252Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=84 y=78 ms=1662
-2026-01-31T21:59:08.756588Z  INFO rrip_tile_server: family_residuals slide_id=demo_out x2=40 y2=39 l1=4 l0=16
-2026-01-31T21:59:08.756966Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=41 y2=39 l2_decode_ms=17 l1_resize_ms=236 l1_residual_ms=27 l1_encode_ms=61 l0_resize_ms=896 l0_residual_ms=760 l0_encode_ms=552 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=13
-2026-01-31T21:59:08.757020Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=41 y2=39 tiles=20 ms=1663
-2026-01-31T21:59:08.757002Z  INFO rrip_tile_server: family_residuals slide_id=demo_out x2=40 y2=38 l1=4 l0=16
-2026-01-31T21:59:08.757119Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=82 y=78 ms=1663
-2026-01-31T21:59:08.757148Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=40 y2=38 l2_decode_ms=25 l1_resize_ms=209 l1_residual_ms=29 l1_encode_ms=81 l0_resize_ms=900 l0_residual_ms=1301 l0_encode_ms=846 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=14
-2026-01-31T21:59:08.757159Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=40 y2=38 tiles=20 ms=1663
-2026-01-31T21:59:08.757193Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=81 y=76 ms=1663
-2026-01-31T21:59:08.758657Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=40 y2=39 l2_decode_ms=18 l1_resize_ms=199 l1_residual_ms=35 l1_encode_ms=82 l0_resize_ms=881 l0_residual_ms=1497 l0_encode_ms=425 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=14
-2026-01-31T21:59:08.758695Z  INFO rrip_tile_server: family_generated slide_id=demo_out x2=40 y2=39 tiles=20 ms=1664
-2026-01-31T21:59:08.758750Z  INFO rrip_tile_server: tile cache_hit slide_id=demo_out level=16 x=166 y=156 ms=0
-2026-01-31T21:59:08.758777Z  INFO rrip_tile_server: tile generated slide_id=demo_out level=15 x=81 y=78 ms=1664
-2026-01-31T21:59:08.758789Z  INFO rrip_tile_server: tile cache_hit slide_id=demo_out level=16 x=164 y=154 ms=0
-2026-01-31T21:59:08.758820Z  INFO rrip_tile_server: tile cache_hit slide_id=demo_out level=16 x=167 y=155 ms=0
-2026-01-31T21:59:08.758839Z  INFO rrip_tile_server: tile cache_hit slide_id=demo_out level=15 x=81 y=75 ms=0
-2026-01-31T21:59:08.758924Z  INFO rrip_tile_server: family_breakdown slide_id=demo_out x2=40 y2=38 l2_decode_ms=19 l1_resize_ms=213 l1_residual_ms=33 l1_encode_ms=131 l0_resize_ms=841 l0_residual_ms=1892 l0_encode_ms=466 total_ms=1664 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=16
+2026-01-31T20:36:03.622060Z  INFO origami_tile_server: metrics tiles_total=78 baseline=4 cache_hit=56 generated=18 residual_view=0 tile_avg_ms=474 tile_max_ms=2604 families=18 family_avg_ms=2052 family_max_ms=2604
 
 
 
 
-2026-01-31T21:59:13.225013Z  INFO rrip_tile_server: metrics tiles_total=241 baseline=5 cache_hit=206 generated=30 fallback=0 residual_view=0 tile_avg_ms=223 tile_max_ms=2253 families=30 family_avg_ms=1797 family_max_ms=2252 pool_total=200 pool_avail=200 pool_in_use_max=24 inflight_current=0 inflight_max=6 rss_kb=226738176 rss_mb=221424 cpu_pct=0.0
+2026-01-31T21:59:08.756202Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=42 y2=39 tiles=20 ms=1661
+2026-01-31T21:59:08.756252Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=84 y=78 ms=1662
+2026-01-31T21:59:08.756588Z  INFO origami_tile_server: family_residuals slide_id=demo_out x2=40 y2=39 l1=4 l0=16
+2026-01-31T21:59:08.756966Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=41 y2=39 l2_decode_ms=17 l1_resize_ms=236 l1_residual_ms=27 l1_encode_ms=61 l0_resize_ms=896 l0_residual_ms=760 l0_encode_ms=552 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=13
+2026-01-31T21:59:08.757020Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=41 y2=39 tiles=20 ms=1663
+2026-01-31T21:59:08.757002Z  INFO origami_tile_server: family_residuals slide_id=demo_out x2=40 y2=38 l1=4 l0=16
+2026-01-31T21:59:08.757119Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=82 y=78 ms=1663
+2026-01-31T21:59:08.757148Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=40 y2=38 l2_decode_ms=25 l1_resize_ms=209 l1_residual_ms=29 l1_encode_ms=81 l0_resize_ms=900 l0_residual_ms=1301 l0_encode_ms=846 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=14
+2026-01-31T21:59:08.757159Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=40 y2=38 tiles=20 ms=1663
+2026-01-31T21:59:08.757193Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=81 y=76 ms=1663
+2026-01-31T21:59:08.758657Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=40 y2=39 l2_decode_ms=18 l1_resize_ms=199 l1_residual_ms=35 l1_encode_ms=82 l0_resize_ms=881 l0_residual_ms=1497 l0_encode_ms=425 total_ms=1662 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=14
+2026-01-31T21:59:08.758695Z  INFO origami_tile_server: family_generated slide_id=demo_out x2=40 y2=39 tiles=20 ms=1664
+2026-01-31T21:59:08.758750Z  INFO origami_tile_server: tile cache_hit slide_id=demo_out level=16 x=166 y=156 ms=0
+2026-01-31T21:59:08.758777Z  INFO origami_tile_server: tile generated slide_id=demo_out level=15 x=81 y=78 ms=1664
+2026-01-31T21:59:08.758789Z  INFO origami_tile_server: tile cache_hit slide_id=demo_out level=16 x=164 y=154 ms=0
+2026-01-31T21:59:08.758820Z  INFO origami_tile_server: tile cache_hit slide_id=demo_out level=16 x=167 y=155 ms=0
+2026-01-31T21:59:08.758839Z  INFO origami_tile_server: tile cache_hit slide_id=demo_out level=15 x=81 y=75 ms=0
+2026-01-31T21:59:08.758924Z  INFO origami_tile_server: family_breakdown slide_id=demo_out x2=40 y2=38 l2_decode_ms=19 l1_resize_ms=213 l1_residual_ms=33 l1_encode_ms=131 l0_resize_ms=841 l0_residual_ms=1892 l0_encode_ms=466 total_ms=1664 l1_residuals=4 l0_residuals=16 l1_parallel_max=4 l0_parallel_max=16
+
+
+
+
+2026-01-31T21:59:13.225013Z  INFO origami_tile_server: metrics tiles_total=241 baseline=5 cache_hit=206 generated=30 fallback=0 residual_view=0 tile_avg_ms=223 tile_max_ms=2253 families=30 family_avg_ms=1797 family_max_ms=2252 pool_total=200 pool_avail=200 pool_in_use_max=24 inflight_current=0 inflight_max=6 rss_kb=226738176 rss_mb=221424 cpu_pct=0.0
 

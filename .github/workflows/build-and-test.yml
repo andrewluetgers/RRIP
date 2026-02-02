@@ -180,7 +180,7 @@ jobs:
         echo "" >> $RESULTS_FILE
 
         # Start the server with test data
-        docker run -d --name rrip-server-${{ matrix.arch }} \
+        docker run -d --name origami-server-${{ matrix.arch }} \
           --platform ${{ matrix.platform }} \
           -p 8080:8080 \
           -v ${{ github.workspace }}/test-data:/data \
@@ -249,25 +249,25 @@ jobs:
         # Collect server timing breakdown
         echo "" >> $RESULTS_FILE
         echo "=== Server Timing Breakdown ===" | tee -a $RESULTS_FILE
-        docker logs rrip-server-${{ matrix.arch }} 2>&1 | grep -E "total_family_gen_ms|l2_decode_ms|parallel_chroma_ms|l0_resize_ms|l0_residual_ms" | tail -20 | tee -a $RESULTS_FILE
+        docker logs origami-server-${{ matrix.arch }} 2>&1 | grep -E "total_family_gen_ms|l2_decode_ms|parallel_chroma_ms|l0_resize_ms|l0_residual_ms" | tail -20 | tee -a $RESULTS_FILE
 
         # Check SIMD features
         echo "" >> $RESULTS_FILE
         echo "=== CPU Features ===" | tee -a $RESULTS_FILE
         if [ "${{ matrix.arch }}" = "amd64" ]; then
-          docker exec rrip-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'flags' | head -1 | grep -o -E 'avx2|sse2|sse4_1|sse4_2'" | tr ' ' '\n' | sort -u | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
+          docker exec origami-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'flags' | head -1 | grep -o -E 'avx2|sse2|sse4_1|sse4_2'" | tr ' ' '\n' | sort -u | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
         elif [ "${{ matrix.arch }}" = "arm64" ]; then
-          docker exec rrip-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'Features' | head -1" | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
+          docker exec origami-server-${{ matrix.arch }} sh -c "cat /proc/cpuinfo | grep -E 'Features' | head -1" | tee -a $RESULTS_FILE || echo "Could not detect CPU features" >> $RESULTS_FILE
         fi
 
         # Memory usage
         echo "" >> $RESULTS_FILE
         echo "=== Resource Usage ===" | tee -a $RESULTS_FILE
-        docker stats --no-stream rrip-server-${{ matrix.arch }} | tee -a $RESULTS_FILE
+        docker stats --no-stream origami-server-${{ matrix.arch }} | tee -a $RESULTS_FILE
 
         # Cleanup
-        docker stop rrip-server-${{ matrix.arch }}
-        docker rm rrip-server-${{ matrix.arch }}
+        docker stop origami-server-${{ matrix.arch }}
+        docker rm origami-server-${{ matrix.arch }}
 
         # Final summary
         echo "" >> $RESULTS_FILE
