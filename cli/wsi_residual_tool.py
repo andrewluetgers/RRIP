@@ -224,17 +224,17 @@ def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
         # Assemble the uncompressed pack file
         pack_data = b"".join(header) + b"".join(index) + data
 
-        # Compress with LZ4 if available (fastest setting)
-        if HAS_LZ4:
-            compressed_data = lz4.frame.compress(pack_data, compression_level=0)  # 0 = fastest
-            compression_ratio = len(pack_data) / len(compressed_data)
-            savings = 100 * (1 - len(compressed_data) / len(pack_data))
-            print(f"  {parent}.cpack: {len(pack_data)//1024}KB → {len(compressed_data)//1024}KB (ratio: {compression_ratio:.2f}x, savings: {savings:.1f}%)")
-            out_path = out_dir / f"{parent}.cpack"  # .cpack for compressed
-            out_path.write_bytes(compressed_data)
-        else:
-            out_path = out_dir / f"{parent}.pack"
-            out_path.write_bytes(pack_data)
+        # Always compress with LZ4 (it's required now)
+        if not HAS_LZ4:
+            raise ImportError("LZ4 is required. Install with: pip install lz4")
+
+        compressed_data = lz4.frame.compress(pack_data, compression_level=0)  # 0 = fastest
+        compression_ratio = len(pack_data) / len(compressed_data)
+        savings = 100 * (1 - len(compressed_data) / len(pack_data))
+        print(f"  {parent}.pack: {len(pack_data)//1024}KB → {len(compressed_data)//1024}KB (ratio: {compression_ratio:.2f}x, savings: {savings:.1f}%)")
+
+        out_path = out_dir / f"{parent}.pack"
+        out_path.write_bytes(compressed_data)
 
 def main():
     ap=argparse.ArgumentParser()

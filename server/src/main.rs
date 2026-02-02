@@ -925,7 +925,7 @@ fn key_to_string(key: &TileKey) -> String {
 }
 
 struct PackFile {
-    _mmap: Mmap,
+    data: Vec<u8>,  // Decompressed pack data
     data_offset: usize,
     index: Vec<PackIndexEntry>,
 }
@@ -938,44 +938,50 @@ impl PackFile {
             .find(|e| e.level_kind == level_kind && e.idx_in_parent == idx_in_parent)?;
         let start = self.data_offset + entry.offset as usize;
         let end = start + entry.length as usize;
-        Some(&self._mmap[start..end])
+        Some(&self.data[start..end])
     }
 }
 
 fn open_pack(pack_dir: &Path, x2: u32, y2: u32) -> Result<PackFile> {
+    // All pack files are LZ4 compressed with .pack extension
     let path = pack_dir.join(format!("{}_{}.pack", x2, y2));
-    let file = fs::File::open(&path)
-        .with_context(|| format!("open pack {}", path.display()))?;
-    let mmap = unsafe { Mmap::map(&file)? };
-    if mmap.len() < 24 {
+
+    // Read and decompress the entire pack file
+    let compressed_data = fs::read(&path)
+        .with_context(|| format!("Failed to read pack file {}", path.display()))?;
+
+    let data = lz4_flex::decompress_size_prepended(&compressed_data)
+        .with_context(|| format!("Failed to decompress pack file {}", path.display()))?;
+
+    if data.len() < 24 {
         return Err(anyhow!("pack too small"));
     }
-    if &mmap[0..4] != b"RRIP" {
+    if &data[0..4] != b"RRIP" {
         return Err(anyhow!("pack magic mismatch"));
     }
-    let version = u16::from_le_bytes([mmap[4], mmap[5]]);
+    let version = u16::from_le_bytes([data[4], data[5]]);
     if version != 1 {
         return Err(anyhow!("pack version mismatch"));
     }
-    let count = u32::from_le_bytes([mmap[8], mmap[9], mmap[10], mmap[11]]) as usize;
-    let index_offset = u32::from_le_bytes([mmap[12], mmap[13], mmap[14], mmap[15]]) as usize;
-    let data_offset = u32::from_le_bytes([mmap[16], mmap[17], mmap[18], mmap[19]]) as usize;
+    let count = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
+    let index_offset = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
+    let data_offset = u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize;
     let mut index = Vec::with_capacity(count);
     let mut cursor = index_offset;
     for _ in 0..count {
-        let level_kind = mmap[cursor];
-        let idx_in_parent = mmap[cursor + 1];
+        let level_kind = data[cursor];
+        let idx_in_parent = data[cursor + 1];
         let offset = u32::from_le_bytes([
-            mmap[cursor + 4],
-            mmap[cursor + 5],
-            mmap[cursor + 6],
-            mmap[cursor + 7],
+            data[cursor + 4],
+            data[cursor + 5],
+            data[cursor + 6],
+            data[cursor + 7],
         ]);
         let length = u32::from_le_bytes([
-            mmap[cursor + 8],
-            mmap[cursor + 9],
-            mmap[cursor + 10],
-            mmap[cursor + 11],
+            data[cursor + 8],
+            data[cursor + 9],
+            data[cursor + 10],
+            data[cursor + 11],
         ]);
         index.push(PackIndexEntry {
             level_kind,
@@ -986,7 +992,7 @@ fn open_pack(pack_dir: &Path, x2: u32, y2: u32) -> Result<PackFile> {
         cursor += 16;
     }
     Ok(PackFile {
-        _mmap: mmap,
+        data,
         data_offset,
         index,
     })
