@@ -121,11 +121,11 @@ cd server
   --port 3007
 
 # Or with custom parameters (see below for details)
-./target/release/rrip-tile-server \
+./target/release/origami-tile-server \
   --slides-root ../data \
   --port 3007 \
   --pack-dir residual_packs \
-  --cache-dir /tmp/rrip-cache \
+  --cache-dir /tmp/origami-cache \
   --hot-cache-mb 512 \
   --timing-breakdown
 ```
@@ -158,7 +158,7 @@ curl http://localhost:3007/metrics
 | `--slides-root` | Root directory containing slide folders | Required | `--slides-root data` |
 | `--port` | HTTP server port | 3007 | `--port 8080` |
 | `--pack-dir` | Subdirectory name for residual packs | `residual_packs` | `--pack-dir packs` |
-| `--cache-dir` | Directory for persistent RocksDB cache | `/tmp/rrip-cache` | `--cache-dir /var/cache/rrip` |
+| `--cache-dir` | Directory for persistent RocksDB cache | `/tmp/origami-cache` | `--cache-dir /var/cache/origami` |
 | `--hot-cache-mb` | In-memory LRU cache size (MB) | 256 | `--hot-cache-mb 1024` |
 | `--warm-cache-gb` | RocksDB cache size (GB) | 1 | `--warm-cache-gb 4` |
 
@@ -422,7 +422,7 @@ ORIGAMI is based on research in multi-resolution image compression and perceptua
 3. **Spatial correlation**: Interpolation captures most image structure
 4. **Access patterns**: Viewers typically request spatially-coherent tiles
 
-See [paper/rrip-paper.md](paper/rrip-paper.md) for detailed methodology.
+See [paper/origami-paper.md](paper/origami-paper.md) for detailed methodology.
 
 ## 📄 License
 

@@ -102,7 +102,7 @@ if [ -f "run-server.sh" ]; then
     ./run-server.sh --slides-root ../data --port 3007 &
 else
     # Fallback
-    ./target/release/rrip-tile-server --slides-root ../data --port 3007 &
+    ./target/release/origami-tile-server --slides-root ../data --port 3007 &
 fi
 
 SERVER_PID=$!

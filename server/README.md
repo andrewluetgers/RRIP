@@ -1,4 +1,4 @@
-# RRIP Tile Server (MVP)
+# ORIGAMI Tile Server (MVP)
 
 This is a Rust HTTP server that serves DeepZoom tiles and reconstructs L1/L0 tiles on demand from L2 + residuals.
 
@@ -15,7 +15,7 @@ Root directory containing all slide folders. The server recursively scans this d
 Directory where RocksDB stores the persistent warm cache. This is a key-value database that caches reconstructed tiles across server restarts.
 
 ```bash
---cache-dir /var/cache/rrip  # Default: /tmp/rrip-cache
+--cache-dir /var/cache/origami  # Default: /tmp/origami-cache
 ```
 
 **How it works:**
@@ -28,7 +28,7 @@ Directory where RocksDB stores the persistent warm cache. This is a key-value da
 
 **Cache directory structure:**
 ```
-/var/cache/rrip/
+/var/cache/origami/
 ├── 000003.log          # Write-ahead log
 ├── 000004.sst          # Sorted String Table files
 ├── 000005.sst          # (immutable tile data)
@@ -89,14 +89,14 @@ The server expects this directory structure under `--slides-root`:
 ./run-server.sh \
   --slides-root ../data \
   --port 3007 \
-  --cache-dir /tmp/rrip-cache \
+  --cache-dir /tmp/origami-cache \
   --pack-dir residual_packs
 
 # Full production config
 cargo run --release --manifest-path server/Cargo.toml -- \
   --slides-root /data/slides \
   --port 3007 \
-  --cache-dir /var/cache/rrip \
+  --cache-dir /var/cache/origami \
   --pack-dir residual_packs \
   --hot-cache-mb 1024 \
   --warm-cache-gb 10 \

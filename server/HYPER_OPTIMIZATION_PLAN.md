@@ -1,4 +1,4 @@
-# 🚀 HYPER-OPTIMIZATION PLAN FOR RRIP SERVER
+# 🚀 HYPER-OPTIMIZATION PLAN FOR ORIGAMI SERVER
 
 ## Critical Bottlenecks Found
 
@@ -260,7 +260,7 @@ echo always > /sys/kernel/mm/transparent_hugepage/enabled
 
 # Or use explicit huge pages
 cargo build --release
-hugectl --heap ./target/release/rrip-server
+hugectl --heap ./target/release/origami-server
 ```
 
 ## The Nuclear Option: Custom Allocator

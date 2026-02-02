@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# RRIP Tile Server Launch Script
+# ORIGAMI Tile Server Launch Script
 # Usage: ./run-server.sh [options]
 
 set -e
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo "RRIP Tile Server"
+            echo "ORIGAMI Tile Server"
             echo ""
             echo "Usage: $0 [options]"
             echo ""
@@ -89,7 +89,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Print configuration
-echo "🚀 Starting RRIP Tile Server"
+echo "🚀 Starting ORIGAMI Tile Server"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📁 Slides root: $SLIDES_ROOT"
 echo "🌐 Port: $PORT"

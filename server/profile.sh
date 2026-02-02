@@ -14,7 +14,7 @@ cargo build --release
 
 echo "Starting server with flamegraph..."
 # Start flamegraph in background
-sudo -E cargo flamegraph --root --bin rrip-tile-server -- --slides-root ../data --port 3007 &
+sudo -E cargo flamegraph --root --bin origami-tile-server -- --slides-root ../data --port 3007 &
 FLAMEGRAPH_PID=$!
 
 # Wait for server to start

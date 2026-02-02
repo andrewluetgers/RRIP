@@ -338,7 +338,7 @@ eviction = "lru"
 
 [cache.warm]
 backend = "rocksdb"
-path = "/var/cache/rrip"
+path = "/var/cache/origami"
 max_size_gb = 100
 compression = "lz4"
 ```
@@ -346,4 +346,4 @@ compression = "lz4"
 ## Appendix B: Evaluation Data
 
 Full evaluation results, test images, and benchmarking scripts are available at:
-https://github.com/andrewluetgers/rrip-evaluation
+https://github.com/andrewluetgers/origami-evaluation

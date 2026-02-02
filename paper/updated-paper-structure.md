@@ -1,8 +1,8 @@
-# RRIP Paper Structure with Evidence Requirements
+# ORIGAMI Paper Structure with Evidence Requirements
 ## Updated to Include Literature Baselines
 
 ### Title
-"RRIP: Serving-Optimized Hierarchical Residual Compression for Gigapixel Whole-Slide Images"
+"ORIGAMI: Serving-Optimized Hierarchical Residual Compression for Gigapixel Whole-Slide Images"
 
 ### Author List
 [To be determined based on contributions]
@@ -12,7 +12,7 @@
 ## Abstract (250 words)
 
 ### Required Evidence Points:
-1. **Quantitative claim**: "RRIP achieves X% storage reduction compared to JPEG-90 pyramids"
+1. **Quantitative claim**: "ORIGAMI achieves X% storage reduction compared to JPEG-90 pyramids"
    - Evidence: Table 1 results across 100+ WSIs
 
 2. **Quality claim**: "Maintains diagnostic acceptability with PSNR-Y > 35dB and ΔE00 < 2.0"
@@ -72,7 +72,7 @@ Brief positioning against each approach:
 | JPEG 2000 | Mixed | 25-50:1 | Medium | Partial |
 | HEVC/SHVC | Lossy | 80-260:1 | High | No |
 | WISE | Lossless | 36:1 avg | Medium | No |
-| RRIP | Lossy | 28-35:1 | Low* | Yes |
+| ORIGAMI | Lossy | 28-35:1 | Low* | Yes |
 
 *Amortized through caching
 
@@ -188,7 +188,7 @@ On request for tile (level, x, y):
 
 #### Visual Comparison
 **Required figure**: 4×6 grid showing:
-- Original, JPEG-80, JP2-32:1, HEVC-CRF23, RRIP-Q32, Error maps
+- Original, JPEG-80, JP2-32:1, HEVC-CRF23, ORIGAMI-Q32, Error maps
 
 #### Perceptual Metrics Distribution
 **Required figure**: ΔE00 histograms for each method
@@ -197,7 +197,7 @@ On request for tile (level, x, y):
 
 #### AI Model Performance
 **Required table**: Downstream task results
-| Task | Metric | Original | JPEG-90 | JP2-32:1 | RRIP-Q32 | p-value |
+| Task | Metric | Original | JPEG-90 | JP2-32:1 | ORIGAMI-Q32 | p-value |
 |------|--------|----------|---------|----------|----------|---------|
 | Nuclei Detection | F1 | ... | ... | ... | ... | ... |
 | Tissue Segmentation | IoU | ... | ... | ... | ... | ... |
@@ -209,7 +209,7 @@ On request for tile (level, x, y):
 
 #### Cache Efficiency
 **Required table**: Cache metrics under navigation workload
-| Metric | RRIP | JPEG | JP2 |
+| Metric | ORIGAMI | JPEG | JP2 |
 |--------|------|------|-----|
 | Hot hit rate | ... | N/A | N/A |
 | Family efficiency | ... | N/A | N/A |
@@ -221,7 +221,7 @@ On request for tile (level, x, y):
 **Required table**: Ablation results
 | Configuration | Storage | PSNR-Y | ΔE00 | Decode (ms) |
 |--------------|---------|---------|------|-------------|
-| RRIP-Full | baseline | ... | ... | ... |
+| ORIGAMI-Full | baseline | ... | ... | ... |
 | - Chroma residuals | ... | ... | ... | ... |
 | - L1 cascade | ... | ... | ... | ... |
 | - Family generation | ... | ... | ... | ... |
@@ -231,7 +231,7 @@ On request for tile (level, x, y):
 ## 6. Discussion (1.5 pages)
 
 ### 6.1 Analysis of Results
-- Why RRIP achieves its compression
+- Why ORIGAMI achieves its compression
 - Trade-offs made for serving optimization
 - Comparison with theoretical limits
 
@@ -241,7 +241,7 @@ On request for tile (level, x, y):
 - CPU-only implementation
 
 ### 6.3 Failure Cases
-**Required figure**: Examples where RRIP struggles
+**Required figure**: Examples where ORIGAMI struggles
 - IHC stains with critical color information
 - Pen marks and annotations
 - Scanner artifacts
@@ -319,7 +319,7 @@ On request for tile (level, x, y):
 
 ## Key Differentiating Messages
 
-1. **"Serving-first design"**: Unlike pure codecs, RRIP optimizes for tile server workloads
+1. **"Serving-first design"**: Unlike pure codecs, ORIGAMI optimizes for tile server workloads
 
 2. **"Pragmatic compression"**: Trades ultimate efficiency for operational simplicity
 

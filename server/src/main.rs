@@ -31,7 +31,7 @@ mod turbojpeg_optimized;
 use turbojpeg_optimized::{load_luma_turbo, decode_luma_turbo, encode_jpeg_turbo, encode_luma_turbo, load_rgb_turbo, apply_residual_fast};
 
 #[derive(Parser, Debug)]
-#[command(name = "rrip-tile-server")]
+#[command(name = "origami-tile-server")]
 struct Args {
     #[arg(long, default_value = "data")]
     slides_root: PathBuf,
@@ -1015,7 +1015,7 @@ fn open_pack(pack_dir: &Path, x2: u32, y2: u32) -> Result<PackFile> {
     if data.len() < 24 {
         return Err(anyhow!("pack too small"));
     }
-    if &data[0..4] != b"RRIP" {
+    if &data[0..4] != b"ORIG" {
         return Err(anyhow!("pack magic mismatch"));
     }
     let version = u16::from_le_bytes([data[4], data[5]]);

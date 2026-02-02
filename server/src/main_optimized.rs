@@ -1,4 +1,4 @@
-// HYPER-OPTIMIZED RRIP SERVER - Key improvements:
+// HYPER-OPTIMIZED ORIGAMI SERVER - Key improvements:
 // 1. Concurrent chroma upsampling (L2->L1 and L1->L0 in parallel)
 // 2. Zero-copy JPEG operations using turbojpeg directly
 // 3. SIMD-optimized YCbCr conversions
@@ -530,7 +530,7 @@ fn refine_l0_prediction(l1_mosaic: &[u8], l1_size: u32, l0_coarse: &[u8], l0_siz
 
 // Keep existing structures and main logic, but use optimized generation
 #[derive(Parser, Debug)]
-#[command(name = "rrip-tile-server")]
+#[command(name = "origami-tile-server")]
 struct Args {
     #[arg(long, default_value = "data")]
     slides_root: PathBuf,

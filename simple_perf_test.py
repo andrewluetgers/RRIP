@@ -53,7 +53,7 @@ def run_performance_test():
 
     # Start server
     server = subprocess.Popen(
-        ['/tmp/rrip-build/release/rrip-tile-server',
+        ['/tmp/origami-build/release/origami-tile-server',
          '--slides-root', 'data',
          '--port', '3007'],
         cwd='/Users/andrewluetgers/projects/dev/RRIP',

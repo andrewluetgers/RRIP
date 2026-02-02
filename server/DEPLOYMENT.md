@@ -1,8 +1,8 @@
-# RRIP Tile Server Deployment Guide
+# ORIGAMI Tile Server Deployment Guide
 
 ## Multi-Architecture Build & Deployment
 
-This guide covers building and deploying the RRIP tile server for both AMD64 and ARM64 architectures.
+This guide covers building and deploying the ORIGAMI tile server for both AMD64 and ARM64 architectures.
 
 ## Prerequisites
 
@@ -35,13 +35,13 @@ The server includes optimizations for both architectures:
 ### Building for your architecture
 ```bash
 # AMD64
-docker build --platform linux/amd64 -t rrip-server:amd64 .
+docker build --platform linux/amd64 -t origami-server:amd64 .
 
 # ARM64 (Apple Silicon)
-docker build --platform linux/arm64 -t rrip-server:arm64 .
+docker build --platform linux/arm64 -t origami-server:arm64 .
 
 # Multi-arch with Docker Buildx
-docker buildx build --platform linux/amd64,linux/arm64 -t rrip-server:latest .
+docker buildx build --platform linux/amd64,linux/arm64 -t origami-server:latest .
 ```
 
 ### Running with Docker Compose
@@ -50,7 +50,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t rrip-server:latest .
 docker-compose up -d
 
 # View logs
-docker-compose logs -f rrip-server
+docker-compose logs -f origami-server
 
 # Stop the server
 docker-compose down
@@ -82,16 +82,16 @@ git push origin v1.0.0
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rrip-server
+  name: origami-server
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: rrip-server
+      app: origami-server
   template:
     metadata:
       labels:
-        app: rrip-server
+        app: origami-server
     spec:
       nodeSelector:
         # For AMD64 nodes
@@ -99,8 +99,8 @@ spec:
         # For ARM64 nodes (uncomment if using Graviton)
         # kubernetes.io/arch: arm64
       containers:
-      - name: rrip-server
-        image: ghcr.io/yourusername/rrip:latest
+      - name: origami-server
+        image: ghcr.io/yourusername/origami:latest
         ports:
         - containerPort: 8080
         resources:
@@ -127,7 +127,7 @@ spec:
 
 ```json
 {
-  "family": "rrip-server",
+  "family": "origami-server",
   "requiresCompatibilities": ["FARGATE"],
   "networkMode": "awsvpc",
   "cpu": "4096",
@@ -136,8 +136,8 @@ spec:
     "cpuArchitecture": "X86_64"
   },
   "containerDefinitions": [{
-    "name": "rrip-server",
-    "image": "ghcr.io/yourusername/rrip:latest",
+    "name": "origami-server",
+    "image": "ghcr.io/yourusername/origami:latest",
     "portMappings": [{
       "containerPort": 8080,
       "protocol": "tcp"
@@ -170,7 +170,7 @@ docker swarm init
 docker stack deploy -c docker-compose.yml rrip
 
 # Scale service
-docker service scale rrip_rrip-server=5
+docker service scale rrip_origami-server=5
 ```
 
 ## Performance Tuning
@@ -227,10 +227,10 @@ Import the dashboard from `monitoring/grafana-dashboard.json`
 ### Check SIMD support
 ```bash
 # AMD64
-docker run --rm rrip-server:latest sh -c "cat /proc/cpuinfo | grep -E 'avx2|sse2'"
+docker run --rm origami-server:latest sh -c "cat /proc/cpuinfo | grep -E 'avx2|sse2'"
 
 # ARM64
-docker run --rm rrip-server:latest sh -c "cat /proc/cpuinfo | grep -E 'neon|asimd'"
+docker run --rm origami-server:latest sh -c "cat /proc/cpuinfo | grep -E 'neon|asimd'"
 ```
 
 ### Performance testing
@@ -245,7 +245,7 @@ curl http://localhost:8080/tiles/demo_out/14/100_100.jpg -H "X-Debug: timing"
 ### Container resource limits
 ```bash
 # Check current limits
-docker stats rrip-server
+docker stats origami-server
 
 # Adjust in docker-compose.yml or K8s deployment
 ```
@@ -271,7 +271,7 @@ spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: rrip-server
+    name: origami-server
   minReplicas: 2
   maxReplicas: 10
   metrics:

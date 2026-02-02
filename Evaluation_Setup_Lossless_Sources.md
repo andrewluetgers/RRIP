@@ -1,15 +1,15 @@
-# RRIP Evaluation Setup with Lossless Source Images
+# ORIGAMI Evaluation Setup with Lossless Source Images
 
 ## The Problem
-Your current baseline pyramid uses JPEG tiles, making it invalid as "ground truth" for compression comparisons. JPEG artifacts compound with further compression, making it impossible to isolate RRIP's actual performance.
+Your current baseline pyramid uses JPEG tiles, making it invalid as "ground truth" for compression comparisons. JPEG artifacts compound with further compression, making it impossible to isolate ORIGAMI's actual performance.
 
 ## The Solution: Two-Track Evaluation
 
 ### Track 1: Algorithm Quality (Lossless Source)
-Test RRIP's compression algorithm in ideal conditions with uncompressed source material.
+Test ORIGAMI's compression algorithm in ideal conditions with uncompressed source material.
 
 ### Track 2: Real-World Performance (JPEG Source)
-Test RRIP's performance in production conditions where source is already JPEG-compressed.
+Test ORIGAMI's performance in production conditions where source is already JPEG-compressed.
 
 ## Recommended Lossless WSI Sources
 
@@ -116,7 +116,7 @@ def generate_test_pyramid(ground_truth_region, method):
     - 'rrip': Your residual approach
     """
     if method == 'rrip':
-        # Your RRIP implementation
+        # Your ORIGAMI implementation
         pyramid = generate_rrip_pyramid(ground_truth_region)
 
     elif method == 'jpeg':
@@ -149,7 +149,7 @@ def evaluate_compression(ground_truth, compressed_pyramid):
     results['metrics']['ms_ssim'] = calculate_ms_ssim(ground_truth, reconstructed)
     results['metrics']['delta_e'] = calculate_delta_e_2000(ground_truth, reconstructed)
 
-    # Measure at tile boundaries (RRIP weakness)
+    # Measure at tile boundaries (ORIGAMI weakness)
     results['metrics']['edge_delta_e'] = measure_edge_artifacts(ground_truth, reconstructed)
 
     return results
@@ -167,7 +167,7 @@ Create comparisons at matched quality levels:
 | **JPEG Q80** | Standard | 5MB | 38dB | 0.96 | 2.1 | Your current L2 |
 | **JPEG 2000** | Rate 0.1 | 4.8MB | 40dB | 0.97 | 1.5 | Lossless option available |
 | **HTJ2K** | Rate 0.1 | 4.8MB | 39dB | 0.96 | 1.6 | Fast decode |
-| **RRIP** | Q32 residuals | 2.4MB | 37dB | 0.95 | 2.3 | Your method |
+| **ORIGAMI** | Q32 residuals | 2.4MB | 37dB | 0.95 | 2.3 | Your method |
 
 ## Key Metrics to Report
 
@@ -175,15 +175,15 @@ Create comparisons at matched quality levels:
 
 1. **BD-Rate** (Bjøntegaard Delta Rate)
    - Compare to JPEG baseline
-   - "RRIP achieves -45% BD-rate compared to JPEG"
+   - "ORIGAMI achieves -45% BD-rate compared to JPEG"
 
 2. **Quality at Fixed Compression**
    - At 20:1 compression: Compare PSNR/SSIM
-   - "At 20:1, RRIP maintains 37dB PSNR vs 35dB for JPEG"
+   - "At 20:1, ORIGAMI maintains 37dB PSNR vs 35dB for JPEG"
 
 3. **Compression at Fixed Quality**
    - At PSNR=38dB: Compare file sizes
-   - "For 38dB quality, RRIP uses 2.4MB vs JPEG's 5MB"
+   - "For 38dB quality, ORIGAMI uses 2.4MB vs JPEG's 5MB"
 
 4. **Perceptual Quality**
    - ΔE2000 distribution (mean, 95th percentile)
@@ -242,12 +242,12 @@ def run_full_evaluation():
 
 With clean, lossless source material:
 
-**RRIP Strengths:**
+**ORIGAMI Strengths:**
 - 50-82% better compression than JPEG at similar quality
 - Fast decode (0.35ms amortized per tile)
 - Good PSNR/SSIM on uniform tissue regions
 
-**RRIP Weaknesses:**
+**ORIGAMI Weaknesses:**
 - Higher ΔE at sharp edges (chroma interpolation)
 - Slightly lower peak quality than lossless J2K
 - Block artifacts at L2 family boundaries
@@ -255,10 +255,10 @@ With clean, lossless source material:
 ## Two-Track Results Section for Paper
 
 ### Section 5.1: Algorithm Performance (Lossless Source)
-"When evaluated on uncompressed TIFF sources from CAMELYON16, RRIP achieves..."
+"When evaluated on uncompressed TIFF sources from CAMELYON16, ORIGAMI achieves..."
 
 ### Section 5.2: Production Performance (JPEG Source)
-"In production scenarios with JPEG-compressed pyramids, RRIP demonstrates..."
+"In production scenarios with JPEG-compressed pyramids, ORIGAMI demonstrates..."
 
 This approach gives you defensible metrics while acknowledging real-world constraints.
 

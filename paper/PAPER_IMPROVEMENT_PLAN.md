@@ -8,7 +8,7 @@ This document outlines comprehensive improvements needed for the RRIP paper base
 ### 1.1 Font Size
 - **Issue**: Current font size appears too large for academic paper
 - **Fix**: Change from 10pt to standard IEEE 9pt font size for computer science papers
-- **Location**: Line 1 of rrip_paper_article.tex
+- **Location**: Line 1 of origami_paper_article.tex
 
 ### 1.2 Bullet List Indentation
 - **Issue**: Bullet lists are indented too far from margin
@@ -235,7 +235,7 @@ Total L0+L1: 94%
 
 #### Python Evaluation Tools
 ✅ **Created Evaluation Scripts**
-- evaluate_rrip_final.py - Main evaluation framework
+- evaluate_origami_final.py - Main evaluation framework
 - compare_compression.py - Multi-method comparison
 - test_residual_quality.py - Quality testing
 - Simple performance tests (perf_test.py, etc.)

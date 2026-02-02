@@ -1,8 +1,8 @@
-# RRIP Scientific Validation Plan
+# ORIGAMI Scientific Validation Plan
 ## From Pre-Production Paper to Published Research
 
 ### Executive Summary
-This document outlines a comprehensive plan to transform the RRIP (Residual Reconstruction from Interpolated Priors) pre-production paper into a rigorous, peer-reviewed scientific publication. The plan covers experimental design, validation methodology, dataset requirements, and publication strategy.
+This document outlines a comprehensive plan to transform the ORIGAMI (Residual Reconstruction from Interpolated Priors) pre-production paper into a rigorous, peer-reviewed scientific publication. The plan covers experimental design, validation methodology, dataset requirements, and publication strategy.
 
 ---
 
@@ -65,8 +65,8 @@ Create stratified test sets for:
 ### 3.1 Compression Metrics
 ```
 Primary Metrics:
-- Compression Ratio (CR) = baseline_bytes / RRIP_bytes
-- Storage Reduction (%) = (1 - RRIP_bytes/baseline_bytes) × 100
+- Compression Ratio (CR) = baseline_bytes / ORIGAMI_bytes
+- Storage Reduction (%) = (1 - ORIGAMI_bytes/baseline_bytes) × 100
 - Bits per pixel (bpp) at each pyramid level
 
 Breakdown Analysis:
@@ -103,7 +103,7 @@ Breakdown Analysis:
 ### 3.3 Task-Based Validation
 
 #### AI Model Performance
-Compare model predictions on original vs. RRIP-reconstructed tiles:
+Compare model predictions on original vs. ORIGAMI-reconstructed tiles:
 1. **Classification Tasks**:
    - Cancer detection accuracy
    - Tissue type classification
@@ -305,7 +305,7 @@ Document:
 ## 8. Paper Structure with Evidence
 
 ### Abstract (250 words)
-- **Claim**: "RRIP achieves X% storage reduction"
+- **Claim**: "ORIGAMI achieves X% storage reduction"
   - **Evidence**: Table 1 with mean±std across datasets
 - **Claim**: "Maintains perceptual quality"
   - **Evidence**: SSIM > 0.95, ΔE00 < 2.0
@@ -481,7 +481,7 @@ Document:
 ## Appendix B: Figure/Table Planning
 
 ### Essential Figures
-1. **Method Overview**: Visual diagram of RRIP pipeline
+1. **Method Overview**: Visual diagram of ORIGAMI pipeline
 2. **Compression Results**: Bar chart comparing methods
 3. **Rate-Distortion**: Curves for different quality settings
 4. **Visual Comparison**: Grid showing original/compressed/residual

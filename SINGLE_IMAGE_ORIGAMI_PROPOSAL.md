@@ -1,8 +1,8 @@
-# Single Image RRIP Compression Proposal
+# Single Image ORIGAMI Compression Proposal
 
 ## Executive Summary
 
-Adapt the RRIP (Residual Reconstruction from Interpolated Priors) algorithm, currently achieving 6.7x compression on WSI pyramids versus JPEG-90, for single image compression. This approach could provide 1.5-2x additional compression beyond standard JPEG while maintaining visual quality.
+Adapt the ORIGAMI (Residual Reconstruction from Interpolated Priors) algorithm, currently achieving 6.7x compression on WSI pyramids versus JPEG-90, for single image compression. This approach could provide 1.5-2x additional compression beyond standard JPEG while maintaining visual quality.
 
 ## Core Concept
 
@@ -39,7 +39,7 @@ Instead of storing a full-resolution JPEG, store:
 ### Example: 4K Image (3840×2160)
 - Original raw: ~25 MB
 - JPEG-90: ~2.5 MB
-- RRIP-compressed: ~1.2-1.5 MB
+- ORIGAMI-compressed: ~1.2-1.5 MB
 - Savings: 40-50% versus JPEG-90
 
 ## Implementation To-Do List
@@ -153,22 +153,22 @@ Instead of storing a full-resolution JPEG, store:
 ## Next Steps
 
 1. **Validate approach** with diverse image dataset
-2. **Build prototype** using existing RRIP codebase as reference
+2. **Build prototype** using existing ORIGAMI codebase as reference
 3. **Benchmark** against WebP, AVIF, and JPEG XL
 4. **Engage** with image format community for feedback
 5. **Develop** formal specification document
 
 ## Notes
 
-- The RRIP WSI implementation provides a solid foundation
+- The ORIGAMI WSI implementation provides a solid foundation
 - Simpler than WSI case (no tile management needed)
 - Could potentially be standardized as JPEG extension
 - Patents/IP need to be investigated
-- Consider submitting to JPEG committee as JPEG-RRIP
+- Consider submitting to JPEG committee as JPEG-ORIGAMI
 
 ## References
 
-- RRIP WSI Implementation: `/Users/andrewluetgers/projects/dev/RRIP`
+- ORIGAMI WSI Implementation: `/Users/andrewluetgers/projects/dev/ORIGAMI`
 - JPEG Standard: ITU-T T.81
 - Similar work: JPEG 2000, JPEG XR, BPG, AVIF
 - Research papers on residual coding in video (H.264/H.265)

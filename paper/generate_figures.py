@@ -38,18 +38,18 @@ def create_rd_curves(results, output_path="figures/rd_curves.pdf"):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.5))
 
     # Group results by method
-    rrip_data = [r for r in results if r['method'] == 'RRIP']
+    origami_data = [r for r in results if r['method'] == 'RRIP']
     jpeg_data = [r for r in results if r['method'] == 'JPEG']
 
     # RRIP point
-    if rrip_data:
-        rrip_bpp = np.mean([r['bpp'] for r in rrip_data])
-        rrip_psnr = np.mean([r['psnr_db'] for r in rrip_data])
-        rrip_ssim = np.mean([r['ssim'] for r in rrip_data])
+    if origami_data:
+        origami_bpp = np.mean([r['bpp'] for r in origami_data])
+        origami_psnr = np.mean([r['psnr_db'] for r in origami_data])
+        origami_ssim = np.mean([r['ssim'] for r in origami_data])
 
-        ax1.plot(rrip_bpp, rrip_psnr, 'r^', markersize=10,
+        ax1.plot(origami_bpp, origami_psnr, 'r^', markersize=10,
                 label='RRIP', markeredgewidth=1.5, markeredgecolor='darkred')
-        ax2.plot(rrip_bpp, rrip_ssim, 'r^', markersize=10,
+        ax2.plot(origami_bpp, origami_ssim, 'r^', markersize=10,
                 label='RRIP', markeredgewidth=1.5, markeredgecolor='darkred')
 
     # JPEG curve - group by quality
@@ -111,10 +111,10 @@ def create_rd_curves(results, output_path="figures/rd_curves.pdf"):
     ax2.set_ylim([0.94, 1.0])
 
     # Add RRIP annotation
-    if rrip_data:
+    if origami_data:
         ax1.annotate('RRIP\n(Our Method)',
-                    xy=(rrip_bpp, rrip_psnr),
-                    xytext=(rrip_bpp+0.3, rrip_psnr-3),
+                    xy=(origami_bpp, origami_psnr),
+                    xytext=(origami_bpp+0.3, origami_psnr-3),
                     arrowprops=dict(arrowstyle='->', color='red', lw=1),
                     fontsize=8, color='red', fontweight='bold')
 

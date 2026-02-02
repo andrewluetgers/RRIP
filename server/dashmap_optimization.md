@@ -1,4 +1,4 @@
-# DashMap Optimization for RRIP Server
+# DashMap Optimization for ORIGAMI Server
 
 ## Problem Analysis
 

@@ -139,10 +139,10 @@ storage ratio of 5.5:1, using only 18% of the baseline storage."
 ```
 Let S_raw = uncompressed storage in bytes
 Let S_jpeg = JPEG Q90 storage in bytes
-Let S_rrip = ORIGAMI storage in bytes
+Let S_origami = ORIGAMI storage in bytes
 
-Compression ratio (raw to ORIGAMI) = S_raw : S_rrip = 34:1
-Compression ratio (JPEG to ORIGAMI) = S_jpeg : S_rrip = 5.5:1
+Compression ratio (raw to ORIGAMI) = S_raw : S_origami = 34:1
+Compression ratio (JPEG to ORIGAMI) = S_jpeg : S_origami = 5.5:1
 ```
 
 ### 9. Common Mistakes to Avoid

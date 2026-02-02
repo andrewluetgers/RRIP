@@ -41,9 +41,9 @@ make arxiv
 
 Or manually:
 ```bash
-pdflatex rrip_paper.tex
-pdflatex rrip_paper.tex  # Run twice for references
-pdflatex rrip_paper.tex  # Third time for final formatting
+pdflatex origami_paper.tex
+pdflatex origami_paper.tex  # Run twice for references
+pdflatex origami_paper.tex  # Third time for final formatting
 ```
 
 ## Current Format
@@ -58,7 +58,7 @@ The paper is currently formatted using **IEEE Conference style** (`IEEEtran`):
 
 ### 1. ACM Conference Format
 
-Replace the document class in `rrip_paper.tex`:
+Replace the document class in `origami_paper.tex`:
 ```latex
 % Replace this line:
 \documentclass[10pt,conference]{IEEEtran}
@@ -224,7 +224,7 @@ Add to preamble for conferences requiring blind review:
 If you get package conflicts, try:
 ```bash
 rm -rf *.aux *.log
-pdflatex rrip_paper.tex
+pdflatex origami_paper.tex
 ```
 
 ### Missing Packages
@@ -247,17 +247,17 @@ If references don't appear:
 
 ### To Word/DOCX:
 ```bash
-pandoc rrip_paper.tex -o rrip_paper.docx
+pandoc origami_paper.tex -o origami_paper.docx
 ```
 
 ### To HTML:
 ```bash
-htlatex rrip_paper.tex
+htlatex origami_paper.tex
 ```
 
 ### To Markdown:
 ```bash
-pandoc rrip_paper.tex -t markdown -o rrip_paper_converted.md
+pandoc origami_paper.tex -t markdown -o origami_paper_converted.md
 ```
 
 ## Target Venues

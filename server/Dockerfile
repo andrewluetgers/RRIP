@@ -1,4 +1,4 @@
-# Multi-stage, multi-architecture Dockerfile for RRIP tile server
+# Multi-stage, multi-architecture Dockerfile for ORIGAMI tile server
 # Supports AMD64 and ARM64 with architecture-specific optimizations
 
 # Build stage
@@ -47,13 +47,13 @@ RUN if [ "$BUILDARCH" = "$TARGETARCH" ]; then \
 COPY src ./src
 
 # Clean and rebuild with actual source
-RUN rm -rf target/release/deps/rrip* target/$(cat /target.txt)/release/deps/rrip* && \
+RUN rm -rf target/release/deps/origami* target/$(cat /target.txt)/release/deps/origami* && \
     if [ "$BUILDARCH" = "$TARGETARCH" ]; then \
         RUSTFLAGS="-C target-cpu=native" cargo build --release; \
-        cp target/release/rrip-tile-server /rrip-tile-server; \
+        cp target/release/origami-tile-server /origami-tile-server; \
     else \
         cargo build --release --target $(cat /target.txt); \
-        cp target/$(cat /target.txt)/release/rrip-tile-server /rrip-tile-server; \
+        cp target/$(cat /target.txt)/release/origami-tile-server /origami-tile-server; \
     fi
 
 # Runtime stage - minimal image
@@ -66,16 +66,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd -m -u 1001 -s /bin/bash rrip
+RUN useradd -m -u 1001 -s /bin/bash origami
 
 # Copy binary from builder
-COPY --from=builder /rrip-tile-server /usr/local/bin/rrip-tile-server
-RUN chmod +x /usr/local/bin/rrip-tile-server
+COPY --from=builder /origami-tile-server /usr/local/bin/origami-tile-server
+RUN chmod +x /usr/local/bin/origami-tile-server
 
 # Create data directory
-RUN mkdir -p /data && chown rrip:rrip /data
+RUN mkdir -p /data && chown origami:origami /data
 
-USER rrip
+USER origami
 WORKDIR /data
 
 # Health check
@@ -90,5 +90,5 @@ ENV RUST_BACKTRACE=1
 EXPOSE 8080
 
 # Default command with sensible defaults
-ENTRYPOINT ["/usr/local/bin/rrip-tile-server"]
+ENTRYPOINT ["/usr/local/bin/origami-tile-server"]
 CMD ["--slides-root", "/data", "--port", "8080"]

@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# RRIP Paper Build Script
+# ORIGAMI Paper Build Script
 # Generates the complete PDF with figures, references, and citations
 
 set -e  # Exit on error
 
 echo "================================"
-echo "RRIP Paper Build Script"
+echo "ORIGAMI Paper Build Script"
 echo "================================"
 
 # Check if LaTeX is installed
@@ -108,13 +108,13 @@ EOF
 create_article_version() {
     echo "Creating article class version of the paper..."
     # Convert IEEEtran to article class with twocolumn
-    sed 's/\\documentclass\[10pt,conference\]{IEEEtran}/\\documentclass[10pt,twocolumn]{article}/' rrip_paper.tex > rrip_paper_article.tex
-    sed -i '' 's/\\IEEEoverridecommandlockouts/%\\IEEEoverridecommandlockouts/' rrip_paper_article.tex
-    sed -i '' 's/\\begin{IEEEkeywords}/\\textbf{Keywords:}/' rrip_paper_article.tex
-    sed -i '' 's/\\end{IEEEkeywords}//' rrip_paper_article.tex
-    sed -i '' 's/\\IEEEauthorblockN/\\textbf/' rrip_paper_article.tex
-    sed -i '' 's/\\IEEEauthorblockA/\\\\\\small/' rrip_paper_article.tex
-    echo "✓ Created rrip_paper_article.tex"
+    sed 's/\\documentclass\[10pt,conference\]{IEEEtran}/\\documentclass[10pt,twocolumn]{article}/' origami_paper.tex > origami_paper_article.tex
+    sed -i '' 's/\\IEEEoverridecommandlockouts/%\\IEEEoverridecommandlockouts/' origami_paper_article.tex
+    sed -i '' 's/\\begin{IEEEkeywords}/\\textbf{Keywords:}/' origami_paper_article.tex
+    sed -i '' 's/\\end{IEEEkeywords}//' origami_paper_article.tex
+    sed -i '' 's/\\IEEEauthorblockN/\\textbf/' origami_paper_article.tex
+    sed -i '' 's/\\IEEEauthorblockA/\\\\\\small/' origami_paper_article.tex
+    echo "✓ Created origami_paper_article.tex"
 }
 
 # Create bibliography file if it doesn't exist
@@ -235,15 +235,15 @@ build_pdf() {
                 echo "Could not install IEEEtran automatically."
                 echo "Creating fallback article version..."
                 create_article_version
-                PAPER_FILE="rrip_paper_article.tex"
+                PAPER_FILE="origami_paper_article.tex"
             }
         else
             echo "tlmgr not found. Creating fallback article version..."
             create_article_version
-            PAPER_FILE="rrip_paper_article.tex"
+            PAPER_FILE="origami_paper_article.tex"
         fi
     else
-        PAPER_FILE="rrip_paper.tex"
+        PAPER_FILE="origami_paper.tex"
     fi
 
     # Set base name for all subsequent operations
@@ -290,8 +290,8 @@ build_pdf() {
     echo "✓ Pass 3 complete"
 
     # If we used the article version, rename the output
-    if [ "${PAPER_FILE}" = "rrip_paper_article.tex" ]; then
-        mv -f rrip_paper_article.pdf rrip_paper.pdf 2>/dev/null || true
+    if [ "${PAPER_FILE}" = "origami_paper_article.tex" ]; then
+        mv -f origami_paper_article.pdf origami_paper.pdf 2>/dev/null || true
     fi
 }
 
@@ -299,18 +299,18 @@ build_pdf() {
 check_output() {
     echo ""
     echo "Checking output..."
-    if [ -f "rrip_paper.pdf" ]; then
-        size=$(ls -lh rrip_paper.pdf | awk '{print $5}')
+    if [ -f "origami_paper.pdf" ]; then
+        size=$(ls -lh origami_paper.pdf | awk '{print $5}')
         # Try to get page count if pdfinfo is available
         if command -v pdfinfo &> /dev/null; then
-            pages=$(pdfinfo rrip_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
+            pages=$(pdfinfo origami_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
         elif [ -f "/Library/TeX/texbin/pdfinfo" ]; then
-            pages=$(/Library/TeX/texbin/pdfinfo rrip_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
+            pages=$(/Library/TeX/texbin/pdfinfo origami_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
         else
             pages="(pdfinfo not available)"
         fi
         echo "✓ PDF generated successfully!"
-        echo "  File: rrip_paper.pdf"
+        echo "  File: origami_paper.pdf"
         echo "  Size: $size"
         echo "  Pages: $pages"
         echo ""
@@ -319,9 +319,9 @@ check_output() {
         echo "================================"
         echo ""
         echo "View the paper with:"
-        echo "  open rrip_paper.pdf    # macOS"
-        echo "  xdg-open rrip_paper.pdf # Linux"
-        echo "  start rrip_paper.pdf    # Windows"
+        echo "  open origami_paper.pdf    # macOS"
+        echo "  xdg-open origami_paper.pdf # Linux"
+        echo "  start origami_paper.pdf    # Windows"
     else
         echo "❌ ERROR: PDF was not generated"
         exit 1

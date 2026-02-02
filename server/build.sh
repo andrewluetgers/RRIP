@@ -211,20 +211,20 @@ fi
 # Build Docker image if requested
 if [ "$BUILD_DOCKER" = true ]; then
     print_step "Building Docker image"
-    docker build -t rrip-tile-server:latest .
-    print_success "Docker image built: rrip-tile-server:latest"
+    docker build -t origami-tile-server:latest .
+    print_success "Docker image built: origami-tile-server:latest"
     echo ""
 fi
 
 # Print binary location
 if [ "$BUILD_MODE" = "release" ]; then
-    BINARY_PATH="target/release/rrip-tile-server"
+    BINARY_PATH="target/release/origami-tile-server"
 else
-    BINARY_PATH="target/debug/rrip-tile-server"
+    BINARY_PATH="target/debug/origami-tile-server"
 fi
 
 if [ -n "$TARGET" ]; then
-    BINARY_PATH="target/$TARGET/$BUILD_MODE/rrip-tile-server"
+    BINARY_PATH="target/$TARGET/$BUILD_MODE/origami-tile-server"
 fi
 
 # Get binary size
