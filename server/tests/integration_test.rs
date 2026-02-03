@@ -260,7 +260,7 @@ mod pack_tests {
         let test_pack = create_test_pack()?;
 
         // Verify magic bytes
-        assert_eq!(&test_pack[0..4], b"RRIP");
+        assert_eq!(&test_pack[0..4], b"ORIG");
 
         // Verify version
         assert_eq!(test_pack[4], 1);
@@ -276,7 +276,7 @@ mod pack_tests {
         let mut pack = Vec::new();
 
         // Magic bytes
-        pack.write_all(b"RRIP")?;
+        pack.write_all(b"ORIG")?;
 
         // Version
         pack.push(1);

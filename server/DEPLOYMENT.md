@@ -167,10 +167,10 @@ spec:
 docker swarm init
 
 # Deploy stack
-docker stack deploy -c docker-compose.yml rrip
+docker stack deploy -c docker-compose.yml origami
 
 # Scale service
-docker service scale rrip_origami-server=5
+docker service scale origami_origami-server=5
 ```
 
 ## Performance Tuning
@@ -266,7 +266,7 @@ docker stats origami-server
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: rrip-hpa
+  name: origami-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

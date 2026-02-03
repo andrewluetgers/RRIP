@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RRIP Parameter Grid Evaluation Script
+ORIGAMI Parameter Grid Evaluation Script
 
 Tests a 3x3 grid of quantization levels and JPEG qualities:
 - Quantization levels: [16, 32, 64]
@@ -394,7 +394,7 @@ class ParameterGridEvaluator:
     def run_full_grid(self) -> List[ParameterResult]:
         """Run evaluation for all parameter combinations"""
         print(f"\n{'='*80}")
-        print("RRIP PARAMETER GRID EVALUATION")
+        print("ORIGAMI PARAMETER GRID EVALUATION")
         print(f"{'='*80}")
         print(f"Quantization levels: {self.QUANT_LEVELS}")
         print(f"JPEG qualities: {self.JPEG_QUALITIES}")
@@ -522,7 +522,7 @@ class ParameterGridEvaluator:
         print("\nGenerating plots...")
 
         fig, axes = plt.subplots(2, 2, figsize=(14, 12))
-        fig.suptitle('RRIP Parameter Grid Evaluation Results', fontsize=16, fontweight='bold')
+        fig.suptitle('ORIGAMI Parameter Grid Evaluation Results', fontsize=16, fontweight='bold')
 
         # Plot 1: Compression ratio vs PSNR
         ax1 = axes[0, 0]
@@ -626,7 +626,7 @@ class ParameterGridEvaluator:
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
-        description="Run RRIP parameter grid evaluation",
+        description="Run ORIGAMI parameter grid evaluation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

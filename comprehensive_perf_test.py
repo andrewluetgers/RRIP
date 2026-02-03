@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive performance test for RRIP tile server with detailed metrics.
+Comprehensive performance test for ORIGAMI tile server with detailed metrics.
 Measures:
 - Tiles per second
 - Family generation rate
@@ -61,7 +61,7 @@ class PerformanceTester:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 cmdline = proc.info['cmdline']
-                if cmdline and 'rrip-tile-server' in ' '.join(cmdline):
+                if cmdline and 'origami-tile-server' in ' '.join(cmdline):
                     self.server_pid = proc.info['pid']
                     print(f"Found server process: PID {self.server_pid}")
                     break
@@ -253,7 +253,7 @@ class PerformanceTester:
     def print_summary(self):
         """Print comprehensive summary table."""
         print("\n" + "=" * 120)
-        print("COMPREHENSIVE PERFORMANCE RESULTS - RRIP with LZ4 Compression")
+        print("COMPREHENSIVE PERFORMANCE RESULTS - ORIGAMI with LZ4 Compression")
         print("=" * 120)
 
         print(f"\n{'Concur':<7} {'Tiles/s':<9} {'Fam/s':<8} {'Pack/s':<8} "

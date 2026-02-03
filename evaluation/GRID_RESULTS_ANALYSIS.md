@@ -1,4 +1,4 @@
-# RRIP Parameter Grid Results Analysis
+# ORIGAMI Parameter Grid Results Analysis
 
 ## Executive Summary
 

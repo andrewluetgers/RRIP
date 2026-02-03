@@ -59,7 +59,7 @@ Instead of storing a full-resolution JPEG, store:
 - [ ] Profile encoding/decoding performance
 
 ### Phase 3: Format Design
-- [ ] Design file format specification (.rrip or similar)
+- [ ] Design file format specification (.origami or similar)
 - [ ] Create header structure with metadata
 - [ ] Support progressive decoding (base first, then residual)
 - [ ] Add optional alpha channel support

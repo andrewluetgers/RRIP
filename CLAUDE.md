@@ -88,7 +88,7 @@ uv pip install -e .
 cargo bench
 
 # Profile with flamegraph (requires cargo-flamegraph)
-cargo flamegraph --bin rrip-server
+cargo flamegraph --bin origami-server
 
 # Load testing with vegeta (example)
 echo "GET http://localhost:8080/tiles/slide1/10/5_3.jpg" | vegeta attack -duration=30s | vegeta report

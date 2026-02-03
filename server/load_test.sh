@@ -1,6 +1,6 @@
 #!/bin/bash
 # Load test script for flamegraph profiling
-# This script exercises key paths in the RRIP server
+# This script exercises key paths in the ORIGAMI server
 
 PORT=${1:-3007}
 HOST="http://localhost:$PORT"

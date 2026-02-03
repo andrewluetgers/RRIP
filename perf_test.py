@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance test for RRIP tile server
+Performance test for ORIGAMI tile server
 Tests with random uncached requests at various concurrency levels
 """
 import asyncio
@@ -263,7 +263,7 @@ class TileServerBenchmark:
         print(f"  Threads: {res['after'].get('num_threads', 0)}")
 
 async def main():
-    parser = argparse.ArgumentParser(description='RRIP Tile Server Performance Test')
+    parser = argparse.ArgumentParser(description='ORIGAMI Tile Server Performance Test')
     parser.add_argument('--url', default='http://localhost:3007', help='Server URL')
     parser.add_argument('--slide', default='demo_out', help='Slide ID')
     parser.add_argument('--requests', type=int, default=100, help='Number of requests per test')

@@ -74,7 +74,7 @@ evaluation/grid_evaluation/
 
 ### Compression Ratio
 - **Higher is better** (more compression)
-- Example: 2.5x = RRIP is 2.5× smaller than JPEG Q90
+- Example: 2.5x = ORIGAMI is 2.5× smaller than JPEG Q90
 
 ### PSNR (Peak Signal-to-Noise Ratio)
 - Measured in dB, **higher is better**
@@ -108,7 +108,7 @@ The `aggregated_results.json` identifies:
 
 ## Typical Results
 
-Based on the RRIP algorithm, you should expect:
+Based on the ORIGAMI algorithm, you should expect:
 
 - **High JPEG Quality (90)**:
   - Compression: 1.5-2.5x
@@ -202,5 +202,5 @@ Currently sequential, but can be parallelized:
 ## References
 
 - Main documentation: `GRID_EVALUATION.md`
-- RRIP architecture: `../CLAUDE.md`
+- ORIGAMI architecture: `../CLAUDE.md`
 - Tool documentation: `../cli/wsi_residual_tool.py`

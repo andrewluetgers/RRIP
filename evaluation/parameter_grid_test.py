@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-RRIP Parameter Grid Test
+ORIGAMI Parameter Grid Test
 
-This script performs a systematic evaluation of RRIP compression parameters
+This script performs a systematic evaluation of ORIGAMI compression parameters
 by testing a 3x3 grid of quantization levels and JPEG quality settings.
 
 The goal is to identify optimal parameter combinations that balance:
@@ -38,7 +38,7 @@ class CompressionMetrics:
 
 class ParameterGridTest:
     """
-    Test harness for evaluating RRIP compression parameter combinations.
+    Test harness for evaluating ORIGAMI compression parameter combinations.
     """
 
     # Grid parameters
@@ -280,7 +280,7 @@ class ParameterGridTest:
         # Create header
         table = []
         table.append("=" * 100)
-        table.append("RRIP Parameter Grid Test Results")
+        table.append("ORIGAMI Parameter Grid Test Results")
         table.append("=" * 100)
         table.append(f"{'Config':<20} {'Quant':<8} {'JPEG Q':<8} {'PSNR':<10} {'SSIM':<10} {'Size (MB)':<12} {'Ratio':<10}")
         table.append("-" * 100)
@@ -320,7 +320,7 @@ class ParameterGridTest:
             reference_image: Path to reference image for quality comparison
         """
         print("=" * 80)
-        print("RRIP Parameter Grid Test")
+        print("ORIGAMI Parameter Grid Test")
         print("=" * 80)
         print(f"Quantization levels: {self.QUANT_LEVELS}")
         print(f"JPEG qualities: {self.JPEG_QUALITIES}")

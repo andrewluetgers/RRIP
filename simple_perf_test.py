@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple performance test for RRIP with LZ4 compression."""
+"""Simple performance test for ORIGAMI with LZ4 compression."""
 
 import time
 import subprocess
@@ -49,14 +49,14 @@ def generate_random_tiles(count):
 
 def run_performance_test():
     """Run the performance test."""
-    print("Starting RRIP server...")
+    print("Starting ORIGAMI server...")
 
     # Start server
     server = subprocess.Popen(
         ['/tmp/origami-build/release/origami-tile-server',
          '--slides-root', 'data',
          '--port', '3007'],
-        cwd='/Users/andrewluetgers/projects/dev/RRIP',
+        cwd='/Users/andrewluetgers/projects/dev/ORIGAMI',
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
@@ -99,7 +99,7 @@ def run_performance_test():
 
         if latencies:
             print(f"\n{'='*60}")
-            print("PERFORMANCE RESULTS - RRIP with LZ4 Compression")
+            print("PERFORMANCE RESULTS - ORIGAMI with LZ4 Compression")
             print(f"{'='*60}")
 
             print(f"\nTotal requests: {NUM_REQUESTS}")
@@ -131,7 +131,7 @@ def run_performance_test():
         print("COMPRESSION STATISTICS")
         print(f"{'='*60}")
 
-        pack_dir = "/Users/andrewluetgers/projects/dev/RRIP/data/demo_out/residual_packs_lz4"
+        pack_dir = "/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out/residual_packs_lz4"
         if os.path.exists(pack_dir):
             pack_files = [f for f in os.listdir(pack_dir) if f.endswith('.pack')]
             total_size = sum(os.path.getsize(os.path.join(pack_dir, f)) for f in pack_files)

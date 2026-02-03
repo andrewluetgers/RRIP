@@ -1,8 +1,8 @@
-# RRIP Baseline Comparison Strategy
+# ORIGAMI Baseline Comparison Strategy
 ## Incorporating State-of-the-Art Methods from Literature
 
 ### Executive Summary
-This document defines the baseline comparison strategy for RRIP, focusing on mixed/lossy compression methods that are most relevant to our serving-oriented approach. We position RRIP as a pragmatic middle ground between pure compression efficiency and serving-time practicality.
+This document defines the baseline comparison strategy for ORIGAMI, focusing on mixed/lossy compression methods that are most relevant to our serving-oriented approach. We position ORIGAMI as a pragmatic middle ground between pure compression efficiency and serving-time practicality.
 
 ---
 
@@ -36,7 +36,7 @@ This document defines the baseline comparison strategy for RRIP, focusing on mix
 5. **Scalable HEVC (SHVC)**
    - Base + enhancement layer structure
    - Literature reports ~54% bitrate saving vs JPEG
-   - Natural comparison for RRIP's hierarchical approach
+   - Natural comparison for ORIGAMI's hierarchical approach
 
 ### 1.2 Secondary Baselines (If Feasible)
 
@@ -58,10 +58,10 @@ This document defines the baseline comparison strategy for RRIP, focusing on mix
 
 ### 1.3 Ablation Baselines (Internal Comparisons)
 
-9. **RRIP Variants**
-   - RRIP-Luma: Luma residuals only (proposed)
-   - RRIP-Full: Full RGB residuals
-   - RRIP-Adaptive: Quality varies by tile content
+9. **ORIGAMI Variants**
+   - ORIGAMI-Luma: Luma residuals only (proposed)
+   - ORIGAMI-Full: Full RGB residuals
+   - ORIGAMI-Adaptive: Quality varies by tile content
 
 ---
 
@@ -86,11 +86,11 @@ Match metrics from literature for direct comparison:
 | HEVC studies | SSIM target-matched | PSNR, BD-rate |
 | WISE | Compression ratio | PSNR on bitmaps |
 | Mosaic JP2 | PSNR gain | HDR-VDP-2, Nuclei F1 |
-| RRIP | PSNR-Y, ΔE00 | SSIM, task metrics |
+| ORIGAMI | PSNR-Y, ΔE00 | SSIM, task metrics |
 
-### 2.3 Serving Performance (RRIP Advantage)
+### 2.3 Serving Performance (ORIGAMI Advantage)
 
-This is where RRIP differentiates itself:
+This is where ORIGAMI differentiates itself:
 
 ```
 Metrics NOT typically reported in compression papers:
@@ -150,38 +150,38 @@ Generate curves for each method:
 
 ---
 
-## 4. Positioning RRIP vs Competition
+## 4. Positioning ORIGAMI vs Competition
 
 ### 4.1 Key Differentiation Points
 
 #### vs JPEG/WebP Pyramids
-- **RRIP Advantage**: 30-50% storage reduction at same quality
+- **ORIGAMI Advantage**: 30-50% storage reduction at same quality
 - **JPEG Advantage**: Simpler, no reconstruction needed
-- **RRIP Position**: "Worth the complexity for large archives"
+- **ORIGAMI Position**: "Worth the complexity for large archives"
 
 #### vs JPEG 2000
-- **RRIP Advantage**: Faster CPU decode, simpler tooling
+- **ORIGAMI Advantage**: Faster CPU decode, simpler tooling
 - **JP2 Advantage**: Better compression, native multi-resolution
-- **RRIP Position**: "Practical alternative with commodity tools"
+- **ORIGAMI Position**: "Practical alternative with commodity tools"
 
 #### vs HEVC/SHVC
-- **RRIP Advantage**: Tile-granular caching, simpler integration
+- **ORIGAMI Advantage**: Tile-granular caching, simpler integration
 - **HEVC Advantage**: Superior compression ratio
-- **RRIP Position**: "Serving-optimized vs codec-optimized"
+- **ORIGAMI Position**: "Serving-optimized vs codec-optimized"
 
 #### vs WISE (Lossless)
-- **RRIP Advantage**: Lossy allows better compression
+- **ORIGAMI Advantage**: Lossy allows better compression
 - **WISE Advantage**: Lossless guarantee, specialized for WSI
-- **RRIP Position**: "Different use cases: serving vs archival"
+- **ORIGAMI Position**: "Different use cases: serving vs archival"
 
 #### vs ROI-Aware Methods
-- **RRIP Advantage**: Uniform quality, no segmentation needed
+- **ORIGAMI Advantage**: Uniform quality, no segmentation needed
 - **ROI Advantage**: Extreme compression on sparse slides
-- **RRIP Position**: "Simpler, more predictable quality"
+- **ORIGAMI Position**: "Simpler, more predictable quality"
 
 ### 4.2 Narrative Framing
 
-"RRIP occupies a pragmatic middle ground in the WSI compression landscape. While methods like HEVC achieve superior compression ratios and WISE provides lossless guarantees, RRIP optimizes for the specific constraints of production tile servers: CPU-friendly decode, commodity JPEG tooling, and cache-aligned generation policies. Our approach trades ultimate compression efficiency for operational simplicity and predictable serving performance."
+"ORIGAMI occupies a pragmatic middle ground in the WSI compression landscape. While methods like HEVC achieve superior compression ratios and WISE provides lossless guarantees, ORIGAMI optimizes for the specific constraints of production tile servers: CPU-friendly decode, commodity JPEG tooling, and cache-aligned generation policies. Our approach trades ultimate compression efficiency for operational simplicity and predictable serving performance."
 
 ---
 
@@ -196,7 +196,7 @@ Generate curves for each method:
 | WebP-90 | 20:1 | 1.33× | 41.5 | 0.8 | 3 | No |
 | JP2-32:1 | 32:1 | 2.13× | 36.8 | 2.1 | 15 | No |
 | HEVC-CRF23 | 45:1 | 3.0× | 37.5 | 1.9 | 25 | Optional |
-| RRIP-Q32 | 28:1 | 1.87× | 36.5 | 1.7 | 8* | No |
+| ORIGAMI-Q32 | 28:1 | 1.87× | 36.5 | 1.7 | 8* | No |
 
 *Amortized over family generation
 
@@ -206,7 +206,7 @@ Create a 4×N grid showing:
 - Row 1: Original tiles
 - Row 2: JPEG-80
 - Row 3: JP2-32:1
-- Row 4: RRIP-Q32
+- Row 4: ORIGAMI-Q32
 
 Select tiles that show:
 - Dense nuclei (detail preservation)
@@ -220,7 +220,7 @@ Two plots side-by-side:
 1. **Compression Efficiency**: bpp vs PSNR-Y
 2. **Serving Efficiency**: decode time vs PSNR-Y
 
-RRIP should show good position on plot 2 even if not leading on plot 1.
+ORIGAMI should show good position on plot 2 even if not leading on plot 1.
 
 ---
 
@@ -228,7 +228,7 @@ RRIP should show good position on plot 2 even if not leading on plot 1.
 
 ### 6.1 Color Transform Impact (Following Mosaic Paper)
 
-Test RRIP with different color spaces:
+Test ORIGAMI with different color spaces:
 - YCbCr (BT.601) - baseline
 - YCbCr (BT.709)
 - RGB (no transform)
@@ -238,7 +238,7 @@ Expected: ~0.5-1.0 dB PSNR improvement with optimized transform
 
 ### 6.2 Hierarchical Structure (Following SHVC Comparison)
 
-Compare RRIP's L2→L1→L0 to alternatives:
+Compare ORIGAMI's L2→L1→L0 to alternatives:
 - Direct L2→L0 (skip L1)
 - Independent L1/L0 residuals (no cascading)
 - Three-level cascade (L3→L2→L1→L0)
@@ -256,7 +256,7 @@ Test residual compression beyond JPEG:
 ## 7. Critical Path Experiments
 
 ### 7.1 Minimum Viable Comparison
-To establish RRIP's viability, prioritize:
+To establish ORIGAMI's viability, prioritize:
 1. JPEG pyramid (primary baseline)
 2. JPEG 2000 (established alternative)
 3. Basic quality metrics (PSNR, SSIM, ΔE00)
@@ -290,7 +290,7 @@ Based on literature and early experiments:
 
 ### 8.2 Risk Mitigation
 
-If RRIP underperforms:
+If ORIGAMI underperforms:
 
 1. **Compression not competitive**
    - Pivot to serving performance advantages
@@ -320,7 +320,7 @@ If RRIP underperforms:
 
 ### 9.3 Positioning Statement
 
-"While existing methods optimize for either maximum compression (HEVC, WISE) or clinical workflow integration (JPEG 2000), RRIP specifically targets the tile serving layer, trading some compression efficiency for operational advantages: CPU-only decode, commodity JPEG tooling, and cache-aligned reconstruction. Our experiments demonstrate that this trade-off yields a practical system with 30-50% storage savings over current practice while maintaining diagnostic acceptability."
+"While existing methods optimize for either maximum compression (HEVC, WISE) or clinical workflow integration (JPEG 2000), ORIGAMI specifically targets the tile serving layer, trading some compression efficiency for operational advantages: CPU-only decode, commodity JPEG tooling, and cache-aligned reconstruction. Our experiments demonstrate that this trade-off yields a practical system with 30-50% storage savings over current practice while maintaining diagnostic acceptability."
 
 ---
 
@@ -337,4 +337,4 @@ Include these key citations:
 
 ---
 
-This strategy ensures RRIP is evaluated fairly against established methods while highlighting its unique serving-oriented advantages.
+This strategy ensures ORIGAMI is evaluated fairly against established methods while highlighting its unique serving-oriented advantages.

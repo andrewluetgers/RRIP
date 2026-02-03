@@ -1,6 +1,6 @@
-# RRIP Parameter Grid Evaluation
+# ORIGAMI Parameter Grid Evaluation
 
-This document describes how to run the comprehensive parameter grid evaluation for RRIP compression.
+This document describes how to run the comprehensive parameter grid evaluation for ORIGAMI compression.
 
 ## Overview
 
@@ -130,7 +130,7 @@ The generated PNG includes 4 plots:
 
 ### Compression Ratio
 - Higher is better (more compression)
-- Example: 2.5x means the RRIP version is 2.5× smaller than JPEG Q90
+- Example: 2.5x means the ORIGAMI version is 2.5× smaller than JPEG Q90
 
 ### PSNR (Peak Signal-to-Noise Ratio)
 - Measured in dB, higher is better

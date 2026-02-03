@@ -1,5 +1,5 @@
 """
-BD-Rate and BD-PSNR calculation for RRIP compression analysis.
+BD-Rate and BD-PSNR calculation for ORIGAMI compression analysis.
 
 Based on Bjøntegaard Delta calculations for comparing rate-distortion curves.
 Reference: G. Bjøntegaard, "Calculation of average PSNR differences between RD curves"
@@ -65,7 +65,7 @@ class BDMetrics:
         Args:
             reference_rates: Bitrates for reference codec (e.g., standard JPEG)
             reference_psnrs: PSNR values for reference codec
-            test_rates: Bitrates for test codec (e.g., RRIP)
+            test_rates: Bitrates for test codec (e.g., ORIGAMI)
             test_psnrs: PSNR values for test codec
 
         Returns:
@@ -144,7 +144,7 @@ class BDMetrics:
 
 
 class RDCurveAnalyzer:
-    """Analyze and visualize Rate-Distortion curves for RRIP vs baseline."""
+    """Analyze and visualize Rate-Distortion curves for ORIGAMI vs baseline."""
 
     def __init__(self):
         self.reference_points: List[RDPoint] = []
@@ -155,7 +155,7 @@ class RDCurveAnalyzer:
         self.reference_points.append(RDPoint(bitrate, psnr, quality))
 
     def add_test_point(self, bitrate: float, psnr: float, quality: Optional[int] = None):
-        """Add a point to the test (RRIP) RD curve."""
+        """Add a point to the test (ORIGAMI) RD curve."""
         self.test_points.append(RDPoint(bitrate, psnr, quality))
 
     def calculate_metrics(self) -> Dict[str, float]:
@@ -195,7 +195,7 @@ class RDCurveAnalyzer:
         # Plot curves
         ax.plot(ref_rates, ref_psnrs, 'o-', label='Baseline (Standard JPEG)',
                 linewidth=2, markersize=8, color='blue')
-        ax.plot(test_rates, test_psnrs, 's-', label='RRIP (Residual Pyramid)',
+        ax.plot(test_rates, test_psnrs, 's-', label='ORIGAMI (Residual Pyramid)',
                 linewidth=2, markersize=8, color='red')
 
         # Add quality labels if available
@@ -243,7 +243,7 @@ class RDCurveAnalyzer:
 
 
 def example_usage():
-    """Example of how to use BD metrics for RRIP analysis."""
+    """Example of how to use BD metrics for ORIGAMI analysis."""
 
     # Create analyzer
     analyzer = RDCurveAnalyzer()
@@ -262,8 +262,8 @@ def example_usage():
     for quality, bitrate, psnr in baseline_data:
         analyzer.add_reference_point(bitrate, psnr, quality)
 
-    # Add RRIP points (residual quality -> bitrate, PSNR)
-    rrip_data = [
+    # Add ORIGAMI points (residual quality -> bitrate, PSNR)
+    origami_data = [
         (64, 650000, 41.2),  # Higher quality residuals
         (48, 480000, 39.8),
         (32, 350000, 38.1),  # Default quality
@@ -272,19 +272,19 @@ def example_usage():
         (8, 180000, 32.5),   # Lower quality residuals
     ]
 
-    for quality, bitrate, psnr in rrip_data:
+    for quality, bitrate, psnr in origami_data:
         analyzer.add_test_point(bitrate, psnr, quality)
 
     # Calculate metrics
     metrics = analyzer.calculate_metrics()
     print(f"BD-Rate: {metrics['bd_rate']:.2f}%")
-    print(f"  Interpretation: RRIP uses {abs(metrics['bd_rate']):.1f}% {'less' if metrics['bd_rate'] < 0 else 'more'} bitrate on average")
+    print(f"  Interpretation: ORIGAMI uses {abs(metrics['bd_rate']):.1f}% {'less' if metrics['bd_rate'] < 0 else 'more'} bitrate on average")
     print(f"BD-PSNR: {metrics['bd_psnr']:.2f} dB")
-    print(f"  Interpretation: RRIP provides {abs(metrics['bd_psnr']):.2f} dB {'better' if metrics['bd_psnr'] > 0 else 'worse'} quality on average")
+    print(f"  Interpretation: ORIGAMI provides {abs(metrics['bd_psnr']):.2f} dB {'better' if metrics['bd_psnr'] > 0 else 'worse'} quality on average")
 
     # Plot curves
     analyzer.plot_rd_curves(
-        title="RRIP vs Standard JPEG: Rate-Distortion Performance",
+        title="ORIGAMI vs Standard JPEG: Rate-Distortion Performance",
         save_path="rd_curves.png"
     )
     plt.show()

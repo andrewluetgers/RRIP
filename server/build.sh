@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# RRIP Tile Server Build Script
+# ORIGAMI Tile Server Build Script
 # Usage: ./build.sh [options]
 
 set -e
@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo "RRIP Tile Server Build Script"
+            echo "ORIGAMI Tile Server Build Script"
             echo ""
             echo "Usage: $0 [options]"
             echo ""
@@ -147,7 +147,7 @@ print_warning() {
 
 # Start build process
 echo -e "${BLUE}╔════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║${NC}   ${GREEN}RRIP Tile Server Build${NC}          ${BLUE}║${NC}"
+echo -e "${BLUE}║${NC}   ${GREEN}ORIGAMI Tile Server Build${NC}          ${BLUE}║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════╝${NC}"
 echo ""
 

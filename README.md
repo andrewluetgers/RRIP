@@ -255,7 +255,7 @@ ORIGAMI/
 │   └── wsi_residual_pyramid_tool.ipynb
 │
 ├── paper/               # Research documentation
-│   └── rrip-paper.md   # Method description and evaluation
+│   └── origami-paper.md   # Method description and evaluation
 │
 └── data/               # Sample data (not in repo)
     └── demo_out/       # Example slide with residuals
@@ -346,12 +346,12 @@ On Apple M-series (ARM64 with NEON):
 
 ```bash
 # Build Docker image
-docker build -t rrip-server server/
+docker build -t origami-server server/
 
 # Run with Docker
 docker run -p 3007:3007 \
   -v $(pwd)/data:/data \
-  rrip-server
+  origami-server
 
 # Or use Docker Compose
 docker-compose up

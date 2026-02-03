@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RRIP Evaluation Script - Practical Testing with Your Actual Implementation
-Compares RRIP against JPEG and JPEG 2000 using your existing tile data
+ORIGAMI Evaluation Script - Practical Testing with Your Actual Implementation
+Compares ORIGAMI against JPEG and JPEG 2000 using your existing tile data
 """
 
 import os
@@ -34,16 +34,16 @@ class TestResult:
     ms_ssim: float
     bits_per_pixel: float
 
-class RRIPEvaluator:
-    """Evaluate RRIP against your actual server implementation"""
+class ORIGAMIEvaluator:
+    """Evaluate ORIGAMI against your actual server implementation"""
 
-    def __init__(self, server_url="http://localhost:3007", slides_root="/Users/andrewluetgers/projects/dev/RRIP/data"):
+    def __init__(self, server_url="http://localhost:3007", slides_root="/Users/andrewluetgers/projects/dev/ORIGAMI/data"):
         self.server_url = server_url
         self.slides_root = Path(slides_root)
-        self.temp_dir = Path(tempfile.mkdtemp(prefix="rrip_eval_"))
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="origami_eval_"))
 
     def fetch_tile_from_server(self, slide_id: str, level: int, x: int, y: int) -> bytes:
-        """Fetch a tile from the RRIP server"""
+        """Fetch a tile from the ORIGAMI server"""
         url = f"{self.server_url}/tiles/{slide_id}/{level}/{x}_{y}.jpg"
         response = requests.get(url)
         response.raise_for_status()
@@ -56,8 +56,8 @@ class RRIPEvaluator:
             return np.array(Image.open(tile_path))
         return None
 
-    def get_rrip_reconstructed(self, slide_id: str, level: int, x: int, y: int) -> Tuple[np.ndarray, int, float]:
-        """Get RRIP reconstructed tile and measure performance"""
+    def get_origami_reconstructed(self, slide_id: str, level: int, x: int, y: int) -> Tuple[np.ndarray, int, float]:
+        """Get ORIGAMI reconstructed tile and measure performance"""
         start = time.time()
         tile_bytes = self.fetch_tile_from_server(slide_id, level, x, y)
         decode_time = (time.time() - start) * 1000  # ms
@@ -69,12 +69,12 @@ class RRIPEvaluator:
 
         # Calculate effective size (L2 + residuals for this tile)
         # This is approximate - for exact, we'd need pack file size / 20
-        effective_size = self.estimate_rrip_size(slide_id, level, x, y)
+        effective_size = self.estimate_origami_size(slide_id, level, x, y)
 
         return reconstructed, effective_size, decode_time
 
-    def estimate_rrip_size(self, slide_id: str, level: int, x: int, y: int) -> int:
-        """Estimate RRIP compressed size for a tile"""
+    def estimate_origami_size(self, slide_id: str, level: int, x: int, y: int) -> int:
+        """Estimate ORIGAMI compressed size for a tile"""
         # For L0/L1 tiles, size = (L2_size + residuals) / tiles_per_family
         if level <= 1:
             # Get L2 parent coordinates
@@ -239,10 +239,10 @@ def calculate_bd_rate(anchor_rates, anchor_psnr, test_rates, test_psnr):
 def run_evaluation(slide_id="demo_out", num_tiles=50):
     """Run the full evaluation"""
 
-    print(f"Running RRIP Evaluation on slide: {slide_id}")
+    print(f"Running ORIGAMI Evaluation on slide: {slide_id}")
     print(f"Testing {num_tiles} random L0 tiles\n")
 
-    evaluator = RRIPEvaluator()
+    evaluator = ORIGAMIEvaluator()
     metrics = QualityMetrics()
 
     # Results storage
@@ -256,8 +256,8 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
     test_tiles = [(np.random.randint(0, max_x), np.random.randint(0, max_y))
                   for _ in range(num_tiles)]
 
-    print("Testing RRIP reconstruction...")
-    rrip_results = []
+    print("Testing ORIGAMI reconstruction...")
+    origami_results = []
 
     for i, (x, y) in enumerate(test_tiles):
         # Get original tile
@@ -265,12 +265,12 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
         if original is None:
             continue
 
-        # Get RRIP reconstruction
+        # Get ORIGAMI reconstruction
         try:
-            reconstructed, size, decode_time = evaluator.get_rrip_reconstructed(slide_id, 0, x, y)
+            reconstructed, size, decode_time = evaluator.get_origami_reconstructed(slide_id, 0, x, y)
 
             result = TestResult(
-                method="RRIP",
+                method="ORIGAMI",
                 quality_param=32,  # Residual quality
                 file_size_bytes=size,
                 encode_time_ms=0,  # Not measured for pre-computed
@@ -281,12 +281,12 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
                 bits_per_pixel=size * 8 / (256 * 256)
             )
 
-            rrip_results.append(result)
+            origami_results.append(result)
             all_results.append(result)
 
             if (i + 1) % 10 == 0:
-                avg_psnr = np.mean([r.psnr_db for r in rrip_results])
-                avg_size = np.mean([r.file_size_bytes for r in rrip_results])
+                avg_psnr = np.mean([r.psnr_db for r in origami_results])
+                avg_size = np.mean([r.file_size_bytes for r in origami_results])
                 print(f"  Processed {i+1}/{num_tiles} tiles - Avg PSNR: {avg_psnr:.2f} dB, "
                       f"Avg size: {avg_size/1024:.1f} KB")
 
@@ -320,15 +320,15 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
     # Group results by method
     methods_summary = {}
 
-    # RRIP summary
-    if rrip_results:
-        methods_summary['RRIP'] = {
-            'avg_size_kb': np.mean([r.file_size_bytes for r in rrip_results]) / 1024,
-            'avg_psnr': np.mean([r.psnr_db for r in rrip_results]),
-            'avg_ssim': np.mean([r.ssim for r in rrip_results]),
-            'avg_ms_ssim': np.mean([r.ms_ssim for r in rrip_results]),
-            'avg_bpp': np.mean([r.bits_per_pixel for r in rrip_results]),
-            'avg_decode_ms': np.mean([r.decode_time_ms for r in rrip_results])
+    # ORIGAMI summary
+    if origami_results:
+        methods_summary['ORIGAMI'] = {
+            'avg_size_kb': np.mean([r.file_size_bytes for r in origami_results]) / 1024,
+            'avg_psnr': np.mean([r.psnr_db for r in origami_results]),
+            'avg_ssim': np.mean([r.ssim for r in origami_results]),
+            'avg_ms_ssim': np.mean([r.ms_ssim for r in origami_results]),
+            'avg_bpp': np.mean([r.bits_per_pixel for r in origami_results]),
+            'avg_decode_ms': np.mean([r.decode_time_ms for r in origami_results])
         }
 
     # JPEG summaries
@@ -352,7 +352,7 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
               f"{stats['avg_ms_ssim']:<12.4f} {stats['avg_bpp']:<10.3f} {stats['avg_decode_ms']:<12.2f}")
 
     # Calculate BD-Rate if we have enough data points
-    if len(jpeg_results[95]) > 0 and len(rrip_results) > 0:
+    if len(jpeg_results[95]) > 0 and len(origami_results) > 0:
         # Prepare data for BD-rate calculation
         jpeg_rates = []
         jpeg_psnrs = []
@@ -363,15 +363,15 @@ def run_evaluation(slide_id="demo_out", num_tiles=50):
                 jpeg_psnrs.append(np.mean([r.psnr_db for r in jpeg_results[quality]]))
 
         if len(jpeg_rates) >= 4:  # Need at least 4 points for cubic interpolation
-            rrip_rate = np.mean([r.bits_per_pixel for r in rrip_results])
-            rrip_psnr = np.mean([r.psnr_db for r in rrip_results])
+            origami_rate = np.mean([r.bits_per_pixel for r in origami_results])
+            origami_psnr = np.mean([r.psnr_db for r in origami_results])
 
             try:
                 bd_rate = calculate_bd_rate(jpeg_rates, jpeg_psnrs,
-                                          [rrip_rate], [rrip_psnr])
+                                          [origami_rate], [origami_psnr])
                 print(f"\n{'='*85}")
-                print(f"BD-Rate (RRIP vs JPEG): {bd_rate:.1f}%")
-                print(f"Negative value means RRIP is more efficient")
+                print(f"BD-Rate (ORIGAMI vs JPEG): {bd_rate:.1f}%")
+                print(f"Negative value means ORIGAMI is more efficient")
             except:
                 print("\nCould not calculate BD-Rate (need more data points)")
 
@@ -398,7 +398,7 @@ def plot_rd_curve(results: List[TestResult], output_path: Path):
     # Group by method
     methods = {}
     for r in results:
-        key = r.method if r.method == "RRIP" else f"{r.method}_Q{int(r.quality_param)}"
+        key = r.method if r.method == "ORIGAMI" else f"{r.method}_Q{int(r.quality_param)}"
         if key not in methods:
             methods[key] = []
         methods[key].append(r)
@@ -411,8 +411,8 @@ def plot_rd_curve(results: List[TestResult], output_path: Path):
             avg_psnr = np.mean([r.psnr_db for r in method_results])
             avg_ms_ssim = np.mean([r.ms_ssim for r in method_results])
 
-            color = 'red' if 'RRIP' in method else 'blue'
-            marker = 'o' if 'RRIP' in method else 's'
+            color = 'red' if 'ORIGAMI' in method else 'blue'
+            marker = 'o' if 'ORIGAMI' in method else 's'
             label = method.replace('_Q', ' Q')
 
             plot_data.append({
@@ -463,33 +463,33 @@ def plot_rd_curve(results: List[TestResult], output_path: Path):
     ax2.set_title('Rate-Distortion: MS-SSIM', fontsize=14, fontweight='bold')
     ax2.grid(True, alpha=0.3)
 
-    # Add annotation for RRIP point
-    rrip_point = next((p for p in plot_data if 'RRIP' in p['method']), None)
-    if rrip_point:
-        ax1.annotate('RRIP',
-                    xy=(rrip_point['bpp'], rrip_point['psnr']),
-                    xytext=(rrip_point['bpp']+0.5, rrip_point['psnr']-1),
+    # Add annotation for ORIGAMI point
+    origami_point = next((p for p in plot_data if 'ORIGAMI' in p['method']), None)
+    if origami_point:
+        ax1.annotate('ORIGAMI',
+                    xy=(origami_point['bpp'], origami_point['psnr']),
+                    xytext=(origami_point['bpp']+0.5, origami_point['psnr']-1),
                     arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
                     fontsize=11, color='red', fontweight='bold')
 
-        ax2.annotate('RRIP',
-                    xy=(rrip_point['bpp'], rrip_point['ms_ssim']),
-                    xytext=(rrip_point['bpp']+0.5, rrip_point['ms_ssim']-0.01),
+        ax2.annotate('ORIGAMI',
+                    xy=(origami_point['bpp'], origami_point['ms_ssim']),
+                    xytext=(origami_point['bpp']+0.5, origami_point['ms_ssim']-0.01),
                     arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
                     fontsize=11, color='red', fontweight='bold')
 
-    plt.suptitle('RRIP Compression Evaluation: Rate-Distortion Performance',
+    plt.suptitle('ORIGAMI Compression Evaluation: Rate-Distortion Performance',
                 fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"R-D curve saved to {output_path}")
 
 if __name__ == "__main__":
-    # Make sure your RRIP server is running!
+    # Make sure your ORIGAMI server is running!
     print("="*80)
-    print("RRIP COMPRESSION EVALUATION")
+    print("ORIGAMI COMPRESSION EVALUATION")
     print("="*80)
-    print("\nMake sure your RRIP server is running on port 3007!")
+    print("\nMake sure your ORIGAMI server is running on port 3007!")
     print("Start it with: cargo run --manifest-path server/Cargo.toml -- --slides-root data --port 3007\n")
 
     input("Press Enter when server is ready...")

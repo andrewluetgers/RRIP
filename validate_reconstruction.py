@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Bulletproof validation that RRIP server is serving reconstructed tiles, not baselines.
-This test compares tiles from RRIP server against baseline tiles to prove they are different.
+Bulletproof validation that ORIGAMI server is serving reconstructed tiles, not baselines.
+This test compares tiles from ORIGAMI server against baseline tiles to prove they are different.
 """
 
 import requests
@@ -20,7 +20,7 @@ def load_baseline_tile(slide_path, level, x, y):
     return Image.open(tile_path)
 
 def fetch_server_tile(port, slide_id, level, x, y):
-    """Fetch a tile from the RRIP server"""
+    """Fetch a tile from the ORIGAMI server"""
     url = f"http://localhost:{port}/tiles/{slide_id}/{level}/{x}_{y}.jpg"
     response = requests.get(url)
     if response.status_code != 200:
@@ -75,9 +75,9 @@ def compare_images(img1, img2):
 def validate_reconstruction():
     """Main validation function"""
     print("=" * 80)
-    print("RRIP RECONSTRUCTION VALIDATION TEST")
+    print("ORIGAMI RECONSTRUCTION VALIDATION TEST")
     print("=" * 80)
-    print("\nThis test proves that the RRIP server is serving RECONSTRUCTED tiles,")
+    print("\nThis test proves that the ORIGAMI server is serving RECONSTRUCTED tiles,")
     print("not the original baseline tiles.\n")
 
     port = 3007
@@ -174,7 +174,7 @@ def validate_reconstruction():
     print(f"Tests Failed: {failed}/{len(results)}")
 
     if failed == 0:
-        print("\n🎉 SUCCESS: RRIP server is correctly serving reconstructed tiles!")
+        print("\n🎉 SUCCESS: ORIGAMI server is correctly serving reconstructed tiles!")
         print("   - L0/L1 tiles are being reconstructed from residuals")
         print("   - L2+ tiles are being served as baseline")
         print("   - The reconstruction is working as designed")

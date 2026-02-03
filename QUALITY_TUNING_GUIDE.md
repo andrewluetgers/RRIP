@@ -1,8 +1,8 @@
-# RRIP Quality Tuning Guide
+# ORIGAMI Quality Tuning Guide
 
 ## Overview
 
-RRIP provides multiple quality control points throughout the compression pipeline. Understanding these parameters allows you to optimize for your specific use case - whether prioritizing maximum compression, highest quality, or fastest serving speed.
+ORIGAMI provides multiple quality control points throughout the compression pipeline. Understanding these parameters allows you to optimize for your specific use case - whether prioritizing maximum compression, highest quality, or fastest serving speed.
 
 ## Pipeline Stages and Quality Parameters
 
@@ -286,4 +286,4 @@ file data/demo_out/residual_packs_lz4/*.pack
 | 40 | 5.5x | ~165x |
 | 50 | 4.4x | ~132x |
 
-Remember: RRIP's 6.7x compression is versus already-compressed JPEG-90, not raw pixels. This is exceptionally difficult to achieve while maintaining visual quality.
+Remember: ORIGAMI's 6.7x compression is versus already-compressed JPEG-90, not raw pixels. This is exceptionally difficult to achieve while maintaining visual quality.

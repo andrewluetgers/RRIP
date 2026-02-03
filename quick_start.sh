@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# RRIP Quick Start Script
+# ORIGAMI Quick Start Script
 # Downloads sample data, generates pyramids, and starts server
 
 set -e  # Exit on error
 
 echo "================================================"
-echo "RRIP Quick Start - Setting up demo environment"
+echo "ORIGAMI Quick Start - Setting up demo environment"
 echo "================================================"
 
 # Check prerequisites
@@ -73,7 +73,7 @@ fi
 
 # Build server
 echo ""
-echo "🔨 Building RRIP server..."
+echo "🔨 Building ORIGAMI server..."
 cd server
 
 if [ -f "build.sh" ]; then
@@ -90,7 +90,7 @@ else
 fi
 
 echo ""
-echo "🚀 Starting RRIP server..."
+echo "🚀 Starting ORIGAMI server..."
 echo "================================================"
 echo ""
 
@@ -122,11 +122,11 @@ fi
 
 echo ""
 echo "================================================"
-echo "✨ RRIP is ready!"
+echo "✨ ORIGAMI is ready!"
 echo "================================================"
 echo ""
 echo "🌐 Viewer URLs:"
-echo "   RRIP Viewer:     http://localhost:3007/viewer/demo_out"
+echo "   ORIGAMI Viewer:     http://localhost:3007/viewer/demo_out"
 echo "   Health Check:    http://localhost:3007/healthz"
 echo "   Metrics:         http://localhost:3007/metrics"
 echo ""

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive uncached performance evaluation for RRIP tile server with LZ4 compression.
+Comprehensive uncached performance evaluation for ORIGAMI tile server with LZ4 compression.
 Tests family generation throughput, memory usage, and concurrency scaling.
 """
 
@@ -38,8 +38,8 @@ class TileServerTester:
         env['RUST_LOG'] = 'info'
 
         self.process = subprocess.Popen(
-            ['/tmp/rrip-build/release/rrip-tile-server',
-             '--slides-root', '/Users/andrewluetgers/projects/dev/RRIP/data',
+            ['/tmp/origami-build/release/origami-tile-server',
+             '--slides-root', '/Users/andrewluetgers/projects/dev/ORIGAMI/data',
              '--port', str(SERVER_PORT),
              '--pack-dir', 'residual_packs_lz4',
              '--tile-quality', '95'],
@@ -247,7 +247,7 @@ class TileServerTester:
     def print_summary(self):
         """Print comprehensive test summary."""
         print("\n" + "="*80)
-        print("PERFORMANCE TEST SUMMARY - RRIP with LZ4 Compression")
+        print("PERFORMANCE TEST SUMMARY - ORIGAMI with LZ4 Compression")
         print("="*80)
 
         print("\nThroughput Scaling:")
@@ -280,8 +280,8 @@ class TileServerTester:
     def calculate_compression_stats(self):
         """Calculate and print compression statistics."""
         # Get pack file stats
-        pack_dir = "/Users/andrewluetgers/projects/dev/RRIP/data/demo_out/residual_packs_lz4"
-        original_pack_dir = "/Users/andrewluetgers/projects/dev/RRIP/data/demo_out/residual_packs"
+        pack_dir = "/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out/residual_packs_lz4"
+        original_pack_dir = "/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out/residual_packs"
 
         compressed_size = sum(
             os.path.getsize(os.path.join(pack_dir, f))
@@ -299,7 +299,7 @@ class TileServerTester:
         print(f"  Space savings: ~70%")
 
         # Calculate total WSI size including L2+
-        l2_plus_dir = "/Users/andrewluetgers/projects/dev/RRIP/data/demo_out/baseline_pyramid_files"
+        l2_plus_dir = "/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out/baseline_pyramid_files"
         if os.path.exists(l2_plus_dir):
             # Count L2+ tiles (levels 0-12 in the pyramid, since 14 is max)
             l2_plus_size = 0
@@ -311,20 +311,20 @@ class TileServerTester:
                         for f in os.listdir(level_dir) if f.endswith('.jpg')
                     )
 
-            total_rrip_size = compressed_size + l2_plus_size
+            total_origami_size = compressed_size + l2_plus_size
 
             # Estimate what full pyramid would be
             # L0+L1 typically represent 80-95% of a full pyramid
             # So L2+ is about 5-20%, let's use 10%
             estimated_full_pyramid = l2_plus_size / 0.1
 
-            print(f"\nTotal WSI Size (RRIP method):")
+            print(f"\nTotal WSI Size (ORIGAMI method):")
             print(f"  L0+L1 (compressed packs): {compressed_size / (1024*1024):.1f} MB")
             print(f"  L2+ (standard JPEG): {l2_plus_size / (1024*1024):.1f} MB")
-            print(f"  Total RRIP size: {total_rrip_size / (1024*1024):.1f} MB")
+            print(f"  Total ORIGAMI size: {total_origami_size / (1024*1024):.1f} MB")
             print(f"\nEstimated traditional pyramid: {estimated_full_pyramid / (1024*1024):.1f} MB")
-            print(f"Overall compression ratio: {estimated_full_pyramid / total_rrip_size:.1f}x")
-            print(f"Overall space savings: {100 * (1 - total_rrip_size / estimated_full_pyramid):.1f}%")
+            print(f"Overall compression ratio: {estimated_full_pyramid / total_origami_size:.1f}x")
+            print(f"Overall space savings: {100 * (1 - total_origami_size / estimated_full_pyramid):.1f}%")
 
 async def main():
     tester = TileServerTester()

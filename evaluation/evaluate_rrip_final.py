@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-RRIP Final Evaluation Script
-Compares RRIP compression against JPEG using actual pyramid levels
-L16 = highest res (L0 in RRIP), L15 = L1 in RRIP, L14 = L2 in RRIP
+ORIGAMI Final Evaluation Script
+Compares ORIGAMI compression against JPEG using actual pyramid levels
+L16 = highest res (L0 in ORIGAMI), L15 = L1 in ORIGAMI, L14 = L2 in ORIGAMI
 """
 
 import os
@@ -139,9 +139,9 @@ def get_test_tiles(data_dir: Path, level: int, count: int = 50) -> List[Tuple[in
 
     return coords
 
-def test_rrip_compression(slide_id: str, level: int, x: int, y: int,
+def test_origami_compression(slide_id: str, level: int, x: int, y: int,
                          data_dir: Path, server_url: str) -> TestResult:
-    """Test RRIP compression for a specific tile"""
+    """Test ORIGAMI compression for a specific tile"""
 
     # Get original tile
     orig_path = data_dir / "baseline_pyramid_files" / str(level) / f"{x}_{y}.jpg"
@@ -150,7 +150,7 @@ def test_rrip_compression(slide_id: str, level: int, x: int, y: int,
 
     original = np.array(Image.open(orig_path))
 
-    # Fetch RRIP reconstruction from server
+    # Fetch ORIGAMI reconstruction from server
     start = time.time()
     response = requests.get(f"{server_url}/tiles/{slide_id}/{level}/{x}_{y}.jpg")
     decode_time = (time.time() - start) * 1000  # ms
@@ -161,10 +161,10 @@ def test_rrip_compression(slide_id: str, level: int, x: int, y: int,
     # Decode response
     reconstructed = np.array(Image.open(io.BytesIO(response.content)))
 
-    # Estimate RRIP size
-    # For L16/L15 (L0/L1 in RRIP): size includes L14 baseline + residuals
+    # Estimate ORIGAMI size
+    # For L16/L15 (L0/L1 in ORIGAMI): size includes L14 baseline + residuals
     if level >= 15:
-        # L14 coordinates (L2 in RRIP)
+        # L14 coordinates (L2 in ORIGAMI)
         shift = 16 - 14  # 2 levels up
         x14 = x >> shift
         y14 = y >> shift
@@ -181,10 +181,10 @@ def test_rrip_compression(slide_id: str, level: int, x: int, y: int,
             l14_size = l14_path.stat().st_size if l14_path.exists() else 25000
 
             # Add residual size
-            if level == 16:  # L0 in RRIP
+            if level == 16:  # L0 in ORIGAMI
                 res_path = data_dir / f"residuals_q32/L0/{x14}_{y14}/{x}_{y}.jpg"
                 tiles_per_l14 = 16
-            else:  # L15 = L1 in RRIP
+            else:  # L15 = L1 in ORIGAMI
                 res_path = data_dir / f"residuals_q32/L1/{x14}_{y14}/{x}_{y}.jpg"
                 tiles_per_l14 = 4
 
@@ -198,7 +198,7 @@ def test_rrip_compression(slide_id: str, level: int, x: int, y: int,
     metrics = QualityMetrics()
 
     return TestResult(
-        method="RRIP",
+        method="ORIGAMI",
         quality_param=32,  # Residual quality
         level=level,
         tile_coords=(x, y),
@@ -249,14 +249,14 @@ def plot_results(results: List[TestResult], output_dir: Path):
     """Generate publication-quality plots"""
 
     # Group by method and level
-    rrip_results = [r for r in results if r.method == "RRIP"]
+    origami_results = [r for r in results if r.method == "ORIGAMI"]
     jpeg_results = [r for r in results if r.method == "JPEG"]
 
     # Separate by level
-    levels = [16, 15, 14]  # L0, L1, L2 in RRIP terms
+    levels = [16, 15, 14]  # L0, L1, L2 in ORIGAMI terms
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    fig.suptitle('RRIP Compression Evaluation: Rate-Distortion Performance by Level',
+    fig.suptitle('ORIGAMI Compression Evaluation: Rate-Distortion Performance by Level',
                 fontsize=16, fontweight='bold')
 
     for idx, level in enumerate(levels):
@@ -264,17 +264,17 @@ def plot_results(results: List[TestResult], output_dir: Path):
         ax_ssim = axes[1, idx]
 
         # Filter results for this level
-        rrip_level = [r for r in rrip_results if r.level == level]
+        origami_level = [r for r in origami_results if r.level == level]
         jpeg_level = [r for r in jpeg_results if r.level == level]
 
-        # RRIP point
-        if rrip_level:
-            rrip_bpp = np.mean([r.bits_per_pixel for r in rrip_level])
-            rrip_psnr = np.mean([r.psnr_db for r in rrip_level])
-            rrip_ssim = np.mean([r.ms_ssim for r in rrip_level])
+        # ORIGAMI point
+        if origami_level:
+            origami_bpp = np.mean([r.bits_per_pixel for r in origami_level])
+            origami_psnr = np.mean([r.psnr_db for r in origami_level])
+            origami_ssim = np.mean([r.ms_ssim for r in origami_level])
 
-            ax_psnr.plot(rrip_bpp, rrip_psnr, 'ro', markersize=12, label='RRIP')
-            ax_ssim.plot(rrip_bpp, rrip_ssim, 'ro', markersize=12, label='RRIP')
+            ax_psnr.plot(origami_bpp, origami_psnr, 'ro', markersize=12, label='ORIGAMI')
+            ax_ssim.plot(origami_bpp, origami_ssim, 'ro', markersize=12, label='ORIGAMI')
 
         # JPEG curve
         if jpeg_level:
@@ -307,8 +307,8 @@ def plot_results(results: List[TestResult], output_dir: Path):
                 ax_ssim.plot(jpeg_bpp, jpeg_ssim, 'b-', marker='s', label='JPEG')
 
         # Format axes
-        rrip_level_name = {16: 'L0', 15: 'L1', 14: 'L2'}[level]
-        ax_psnr.set_title(f'Level {level} ({rrip_level_name} in RRIP)', fontweight='bold')
+        origami_level_name = {16: 'L0', 15: 'L1', 14: 'L2'}[level]
+        ax_psnr.set_title(f'Level {level} ({origami_level_name} in ORIGAMI)', fontweight='bold')
         ax_psnr.set_xlabel('Bits Per Pixel')
         ax_psnr.set_ylabel('PSNR (dB)')
         ax_psnr.grid(True, alpha=0.3)
@@ -324,21 +324,21 @@ def plot_results(results: List[TestResult], output_dir: Path):
 
     # Generate combined plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle('RRIP vs JPEG: Combined Rate-Distortion Performance',
+    fig.suptitle('ORIGAMI vs JPEG: Combined Rate-Distortion Performance',
                 fontsize=14, fontweight='bold')
 
-    # Combined RRIP (all levels)
-    if rrip_results:
-        rrip_bpp = np.mean([r.bits_per_pixel for r in rrip_results])
-        rrip_psnr = np.mean([r.psnr_db for r in rrip_results])
-        rrip_ssim = np.mean([r.ms_ssim for r in rrip_results])
+    # Combined ORIGAMI (all levels)
+    if origami_results:
+        origami_bpp = np.mean([r.bits_per_pixel for r in origami_results])
+        origami_psnr = np.mean([r.psnr_db for r in origami_results])
+        origami_ssim = np.mean([r.ms_ssim for r in origami_results])
 
-        ax1.plot(rrip_bpp, rrip_psnr, 'ro', markersize=12, label='RRIP', zorder=10)
-        ax2.plot(rrip_bpp, rrip_ssim, 'ro', markersize=12, label='RRIP', zorder=10)
+        ax1.plot(origami_bpp, origami_psnr, 'ro', markersize=12, label='ORIGAMI', zorder=10)
+        ax2.plot(origami_bpp, origami_ssim, 'ro', markersize=12, label='ORIGAMI', zorder=10)
 
         # Add annotation
-        ax1.annotate('RRIP', xy=(rrip_bpp, rrip_psnr),
-                    xytext=(rrip_bpp + 0.5, rrip_psnr - 1),
+        ax1.annotate('ORIGAMI', xy=(origami_bpp, origami_psnr),
+                    xytext=(origami_bpp + 0.5, origami_psnr - 1),
                     arrowprops=dict(arrowstyle='->', color='red'),
                     fontweight='bold', color='red')
 
@@ -387,13 +387,13 @@ def main():
 
     # Configuration
     SLIDE_ID = "demo_out"
-    DATA_DIR = Path("/Users/andrewluetgers/projects/dev/RRIP/data") / SLIDE_ID
+    DATA_DIR = Path("/Users/andrewluetgers/projects/dev/ORIGAMI/data") / SLIDE_ID
     SERVER_URL = "http://localhost:3007"
     OUTPUT_DIR = Path("evaluation_results")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     print("="*80)
-    print("RRIP COMPRESSION EVALUATION")
+    print("ORIGAMI COMPRESSION EVALUATION")
     print("="*80)
     print(f"\nSlide: {SLIDE_ID}")
     print(f"Server: {SERVER_URL}\n")
@@ -410,24 +410,24 @@ def main():
     all_results = []
 
     # Test each level
-    for level in [16, 15, 14]:  # L0, L1, L2 in RRIP terms
-        rrip_name = {16: 'L0', 15: 'L1', 14: 'L2'}[level]
-        print(f"Testing Level {level} ({rrip_name} in RRIP)...")
+    for level in [16, 15, 14]:  # L0, L1, L2 in ORIGAMI terms
+        origami_name = {16: 'L0', 15: 'L1', 14: 'L2'}[level]
+        print(f"Testing Level {level} ({origami_name} in ORIGAMI)...")
 
         # Get test tiles
         test_tiles = get_test_tiles(DATA_DIR, level, count=30)
         print(f"  Found {len(test_tiles)} test tiles")
 
-        # Test RRIP
-        print(f"  Testing RRIP reconstruction...")
-        rrip_count = 0
+        # Test ORIGAMI
+        print(f"  Testing ORIGAMI reconstruction...")
+        origami_count = 0
         for x, y in test_tiles:
-            result = test_rrip_compression(SLIDE_ID, level, x, y, DATA_DIR, SERVER_URL)
+            result = test_origami_compression(SLIDE_ID, level, x, y, DATA_DIR, SERVER_URL)
             if result:
                 all_results.append(result)
-                rrip_count += 1
+                origami_count += 1
 
-        print(f"    Processed {rrip_count} tiles")
+        print(f"    Processed {origami_count} tiles")
 
         # Test JPEG recompression (subset for speed)
         print(f"  Testing JPEG recompression...")
@@ -453,16 +453,16 @@ def main():
     print("="*80)
 
     # Group by method
-    rrip_results = [r for r in all_results if r.method == "RRIP"]
+    origami_results = [r for r in all_results if r.method == "ORIGAMI"]
     jpeg_results = [r for r in all_results if r.method == "JPEG"]
 
-    if rrip_results:
-        print(f"\nRRIP (n={len(rrip_results)}):")
-        print(f"  Average file size: {np.mean([r.file_size_bytes for r in rrip_results])/1024:.1f} KB")
-        print(f"  Average PSNR: {np.mean([r.psnr_db for r in rrip_results]):.2f} dB")
-        print(f"  Average MS-SSIM: {np.mean([r.ms_ssim for r in rrip_results]):.4f}")
-        print(f"  Average BPP: {np.mean([r.bits_per_pixel for r in rrip_results]):.3f}")
-        print(f"  Average decode time: {np.mean([r.decode_time_ms for r in rrip_results]):.2f} ms")
+    if origami_results:
+        print(f"\nORIGAMI (n={len(origami_results)}):")
+        print(f"  Average file size: {np.mean([r.file_size_bytes for r in origami_results])/1024:.1f} KB")
+        print(f"  Average PSNR: {np.mean([r.psnr_db for r in origami_results]):.2f} dB")
+        print(f"  Average MS-SSIM: {np.mean([r.ms_ssim for r in origami_results]):.4f}")
+        print(f"  Average BPP: {np.mean([r.bits_per_pixel for r in origami_results]):.3f}")
+        print(f"  Average decode time: {np.mean([r.decode_time_ms for r in origami_results]):.2f} ms")
 
     # JPEG by quality
     jpeg_by_q = {}

@@ -1,8 +1,8 @@
-# RRIP Performance and Compression Evaluation
+# ORIGAMI Performance and Compression Evaluation
 
 ## Executive Summary
 
-RRIP (Residual Reconstruction from Interpolated Priors) achieves **6.7x compression** (85.1% storage reduction) on whole-slide images while maintaining high-performance tile serving at **278 pack files/second** throughput, generating 5,560 tiles/second total.
+ORIGAMI (Residual Reconstruction from Interpolated Priors) achieves **6.7x compression** (85.1% storage reduction) on whole-slide images while maintaining high-performance tile serving at **278 pack files/second** throughput, generating 5,560 tiles/second total.
 
 ## Compression Results
 
@@ -13,10 +13,10 @@ RRIP (Residual Reconstruction from Interpolated Priors) achieves **6.7x compress
 - **L2+ tiles**: 62,128,167 bytes (62.1 MB)
 - **Total baseline**: 701,257,296 bytes (701.3 MB)
 
-### RRIP Compressed Storage
+### ORIGAMI Compressed Storage
 - **L2+ baseline tiles**: 62,128,167 bytes (62.1 MB) - retained as-is
 - **LZ4 pack files**: 42,581,763 bytes (42.6 MB) - replacing all L0+L1 tiles
-- **Total RRIP storage**: 104,709,930 bytes (104.7 MB)
+- **Total ORIGAMI storage**: 104,709,930 bytes (104.7 MB)
 
 ### Compression Achievement
 - **Overall compression ratio**: 701.3 MB → 104.7 MB = **6.7x reduction**
@@ -59,7 +59,7 @@ pip install pyvips Pillow numpy scikit-image openslide-python lz4
 # macOS: brew install libvips openslide libjpeg-turbo
 # Linux: apt-get install libvips openslide-tools libturbojpeg
 
-# Build the RRIP tile server
+# Build the ORIGAMI tile server
 cd server
 TURBOJPEG_SOURCE=explicit \
 TURBOJPEG_DYNAMIC=1 \
@@ -94,10 +94,10 @@ python cli/wsi_residual_tool.py pack \
   --out data/demo_out/residual_packs_lz4
 ```
 
-### Step 4: Start RRIP Tile Server
+### Step 4: Start ORIGAMI Tile Server
 ```bash
 # Start server with LZ4 pack directory
-RUST_LOG=info /tmp/rrip-build/release/rrip-tile-server \
+RUST_LOG=info /tmp/origami-build/release/origami-tile-server \
   --slides-root data \
   --port 3007 \
   --pack-dir residual_packs_lz4

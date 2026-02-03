@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test RRIP with correct pyramid levels"""
+"""Test ORIGAMI with correct pyramid levels"""
 
 import requests
 import numpy as np
@@ -17,7 +17,7 @@ test_tiles = [
     (14, 12, 25)
 ]
 
-print("Testing RRIP tile serving at different levels:\n")
+print("Testing ORIGAMI tile serving at different levels:\n")
 
 for level, x, y in test_tiles:
     # Try to fetch from server
@@ -35,13 +35,13 @@ for level, x, y in test_tiles:
         print(f"✗ L{level} tile ({x},{y}): {e}")
 
 print("\nChecking residual structure:")
-data_path = Path("/Users/andrewluetgers/projects/dev/RRIP/data/demo_out")
+data_path = Path("/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out")
 
-# Check L14 as "L2" in RRIP terminology (L16=L0, L15=L1, L14=L2)
+# Check L14 as "L2" in ORIGAMI terminology (L16=L0, L15=L1, L14=L2)
 baseline_l14 = data_path / "baseline_pyramid_files" / "14"
 if baseline_l14.exists():
     tiles = list(baseline_l14.glob("*.jpg"))[:5]
-    print(f"Found {len(list(baseline_l14.glob('*.jpg')))} L14 (L2 in RRIP) baseline tiles")
+    print(f"Found {len(list(baseline_l14.glob('*.jpg')))} L14 (L2 in ORIGAMI) baseline tiles")
 
 # Check residuals - they should be organized by L14 coordinates
 residuals = data_path / "residuals_q32"

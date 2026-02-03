@@ -66,7 +66,7 @@ import json
 def save_debug_image(arr, path, step_num, name_suffix, normalize=False):
     """Save a debug image with sequential numbering."""
     path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True, exist_ok=True)
 
     if arr.ndim == 3 and arr.shape[2] == 3:
         # RGB image
@@ -82,14 +82,14 @@ def save_debug_image(arr, path, step_num, name_suffix, normalize=False):
 
     filename = f"{step_num:03d}_{name_suffix}"
     if filename.endswith('.jpg'):
-        img.save(path.parent / filename, format="JPEG", quality=75)
+        img.save(path / filename, format="JPEG", quality=75)
     else:
         if not filename.endswith('.png'):
             filename += '.png'
-        img.save(path.parent / filename, format="PNG")
+        img.save(path / filename, format="PNG")
 
     print(f"  Saved: {filename}")
-    return path.parent / filename
+    return path / filename
 
 def rgb_to_ycbcr_bt601(rgb_u8):
     """Convert RGB to YCbCr using BT.601."""
@@ -161,6 +161,9 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
 
     print("\n=== COMPRESSION PHASE ===")
 
+    # Track saved residual paths for decompression phase
+    residual_paths = {'L1': {}, 'L0': {}}
+
     # Save L2 tile and its channels
     save_debug_image(l2_tile, out_dir / "compress", 1, "L2_original.png")
     Y_l2, Cb_l2, Cr_l2 = rgb_to_ycbcr_bt601(l2_tile)
@@ -209,6 +212,9 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
         # Save as JPEG
         jpeg_path = save_debug_image(residual_centered, out_dir / "compress",
                                     step+8, f"L1_{dx}_{dy}_residual_jpeg.jpg")
+
+        # Store path for decompression
+        residual_paths['L1'][(dx, dy)] = f"{step+8:03d}_L1_{dx}_{dy}_residual_jpeg.jpg"
 
         # Simulate reconstruction for L0 prediction
         r_dec = np.array(Image.open(jpeg_path).convert("L")).astype(np.float32) - 128.0
@@ -297,8 +303,10 @@ def decompress_with_debug(out_dir, tile_size=256):
             pred = l1_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
             Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
 
-            # Load residual JPEG
-            residual_path = compress_dir / f"018_L1_{dx}_{dy}_residual_jpeg.jpg"
+            # Load residual JPEG - use tile index to find correct file
+            tile_idx = dy * 2 + dx
+            residual_file = f"{10 + tile_idx * 10 + 8:03d}_L1_{dx}_{dy}_residual_jpeg.jpg"
+            residual_path = compress_dir / residual_file
             if residual_path.exists():
                 residual_loaded = np.array(Image.open(residual_path).convert("L"))
                 save_debug_image(residual_loaded, decompress_dir, step,

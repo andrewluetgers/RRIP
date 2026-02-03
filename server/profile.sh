@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to generate a flamegraph of the RRIP server under load
+# Script to generate a flamegraph of the ORIGAMI server under load
 
 echo "Setting up environment..."
 export TURBOJPEG_SOURCE=explicit

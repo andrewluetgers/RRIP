@@ -1,4 +1,4 @@
-# RRIP Executive Summary
+# ORIGAMI Executive Summary
 
 ## The Problem
 Whole-slide imaging generates massive data: a single 40× slide requires 5-10 GB even with JPEG compression. Institutions managing millions of slides face petabyte-scale storage costs exceeding $300K/year.
@@ -6,10 +6,10 @@ Whole-slide imaging generates massive data: a single 40× slide requires 5-10 GB
 ## The Insight
 In standard tile pyramids, 94% of storage is consumed by the two finest resolution levels (L0 and L1). These levels contain redundant information that can be reconstructed from coarser levels.
 
-## The Solution: RRIP
+## The Solution: ORIGAMI
 **Residual Reconstruction from Interpolated Priors**
 
-RRIP operates ON TOP of existing JPEG-compressed pyramids (Q80-90) and achieves:
+ORIGAMI operates ON TOP of existing JPEG-compressed pyramids (Q80-90) and achieves:
 - **82% additional storage reduction** beyond JPEG
 - **5.5× further compression** (25KB → 8KB per tile)
 - **~33× total compression** from raw pixels
@@ -42,7 +42,7 @@ RRIP operates ON TOP of existing JPEG-compressed pyramids (Q80-90) and achieves:
 
 For 1 Petabyte Archive (200,000 slides):
 - **Standard JPEG storage**: $318,000/year
-- **With RRIP**: $57,000/year
+- **With ORIGAMI**: $57,000/year
 - **Annual savings**: $261,000
 
 ## Key Advantages
@@ -60,7 +60,7 @@ For 1 Petabyte Archive (200,000 slides):
 | JPEG recompression | Limited by quality loss | Fast | Yes | Yes |
 | JPEG 2000 | 30% | 30-50ms | No | Yes |
 | HTJ2K (2025) | 35% | 5-10ms | No | Emerging |
-| **RRIP** | **82%** | **0.35ms** | Via server | **Yes** |
+| **ORIGAMI** | **82%** | **0.35ms** | Via server | **Yes** |
 
 ## Critical Context
 
@@ -77,14 +77,14 @@ For 1 Petabyte Archive (200,000 slides):
 
 ## Bottom Line
 
-RRIP provides a practical, deployable solution for institutions struggling with WSI storage costs. By applying intelligent compression ON TOP of existing JPEG archives, it delivers 5.5× additional savings while maintaining diagnostic quality and sub-millisecond serving performance.
+ORIGAMI provides a practical, deployable solution for institutions struggling with WSI storage costs. By applying intelligent compression ON TOP of existing JPEG archives, it delivers 5.5× additional savings while maintaining diagnostic quality and sub-millisecond serving performance.
 
 **The choice is simple:**
 - Continue paying $318K/year for storage, or
-- Deploy RRIP and pay $57K/year
+- Deploy ORIGAMI and pay $57K/year
 - Same diagnostic quality, 5× less cost
 
 ---
 
 *Contact: Andrew Luetgers | GitHub: @andrewluetgers*
-*Paper: "RRIP: Efficient Whole-Slide Image Serving Through Residual Reconstruction"*
+*Paper: "ORIGAMI: Efficient Whole-Slide Image Serving Through Residual Reconstruction"*

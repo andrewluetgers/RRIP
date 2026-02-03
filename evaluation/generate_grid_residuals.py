@@ -87,7 +87,7 @@ def generate_residuals(quant_levels, jpeg_quality):
 
 def main():
     """Generate all 9 configurations."""
-    print("RRIP Parameter Grid Generation")
+    print("ORIGAMI Parameter Grid Generation")
     print(f"Pyramid: {PYRAMID_PATH}")
     print(f"Output: {OUTPUT_BASE}")
 

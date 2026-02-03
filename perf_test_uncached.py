@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance test for RRIP tile server - TRULY UNCACHED version
+Performance test for ORIGAMI tile server - TRULY UNCACHED version
 Ensures each request hits a different L2 parent to avoid family cache benefits
 """
 import asyncio
@@ -315,7 +315,7 @@ class UncachedTileServerBenchmark:
         print(f"  Threads: {res['after'].get('num_threads', 0)}")
 
 async def main():
-    parser = argparse.ArgumentParser(description='RRIP Tile Server UNCACHED Performance Test')
+    parser = argparse.ArgumentParser(description='ORIGAMI Tile Server UNCACHED Performance Test')
     parser.add_argument('--url', default='http://localhost:3007', help='Server URL')
     parser.add_argument('--slide', default='demo_out', help='Slide ID')
     parser.add_argument('--max-concurrent', type=int, default=128, help='Maximum concurrency to test')

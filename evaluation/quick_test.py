@@ -33,7 +33,7 @@ except Exception as e:
     print(f"✗ Error fetching tile: {e}")
 
 # Check for original tiles
-data_path = Path("/Users/andrewluetgers/projects/dev/RRIP/data/demo_out")
+data_path = Path("/Users/andrewluetgers/projects/dev/ORIGAMI/data/demo_out")
 baseline_path = data_path / "baseline_pyramid_files" / "0"
 if baseline_path.exists():
     tiles = list(baseline_path.glob("*.jpg"))

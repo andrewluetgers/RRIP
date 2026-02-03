@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Performance test for Moka cache optimization
-echo "🚀 RRIP Server Performance Test"
+echo "🚀 ORIGAMI Server Performance Test"
 echo "================================"
 echo ""
 echo "This test compares cache performance with the new lock-free Moka cache."

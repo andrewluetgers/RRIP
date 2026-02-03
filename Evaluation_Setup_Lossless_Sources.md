@@ -113,11 +113,11 @@ def generate_test_pyramid(ground_truth_region, method):
     Generate pyramid using different methods:
     - 'jpeg': Standard JPEG pyramid
     - 'jpeg2000': JPEG 2000 pyramid
-    - 'rrip': Your residual approach
+    - 'origami': Your residual approach
     """
-    if method == 'rrip':
+    if method == 'origami':
         # Your ORIGAMI implementation
-        pyramid = generate_rrip_pyramid(ground_truth_region)
+        pyramid = generate_origami_pyramid(ground_truth_region)
 
     elif method == 'jpeg':
         # Standard JPEG pyramid at various qualities
@@ -218,7 +218,7 @@ def run_full_evaluation():
     test_images = load_camelyon16_samples(n=100)
 
     # 2. Run each compression method
-    methods = ['jpeg', 'jpeg2000', 'htj2k', 'rrip']
+    methods = ['jpeg', 'jpeg2000', 'htj2k', 'origami']
     results = {}
 
     for method in methods:
