@@ -30,7 +30,7 @@
 
 \begin{document}
 
-\title{ORIGAMI: Efficient Whole-Slide Image Serving Through\\Residual Reconstruction from Interpolated Priors}
+\title{ORIGAMI: Efficient Whole-Slide Image Serving Through\\Optimized Residual Image Generation Across Multiscale Interpolation}
 
 \author{\IEEEauthorblockN{Andrew Luetgers}
 \IEEEauthorblockA{Email: andrew.luetgers@gmail.com}
@@ -39,7 +39,7 @@
 \maketitle
 
 \begin{abstract}
-We present ORIGAMI (Residual Reconstruction from Interpolated Priors), a novel compression and serving architecture for gigapixel whole-slide images (WSI) that achieves 82\% additional storage reduction beyond JPEG compression. ORIGAMI operates on standard JPEG tile pyramids (typically compressed at quality 80-90) and further reduces their storage by 5.5$\times$. The method leverages the observation that the two finest pyramid levels (L0 and L1) account for 94\% of storage in standard tile pyramids. Instead of storing these levels as independent JPEG tiles, ORIGAMI encodes them as compact grayscale residuals relative to interpolated predictions from coarser level (L2) tiles. Our serving architecture generates tile ``families''---all 20 tiles (4 L1 + 16 L0) that share a common L2 parent---in 4-7ms, achieving 0.35ms amortized serving time per tile. When evaluated against JPEG Q90 baselines, ORIGAMI maintains PSNR of 49.8 dB and SSIM of 0.98 relative to the already-compressed source. Combined with initial JPEG compression, this represents approximately 50-100$\times$ reduction from raw pixel data. ORIGAMI provides a practical solution for institutions managing petabyte-scale WSI archives, requiring only commodity hardware and standard JPEG tooling.
+We present ORIGAMI (Optimized Residual Image Generation Across Multiscale Interpolation), a novel compression and serving architecture for gigapixel whole-slide images (WSI) that achieves 82\% additional storage reduction beyond JPEG compression. ORIGAMI operates on standard JPEG tile pyramids (typically compressed at quality 80-90) and further reduces their storage by 5.5$\times$. The method leverages the observation that the two finest pyramid levels (L0 and L1) account for 94\% of storage in standard tile pyramids. Instead of storing these levels as independent JPEG tiles, ORIGAMI encodes them as compact grayscale residuals relative to interpolated predictions from coarser level (L2) tiles. Our serving architecture generates tile ``families''---all 20 tiles (4 L1 + 16 L0) that share a common L2 parent---in 4-7ms, achieving 0.35ms amortized serving time per tile. When evaluated against JPEG Q90 baselines, ORIGAMI maintains PSNR of 49.8 dB and SSIM of 0.98 relative to the already-compressed source. Combined with initial JPEG compression, this represents approximately 50-100$\times$ reduction from raw pixel data. ORIGAMI provides a practical solution for institutions managing petabyte-scale WSI archives, requiring only commodity hardware and standard JPEG tooling.
 \end{abstract}
 
 \begin{IEEEkeywords}

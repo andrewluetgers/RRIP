@@ -1,7 +1,0 @@
-{
-  "input_image": "../paper/L0-1024.jpg",
-  "tile_size": 256,
-  "quantization_levels": 32,
-  "jpeg_quality": 75,
-  "output_directory": "../paper/debug_output"
-}

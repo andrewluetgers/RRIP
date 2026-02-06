@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Generate all 9 configurations for the 3x3 parameter grid.
-Uses the enhanced wsi_residual_tool_grid.py that supports separate quantization and JPEG quality.
+Generate residuals for a range of JPEG quality levels.
+Uses the wsi_residual_tool_grid.py CLI.
 """
 
 import os
@@ -19,8 +19,7 @@ TILE_SIZE = 256
 MAX_PARENTS = 100  # Limit for testing
 
 # Parameter grid
-QUANTIZATION_LEVELS = [16, 32, 64]
-JPEG_QUALITIES = [30, 60, 90]
+JPEG_QUALITIES = [30, 50, 70, 90]
 
 def run_command(cmd):
     """Run command and return output."""
@@ -31,12 +30,11 @@ def run_command(cmd):
         return False
     return True
 
-def generate_residuals(quant_levels, jpeg_quality):
-    """Generate residuals for a specific configuration."""
-    config_name = f"q{quant_levels}_j{jpeg_quality}"
+def generate_residuals(jpeg_quality):
+    """Generate residuals for a specific JPEG quality."""
+    config_name = f"j{jpeg_quality}"
     print(f"\n{'='*60}")
     print(f"Generating configuration: {config_name}")
-    print(f"  Quantization levels: {quant_levels}")
     print(f"  JPEG quality: {jpeg_quality}")
     print(f"{'='*60}")
 
@@ -50,7 +48,6 @@ def generate_residuals(quant_levels, jpeg_quality):
         "--pyramid", str(PYRAMID_PATH),
         "--out", str(config_dir),
         "--tile", str(TILE_SIZE),
-        "--quant", str(quant_levels),
         "--resq", str(jpeg_quality),
         "--max-parents", str(MAX_PARENTS)
     ]
@@ -61,7 +58,7 @@ def generate_residuals(quant_levels, jpeg_quality):
 
     if success:
         # Read the summary file
-        summary_path = config_dir / f"summary_q{quant_levels}_j{jpeg_quality}.json"
+        summary_path = config_dir / f"summary_j{jpeg_quality}.json"
         if summary_path.exists():
             with open(summary_path) as f:
                 summary = json.load(f)
@@ -86,7 +83,7 @@ def generate_residuals(quant_levels, jpeg_quality):
     return None
 
 def main():
-    """Generate all 9 configurations."""
+    """Generate all configurations."""
     print("ORIGAMI Parameter Grid Generation")
     print(f"Pyramid: {PYRAMID_PATH}")
     print(f"Output: {OUTPUT_BASE}")
@@ -102,17 +99,18 @@ def main():
     successful = 0
     failed = 0
 
-    # Generate all combinations
-    for quant in QUANTIZATION_LEVELS:
-        for jpeg_q in JPEG_QUALITIES:
-            result = generate_residuals(quant, jpeg_q)
+    # Generate all configurations
+    for jpeg_q in JPEG_QUALITIES:
+        result = generate_residuals(jpeg_q)
 
-            if result:
-                config_name = f"q{quant}_j{jpeg_q}"
-                all_results[config_name] = result
-                successful += 1
-            else:
-                failed += 1
+        if result:
+            config_name = f"j{jpeg_q}"
+            all_results[config_name] = result
+            successful += 1
+        else:
+            failed += 1
+
+    total = len(JPEG_QUALITIES)
 
     # Save aggregated results
     aggregated_path = OUTPUT_BASE / "all_configurations.json"
@@ -122,25 +120,24 @@ def main():
     # Print summary
     print(f"\n{'='*60}")
     print("GENERATION COMPLETE")
-    print(f"  Successful: {successful}/9")
-    print(f"  Failed: {failed}/9")
+    print(f"  Successful: {successful}/{total}")
+    print(f"  Failed: {failed}/{total}")
     print(f"  Results saved to: {aggregated_path}")
 
     # Print comparison table
     if all_results:
         print(f"\n{'='*60}")
         print("COMPRESSION COMPARISON")
-        print(f"{'Config':<15} {'Quant':<8} {'JPEG':<8} {'Ratio':<10} {'Savings':<10}")
-        print("-" * 60)
+        print(f"{'Config':<15} {'JPEG':<8} {'Ratio':<10} {'Savings':<10}")
+        print("-" * 50)
 
         for config_name in sorted(all_results.keys()):
             data = all_results[config_name]
-            quant = data.get('quantization_levels', 'N/A')
             jpeg = data.get('residual_jpeg_quality', 'N/A')
             ratio = data.get('compression_ratio', 0)
             savings = data.get('savings_pct', 0)
 
-            print(f"{config_name:<15} {quant:<8} {jpeg:<8} {ratio:<10.2f} {savings:<10.1f}%")
+            print(f"{config_name:<15} {jpeg:<8} {ratio:<10.2f} {savings:<10.1f}%")
 
     # Find optimal configurations
     if all_results:
@@ -152,13 +149,6 @@ def main():
                               key=lambda x: x[1].get('compression_ratio', 0))
         print(f"Best Compression: {best_compression[0]} "
               f"(Ratio: {best_compression[1].get('compression_ratio', 0):.2f}x)")
-
-        # Most balanced (middle ground)
-        target_ratio = 4.0  # Target middle compression
-        best_balanced = min(all_results.items(),
-                           key=lambda x: abs(x[1].get('compression_ratio', 0) - target_ratio))
-        print(f"Most Balanced: {best_balanced[0]} "
-              f"(Ratio: {best_balanced[1].get('compression_ratio', 0):.2f}x)")
 
 if __name__ == "__main__":
     main()

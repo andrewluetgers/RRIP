@@ -25,6 +25,39 @@ except ImportError:
     HAS_LZ4 = False
     print("Warning: lz4 not installed. Pack files will not be compressed. Install with: pip install lz4")
 from PIL import Image
+from typing import Optional, Dict, Callable, Any
+import sys, os
+# Add evals/scripts to path for jpeg_encoder module
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'evals', 'scripts'))
+from jpeg_encoder import JpegEncoder, encode_jpeg_to_file, parse_encoder_arg
+
+
+class DebugContext:
+    """Debug instrumentation context with zero overhead when disabled."""
+
+    def __init__(self, enabled: bool = False, output_dir: Optional[pathlib.Path] = None):
+        self.enabled = enabled
+        self.output_dir = output_dir
+        self.callbacks: Dict[str, Callable] = {}
+        self.data: Dict[str, Any] = {}
+
+    def register_callback(self, event: str, callback: Callable):
+        """Register a callback for a specific debug event."""
+        if self.enabled:
+            self.callbacks[event] = callback
+
+    def emit(self, event: str, **kwargs):
+        """Emit a debug event with data. Zero-cost when disabled."""
+        if not self.enabled:
+            return
+        if event in self.callbacks:
+            self.callbacks[event](**kwargs)
+
+    def capture(self, key: str, value: Any):
+        """Capture data for later use. Zero-cost when disabled."""
+        if not self.enabled:
+            return
+        self.data[key] = value
 
 def import_pyvips():
     import pyvips
@@ -51,9 +84,10 @@ def tile_path(files_dir: pathlib.Path, level:int, x:int, y:int):
 def load_rgb(p: pathlib.Path):
     return np.array(Image.open(p).convert("RGB"))
 
-def save_gray_jpeg(arr_u8: np.ndarray, p: pathlib.Path, q:int):
+def save_gray_jpeg(arr_u8: np.ndarray, p: pathlib.Path, q:int, encoder=JpegEncoder.LIBJPEG_TURBO):
     p.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(arr_u8.astype(np.uint8), mode="L").save(p, format="JPEG", quality=int(q), optimize=True)
+    img = Image.fromarray(arr_u8.astype(np.uint8), mode="L")
+    encode_jpeg_to_file(img, p, int(q), encoder)
 
 def rgb_to_ycbcr_bt601(rgb_u8):
     rgb = rgb_u8.astype(np.float32)
@@ -72,14 +106,21 @@ def ycbcr_to_rgb_bt601(Y, Cb, Cr):
     B = Y + 1.772*Cb
     return np.clip(np.stack([R,G,B], axis=-1), 0, 255).astype(np.uint8)
 
-def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, resq=32, max_parents=None, sample_prob=0.0):
+def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, resq=32, max_parents=None, sample_prob=0.0, debug_ctx: Optional[DebugContext] = None, encoder=JpegEncoder.LIBJPEG_TURBO):
+    # Default to disabled debug context if not provided
+    if debug_ctx is None:
+        debug_ctx = DebugContext(enabled=False)
+
     files_dir = pyramid_prefix.parent / (pyramid_prefix.name + "_files")
     levels, max_level, L0, L1, L2 = parse_levels(files_dir)
     if max_level < 2:
         raise ValueError("Need at least 3 DeepZoom levels (L0/L1/L2). Rebuild with depth='onepixel' or 'onetile'.")
-    out_res = out_dir / f"residuals_q{resq}"
+    out_res = out_dir / f"residuals_j{resq}"
     if out_res.exists(): shutil.rmtree(out_res)
     out_res.mkdir(parents=True, exist_ok=True)
+
+    # Emit initialization event
+    debug_ctx.emit('init', levels=levels, L0=L0, L1=L1, L2=L2, tile_size=tile_size, resq=resq)
 
     baseline_bytes = sum(f.stat().st_size for lv in levels for f in (files_dir/str(lv)).glob("*.jpg"))
     retained_bytes = sum(f.stat().st_size for lv in levels if lv <= L2 for f in (files_dir/str(lv)).glob("*.jpg"))
@@ -100,7 +141,15 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, r
         p2=tile_path(files_dir, L2, x2, y2)
         if not p2.exists(): continue
         l2=load_rgb(p2)
+
+        # Debug: L2 tile loaded
+        debug_ctx.emit('l2_loaded', x2=x2, y2=y2, tile=l2, path=p2)
+
         l1_pred = np.array(Image.fromarray(l2).resize((tile_size*2, tile_size*2), resample=UPSAMPLE))
+
+        # Debug: L1 prediction mosaic created
+        debug_ctx.emit('l1_prediction_mosaic', x2=x2, y2=y2, prediction=l1_pred)
+
         recon_l1=[[None,None],[None,None]]
         for dy in range(2):
             for dx in range(2):
@@ -109,20 +158,51 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, r
                 if not p1.exists(): continue
                 gt=load_rgb(p1)
                 pred=l1_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
-                Yg,_,_=rgb_to_ycbcr_bt601(gt)
+
+                # Debug: L1 tile processing
+                debug_ctx.emit('l1_tile_start', x1=x1, y1=y1, ground_truth=gt, prediction=pred)
+
+                Yg,Cbg,Crg=rgb_to_ycbcr_bt601(gt)
                 Yp,Cbp,Crp=rgb_to_ycbcr_bt601(pred)
+
+                # Debug: YCbCr conversion
+                debug_ctx.emit('l1_ycbcr', x1=x1, y1=y1, Y_gt=Yg, Y_pred=Yp, Cb_pred=Cbp, Cr_pred=Crp)
+
                 Ry=Yg-Yp
+
+                # Debug: Raw residual
+                debug_ctx.emit('l1_residual_raw', x1=x1, y1=y1, residual=Ry)
+
                 enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
+
+                # Debug: Encoded residual
+                debug_ctx.emit('l1_residual_encoded', x1=x1, y1=y1, encoded=enc)
+
                 rp=out_res/"L1"/f"{x2}_{y2}"/f"{x1}_{y1}.jpg"
-                save_gray_jpeg(enc,rp,resq)
+                save_gray_jpeg(enc,rp,resq,encoder)
                 residual_bytes_L1 += rp.stat().st_size
+
+                # Debug: Saved residual
+                debug_ctx.emit('l1_residual_saved', x1=x1, y1=y1, path=rp, size=rp.stat().st_size)
+
                 r_dec=np.array(Image.open(rp).convert("L")).astype(np.float32)-128.0
                 Yhat=np.clip(Yp+r_dec,0,255)
                 recon_l1[dy][dx]=ycbcr_to_rgb_bt601(Yhat,Cbp,Crp)
+
+                # Debug: L1 reconstruction
+                debug_ctx.emit('l1_reconstructed', x1=x1, y1=y1, Y_recon=Yhat, rgb_recon=recon_l1[dy][dx])
         if any(recon_l1[dy][dx] is None for dy in range(2) for dx in range(2)):
             continue
         l1_mosaic=np.concatenate([np.concatenate(row,axis=1) for row in recon_l1], axis=0)
+
+        # Debug: L1 mosaic complete
+        debug_ctx.emit('l1_mosaic_complete', x2=x2, y2=y2, mosaic=l1_mosaic)
+
         l0_pred=np.array(Image.fromarray(l1_mosaic).resize((tile_size*4,tile_size*4), resample=UPSAMPLE))
+
+        # Debug: L0 prediction mosaic
+        debug_ctx.emit('l0_prediction_mosaic', x2=x2, y2=y2, prediction=l0_pred)
+
         for dy in range(4):
             for dx in range(4):
                 x0=x2*4+dx; y0=y2*4+dy
@@ -130,13 +210,32 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, r
                 if not p0.exists(): continue
                 gt=load_rgb(p0)
                 pred=l0_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
-                Yg,_,_=rgb_to_ycbcr_bt601(gt)
+
+                # Debug: L0 tile processing
+                debug_ctx.emit('l0_tile_start', x0=x0, y0=y0, ground_truth=gt, prediction=pred)
+
+                Yg,Cbg,Crg=rgb_to_ycbcr_bt601(gt)
                 Yp,Cbp,Crp=rgb_to_ycbcr_bt601(pred)
+
+                # Debug: L0 YCbCr
+                debug_ctx.emit('l0_ycbcr', x0=x0, y0=y0, Y_gt=Yg, Y_pred=Yp, Cb_pred=Cbp, Cr_pred=Crp)
+
                 Ry=Yg-Yp
+
+                # Debug: L0 raw residual
+                debug_ctx.emit('l0_residual_raw', x0=x0, y0=y0, residual=Ry)
+
                 enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
+
+                # Debug: L0 encoded residual
+                debug_ctx.emit('l0_residual_encoded', x0=x0, y0=y0, encoded=enc)
+
                 rp=out_res/"L0"/f"{x2}_{y2}"/f"{x0}_{y0}.jpg"
-                save_gray_jpeg(enc,rp,resq)
+                save_gray_jpeg(enc,rp,resq,encoder)
                 residual_bytes_L0 += rp.stat().st_size
+
+                # Debug: L0 saved residual
+                debug_ctx.emit('l0_residual_saved', x0=x0, y0=y0, path=rp, size=rp.stat().st_size)
 
     proposed_bytes = retained_bytes + residual_bytes_L1 + residual_bytes_L0
     summary = {
@@ -153,6 +252,9 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, r
     }
     (out_dir/"summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
+
+    # Debug: Encoding complete
+    debug_ctx.emit('encoding_complete', summary=summary)
 
 def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -255,6 +357,8 @@ def main():
     ap_e.add_argument("--tile", type=int, default=256)
     ap_e.add_argument("--resq", type=int, default=32)
     ap_e.add_argument("--max-parents", type=int, default=None)
+    ap_e.add_argument("--encoder", default="libjpeg-turbo",
+                     help="JPEG encoder: libjpeg-turbo (default) or jpegli")
 
     ap_p=sp.add_parser("pack")
     ap_p.add_argument("--residuals", required=True, help="Path to residuals_qXX folder")
@@ -267,7 +371,8 @@ def main():
     if args.cmd=="build":
         dzsave(args.slide, out/"baseline_pyramid", tile_size=args.tile, q=args.q)
     elif args.cmd=="encode":
-        encode(pathlib.Path(args.pyramid), out, tile_size=args.tile, resq=args.resq, max_parents=args.max_parents)
+        enc = parse_encoder_arg(args.encoder)
+        encode(pathlib.Path(args.pyramid), out, tile_size=args.tile, resq=args.resq, max_parents=args.max_parents, encoder=enc)
     elif args.cmd=="pack":
         pack_residuals(pathlib.Path(args.residuals), pathlib.Path(args.out))
 

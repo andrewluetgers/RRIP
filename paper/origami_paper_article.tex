@@ -207,6 +207,7 @@ Table~\ref{tab:compression} shows compression and quality metrics, all relative 
 \centering
 \caption{Compression Performance (Relative to JPEG Q90 Baseline)}
 \label{tab:compression}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 Method & Size & PSNR & SSIM & Comp. & Total \\
@@ -214,11 +215,12 @@ Method & Size & PSNR & SSIM & Comp. & Total \\
 \midrule
 Raw pixels & $\sim$196 & $\infty$ & 1.000 & -- & 1$\times$ \\
 JPEG Q90 & 25.0 & Ref. & Ref. & 1$\times$ & $\sim$8$\times$ \\
-\textbf{ORIGAMI} & \textbf{8.0} & \textbf{49.81} & \textbf{0.9803} & \textbf{3.1$\times$} & \textbf{$\sim$25$\times$} \\
-JPEG Q60\textsuperscript{*} & 3.2 & 57.88 & 0.9956 & 7.8$\times$ & $\sim$61$\times$ \\
+\textbf{ORIGAMI} & \textbf{8.0} & \textbf{49.8} & \textbf{0.98} & \textbf{3.1$\times$} & \textbf{$\sim$25$\times$} \\
+JPEG Q60* & 3.2 & 57.9 & 0.996 & 7.8$\times$ & $\sim$61$\times$ \\
 \bottomrule
-\multicolumn{6}{l}{\textsuperscript{*}Recompressed from Q90}
-\end{tabular}
+\multicolumn{6}{l}{*Recompressed from Q90}
+\end{tabular}%
+}
 \end{table}
 
 \textbf{Key observations}:
@@ -236,6 +238,7 @@ Measured on Apple M-series processor (ARM64 with NEON):
 \centering
 \caption{Serving Performance Metrics}
 \label{tab:performance}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcc@{}}
 \toprule
 Operation & Time (ms) & Details \\
@@ -245,7 +248,8 @@ Single tile (first) & 6.7 & Including server RTT \\
 Single tile (cached) & $<$1 & From hot cache \\
 Amortized per tile & 0.35 & Family gen. / 20 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 Throughput testing with 64 concurrent connections achieved 368 requests/second for uncached tiles.
@@ -292,6 +296,7 @@ Table~\ref{tab:comparison} compares ORIGAMI with existing approaches.
 \centering
 \caption{Comparison with Industry Standards}
 \label{tab:comparison}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Approach & Comp. & Decode & Browser & Storage \\
@@ -303,7 +308,8 @@ HTJ2K & 35\% & 5-10ms & None & 35\% \\
 \textbf{ORIGAMI} & \textbf{Custom} & \textbf{0.35ms}* & \textbf{Server} & \textbf{82\%} \\
 \bottomrule
 \multicolumn{5}{l}{*Amortized after family generation}
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \section{Discussion}

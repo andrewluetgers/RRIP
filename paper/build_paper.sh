@@ -215,115 +215,163 @@ EOF
     fi
 }
 
-# Build the PDF
-build_pdf() {
+# Build a single PDF file
+build_single_pdf() {
+    local TEX_FILE=$1
+    local PDF_NAME="${TEX_FILE%.tex}"
+
     echo ""
-    echo "Building PDF..."
+    echo "Building ${PDF_NAME}..."
     echo "--------------------------------"
-
-    # Check if IEEEtran class is available
-    if ! kpsewhich IEEEtran.cls > /dev/null 2>&1; then
-        echo "⚠️  WARNING: IEEEtran.cls not found."
-        echo "Installing IEEEtran package..."
-
-        # Try to install using tlmgr if available
-        if command -v tlmgr &> /dev/null || [ -f "/Library/TeX/texbin/tlmgr" ]; then
-            TLMGR=${TLMGR:-$(command -v tlmgr || echo "/Library/TeX/texbin/tlmgr")}
-            echo "Using tlmgr to install IEEEtran..."
-            sudo $TLMGR update --self 2>/dev/null || true
-            sudo $TLMGR install IEEEtran 2>/dev/null || {
-                echo "Could not install IEEEtran automatically."
-                echo "Creating fallback article version..."
-                create_article_version
-                PAPER_FILE="origami_paper_article.tex"
-            }
-        else
-            echo "tlmgr not found. Creating fallback article version..."
-            create_article_version
-            PAPER_FILE="origami_paper_article.tex"
-        fi
-    else
-        PAPER_FILE="origami_paper.tex"
-    fi
-
-    # Set base name for all subsequent operations
-    BASE_NAME="${PAPER_FILE%.tex}"
 
     # First pass - generate aux files
     echo "Pass 1: Generating auxiliary files..."
-    $PDFLATEX -interaction=nonstopmode ${PAPER_FILE} > build.log 2>&1
-    # Check if PDF was actually created (pdflatex can have warnings but still succeed)
-    if [ ! -f "${BASE_NAME}.pdf" ] && ! grep -q "Output written on" build.log; then
-        echo "❌ ERROR in first pass. Check build.log for details"
-        tail -20 build.log
-        exit 1
+    $PDFLATEX -interaction=nonstopmode ${TEX_FILE} > ${PDF_NAME}_build.log 2>&1
+
+    # Check if PDF was created (even with warnings)
+    if grep -q "Output written on" ${PDF_NAME}_build.log; then
+        echo "✓ Pass 1 complete"
+    else
+        echo "❌ ERROR in first pass for ${TEX_FILE}. Check ${PDF_NAME}_build.log for details"
+        return 1
     fi
-    echo "✓ Pass 1 complete"
 
     # Run BibTeX if available and needed
-    if [ -f "${BASE_NAME}.aux" ] && check_bibtex > /dev/null 2>&1; then
+    if [ -f "${PDF_NAME}.aux" ] && check_bibtex > /dev/null 2>&1; then
         echo "Processing bibliography..."
-        $BIBTEX ${BASE_NAME} > bibtex.log 2>&1 || {
-            echo "⚠️  WARNING: BibTeX had issues. Check bibtex.log"
+        $BIBTEX ${PDF_NAME} > ${PDF_NAME}_bibtex.log 2>&1 || {
+            echo "⚠️  WARNING: BibTeX had issues. Check ${PDF_NAME}_bibtex.log"
         }
-        echo "✓ Bibliography processed"
     fi
 
     # Second pass - incorporate references
     echo "Pass 2: Incorporating references..."
-    $PDFLATEX -interaction=nonstopmode ${PAPER_FILE} >> build.log 2>&1
-    if ! grep -q "Output written on" build.log; then
-        echo "❌ ERROR in second pass. Check build.log for details"
-        tail -20 build.log
-        exit 1
-    fi
-    echo "✓ Pass 2 complete"
+    $PDFLATEX -interaction=nonstopmode ${TEX_FILE} >> ${PDF_NAME}_build.log 2>&1
 
     # Third pass - finalize cross-references
     echo "Pass 3: Finalizing cross-references..."
-    $PDFLATEX -interaction=nonstopmode ${PAPER_FILE} >> build.log 2>&1
-    if ! grep -q "Output written on" build.log; then
-        echo "❌ ERROR in third pass. Check build.log for details"
-        tail -20 build.log
-        exit 1
-    fi
-    echo "✓ Pass 3 complete"
+    $PDFLATEX -interaction=nonstopmode ${TEX_FILE} >> ${PDF_NAME}_build.log 2>&1
 
-    # If we used the article version, rename the output
-    if [ "${PAPER_FILE}" = "origami_paper_article.tex" ]; then
-        mv -f origami_paper_article.pdf origami_paper.pdf 2>/dev/null || true
+    if [ -f "${PDF_NAME}.pdf" ]; then
+        echo "✓ ${PDF_NAME}.pdf generated successfully"
+        return 0
+    else
+        echo "❌ Failed to generate ${PDF_NAME}.pdf"
+        return 1
     fi
+}
+
+# Build the PDFs (both versions)
+build_pdf() {
+    echo ""
+    echo "Building both paper versions..."
+    echo "================================"
+
+    local BUILD_SUCCESS=0
+
+    # Build IEEE version if IEEEtran is available
+    if kpsewhich IEEEtran.cls > /dev/null 2>&1; then
+        echo "📄 Building IEEE Conference Version..."
+        if build_single_pdf "origami_paper.tex"; then
+            echo "✓ IEEE version complete"
+        else
+            echo "⚠️  IEEE version failed (may have font issues)"
+            BUILD_SUCCESS=1
+        fi
+    else
+        echo "⚠️  Skipping IEEE version (IEEEtran.cls not found)"
+
+        # Try to download IEEEtran if not present
+        if [ ! -f "IEEEtran.cls" ]; then
+            echo "Attempting to download IEEEtran.cls..."
+            wget -q https://www.ieee.org/content/dam/ieee-org/ieee/web/org/conferences/IEEEtran.cls 2>/dev/null || \
+            curl -s -o IEEEtran.cls https://www.ieee.org/content/dam/ieee-org/ieee/web/org/conferences/IEEEtran.cls 2>/dev/null || \
+            echo "Could not download IEEEtran.cls"
+        fi
+    fi
+
+    # Always build article version as fallback
+    echo ""
+    echo "📄 Building Article Version..."
+    if [ -f "origami_paper_article.tex" ]; then
+        if build_single_pdf "origami_paper_article.tex"; then
+            echo "✓ Article version complete"
+        else
+            echo "❌ Article version failed"
+            BUILD_SUCCESS=1
+        fi
+    else
+        echo "❌ origami_paper_article.tex not found!"
+        BUILD_SUCCESS=1
+    fi
+
+    return $BUILD_SUCCESS
 }
 
 # Check PDF output
 check_output() {
     echo ""
     echo "Checking output..."
+    echo "================================"
+
+    local FOUND_PDF=0
+
+    # Check IEEE version
     if [ -f "origami_paper.pdf" ]; then
         size=$(ls -lh origami_paper.pdf | awk '{print $5}')
         # Try to get page count if pdfinfo is available
         if command -v pdfinfo &> /dev/null; then
             pages=$(pdfinfo origami_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
-        elif [ -f "/Library/TeX/texbin/pdfinfo" ]; then
-            pages=$(/Library/TeX/texbin/pdfinfo origami_paper.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
         else
-            pages="(pdfinfo not available)"
+            pages="?"
         fi
-        echo "✓ PDF generated successfully!"
+        echo "✓ IEEE Conference Version:"
         echo "  File: origami_paper.pdf"
         echo "  Size: $size"
         echo "  Pages: $pages"
+        FOUND_PDF=1
+    else
+        echo "⚠️  IEEE version not found (origami_paper.pdf)"
+    fi
+
+    # Check Article version
+    if [ -f "origami_paper_article.pdf" ]; then
+        size=$(ls -lh origami_paper_article.pdf | awk '{print $5}')
+        # Try to get page count if pdfinfo is available
+        if command -v pdfinfo &> /dev/null; then
+            pages=$(pdfinfo origami_paper_article.pdf 2>/dev/null | grep Pages | awk '{print $2}' || echo "unknown")
+        else
+            pages="?"
+        fi
+        echo "✓ Article Version:"
+        echo "  File: origami_paper_article.pdf"
+        echo "  Size: $size"
+        echo "  Pages: $pages"
+        FOUND_PDF=1
+    else
+        echo "⚠️  Article version not found (origami_paper_article.pdf)"
+    fi
+
+    if [ $FOUND_PDF -eq 1 ]; then
         echo ""
         echo "================================"
         echo "✅ Build Complete!"
         echo "================================"
         echo ""
-        echo "View the paper with:"
-        echo "  open origami_paper.pdf    # macOS"
-        echo "  xdg-open origami_paper.pdf # Linux"
-        echo "  start origami_paper.pdf    # Windows"
+        echo "📚 Both papers contain:"
+        echo "  Title: ORIGAMI: Efficient Whole-Slide Image Serving Through"
+        echo "         Optimized Residual Image Generation Across Multiscale Interpolation"
+        echo "  Author: Andrew Luetgers (andrew.luetgers@gmail.com)"
+        echo ""
+        echo "View the papers with:"
+        echo "  open origami_paper.pdf           # IEEE version (macOS)"
+        echo "  open origami_paper_article.pdf   # Article version (macOS)"
+        echo ""
+        echo "  xdg-open origami_paper.pdf       # Linux"
+        echo "  start origami_paper.pdf          # Windows"
     else
-        echo "❌ ERROR: PDF was not generated"
+        echo ""
+        echo "❌ ERROR: No PDF was generated"
         exit 1
     fi
 }

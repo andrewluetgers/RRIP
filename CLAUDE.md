@@ -29,7 +29,7 @@ slides/{slide_id}/
   baseline_pyramid_files/        # Standard pyramid tiles
     {level}/
       {x}_{y}.jpg
-  residuals_q32/                # Residual tiles for reconstruction
+  residuals_j{quality}/          # Residual tiles for reconstruction
     L1/{x2}_{y2}/{x1}_{y1}.jpg
     L0/{x2}_{y2}/{x0}_{y0}.jpg
 ```

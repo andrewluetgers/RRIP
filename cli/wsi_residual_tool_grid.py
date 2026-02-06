@@ -2,20 +2,15 @@
 """
 wsi_residual_tool_grid.py
 
-Modified version of wsi_residual_tool.py that supports BOTH quantization levels AND JPEG quality as separate parameters.
-
 Build a DeepZoom pyramid with pyvips, then encode luma residual JPEGs for the two highest-res levels (L0/L1)
 conditioned on covering L2 tiles. Keeps all levels L2+ unchanged.
 
-Key differences from original:
-- Adds --quant parameter for residual quantization (separate from JPEG quality)
-- Quantization reduces the number of discrete residual levels before JPEG encoding
-- Output folders named: residuals_q{quant}_j{jpeg}
+Output folders named: residuals_j{jpeg}
 
 Example:
   python wsi_residual_tool_grid.py build --slide /path/to/slide.svs --out out --tile 256 --q 90
-  python wsi_residual_tool_grid.py encode --pyramid out/baseline_pyramid --out out --tile 256 --quant 32 --resq 75 --max-parents 200
-  python wsi_residual_tool_grid.py pack --residuals out/residuals_q32_j75 --out out/residual_packs
+  python wsi_residual_tool_grid.py encode --pyramid out/baseline_pyramid --out out --tile 256 --resq 75 --max-parents 200
+  python wsi_residual_tool_grid.py pack --residuals out/residuals_j75 --out out/residual_packs
 
 Requires:
   pip install pyvips Pillow numpy scikit-image requests tqdm openslide-python
@@ -31,6 +26,16 @@ except ImportError:
     HAS_LZ4 = False
     print("Warning: lz4 not installed. Pack files will not be compressed. Install with: pip install lz4")
 from PIL import Image
+import struct, io, sys, os
+# Add evals/scripts to path for jpeg_encoder module
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'evals', 'scripts'))
+from jpeg_encoder import JpegEncoder, encode_jpeg_to_file, parse_encoder_arg
+try:
+    from skimage.metrics import structural_similarity as ssim
+    from skimage.metrics import peak_signal_noise_ratio as psnr
+    HAS_METRICS = True
+except ImportError:
+    HAS_METRICS = False
 
 def import_pyvips():
     import pyvips
@@ -57,9 +62,10 @@ def tile_path(files_dir: pathlib.Path, level:int, x:int, y:int):
 def load_rgb(p: pathlib.Path):
     return np.array(Image.open(p).convert("RGB"))
 
-def save_gray_jpeg(arr_u8: np.ndarray, p: pathlib.Path, q:int):
+def save_gray_jpeg(arr_u8: np.ndarray, p: pathlib.Path, q:int, encoder=JpegEncoder.LIBJPEG_TURBO):
     p.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(arr_u8.astype(np.uint8), mode="L").save(p, format="JPEG", quality=int(q), optimize=True)
+    img = Image.fromarray(arr_u8.astype(np.uint8), mode="L")
+    encode_jpeg_to_file(img, p, int(q), encoder)
 
 def rgb_to_ycbcr_bt601(rgb_u8):
     rgb = rgb_u8.astype(np.float32)
@@ -78,41 +84,60 @@ def ycbcr_to_rgb_bt601(Y, Cb, Cr):
     B = Y + 1.772*Cb
     return np.clip(np.stack([R,G,B], axis=-1), 0, 255).astype(np.uint8)
 
-def quantize_residual(residual, num_levels):
-    """
-    Quantize residual values to a specified number of levels.
+def save_debug_image(arr, path, step_num, name_suffix, normalize=False):
+    """Save a debug image with sequential numbering (only in debug mode)."""
+    path = pathlib.Path(path)
 
-    Args:
-        residual: numpy array with approximate range [-255, 255]
-        num_levels: number of quantization levels (e.g., 16, 32, 64, 256)
+    if normalize and arr.dtype != np.uint8:
+        # Normalize float arrays to 0-255 for visualization
+        arr_vis = ((arr - arr.min()) / (arr.max() - arr.min() + 1e-10) * 255).astype(np.uint8)
+    else:
+        arr_vis = np.clip(arr, 0, 255).astype(np.uint8)
 
-    Returns:
-        Quantized residual in the same approximate range
-    """
-    if num_levels >= 256:
-        # No quantization needed
-        return residual
+    # Handle different array shapes
+    if len(arr_vis.shape) == 3:
+        # RGB image
+        img = Image.fromarray(arr_vis, mode='RGB')
+    else:
+        # Grayscale image
+        img = Image.fromarray(arr_vis, mode='L')
 
-    # Map residual range [-255, 255] to [0, 1]
-    # Using a slightly larger range to handle edge cases
-    min_val = -255.0
-    max_val = 255.0
-    normalized = (residual - min_val) / (max_val - min_val)
+    # Create filename with step number
+    filename = f"{step_num:03d}_{name_suffix}.png"
+    output_path = path / filename
+    img.save(output_path)
 
-    # Quantize to num_levels
-    quantized = np.round(normalized * (num_levels - 1)) / (num_levels - 1)
+    # Calculate file size
+    file_size = output_path.stat().st_size
+    print(f"  Saved: {filename} ({file_size:,} bytes)")
+    return output_path, file_size
 
-    # Map back to original residual range
-    return quantized * (max_val - min_val) + min_val
+def calculate_metrics(original, reconstructed):
+    """Calculate PSNR and SSIM metrics if available."""
+    if not HAS_METRICS:
+        return None, None
 
-def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, quant_levels=256, jpeg_quality=75, max_parents=None, sample_prob=0.0):
+    # Convert to grayscale if needed
+    if len(original.shape) == 3:
+        from skimage.color import rgb2gray
+        original = rgb2gray(original)
+    if len(reconstructed.shape) == 3:
+        from skimage.color import rgb2gray
+        reconstructed = rgb2gray(reconstructed)
+
+    # Calculate metrics
+    psnr_val = psnr(original, reconstructed, data_range=1.0)
+    ssim_val = ssim(original, reconstructed, data_range=1.0)
+
+    return psnr_val, ssim_val
+
+def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, jpeg_quality=75, max_parents=None, sample_prob=0.0, debug=False, debug_dir=None, create_pac=False, baseline_quality=95, encoder=JpegEncoder.LIBJPEG_TURBO):
     files_dir = pyramid_prefix.parent / (pyramid_prefix.name + "_files")
     levels, max_level, L0, L1, L2 = parse_levels(files_dir)
     if max_level < 2:
         raise ValueError("Need at least 3 DeepZoom levels (L0/L1/L2). Rebuild with depth='onepixel' or 'onetile'.")
 
-    # Output folder name includes both quantization and JPEG quality
-    out_res = out_dir / f"residuals_q{quant_levels}_j{jpeg_quality}"
+    out_res = out_dir / f"residuals_j{jpeg_quality}"
     if out_res.exists(): shutil.rmtree(out_res)
     out_res.mkdir(parents=True, exist_ok=True)
 
@@ -150,15 +175,12 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, q
                 # Compute raw residual
                 Ry=Yg-Yp
 
-                # Apply quantization BEFORE offset
-                Ry_quantized = quantize_residual(Ry, quant_levels)
-
                 # Offset by +128 to map to [0,255]
-                enc=np.clip(np.round(Ry_quantized+128.0),0,255).astype(np.uint8)
+                enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
 
                 # Save with specified JPEG quality
                 rp=out_res/"L1"/f"{x2}_{y2}"/f"{x1}_{y1}.jpg"
-                save_gray_jpeg(enc,rp,jpeg_quality)
+                save_gray_jpeg(enc,rp,jpeg_quality,encoder)
                 residual_bytes_L1 += rp.stat().st_size
 
                 # Decode for reconstruction (simulating what the decoder will see)
@@ -182,21 +204,17 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, q
                 # Compute raw residual
                 Ry=Yg-Yp
 
-                # Apply quantization BEFORE offset
-                Ry_quantized = quantize_residual(Ry, quant_levels)
-
                 # Offset by +128 to map to [0,255]
-                enc=np.clip(np.round(Ry_quantized+128.0),0,255).astype(np.uint8)
+                enc=np.clip(np.round(Ry+128.0),0,255).astype(np.uint8)
 
                 # Save with specified JPEG quality
                 rp=out_res/"L0"/f"{x2}_{y2}"/f"{x0}_{y0}.jpg"
-                save_gray_jpeg(enc,rp,jpeg_quality)
+                save_gray_jpeg(enc,rp,jpeg_quality,encoder)
                 residual_bytes_L0 += rp.stat().st_size
 
     proposed_bytes = retained_bytes + residual_bytes_L1 + residual_bytes_L0
     summary = {
         "tile_size": tile_size,
-        "quantization_levels": quant_levels,
         "residual_jpeg_quality": jpeg_quality,
         "dz_levels": {"L0": L0, "L1": L1, "L2": L2},
         "baseline_bytes_all_levels": baseline_bytes,
@@ -207,7 +225,7 @@ def encode(pyramid_prefix: pathlib.Path, out_dir: pathlib.Path, tile_size=256, q
         "compression_ratio": baseline_bytes/proposed_bytes,
         "savings_pct": (1-proposed_bytes/baseline_bytes)*100.0
     }
-    (out_dir/f"summary_q{quant_levels}_j{jpeg_quality}.json").write_text(json.dumps(summary, indent=2))
+    (out_dir/f"summary_j{jpeg_quality}.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 
 def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
@@ -309,12 +327,17 @@ def main():
     ap_e.add_argument("--pyramid", required=True, help="Path prefix (without _files) e.g. out/baseline_pyramid")
     ap_e.add_argument("--out", required=True)
     ap_e.add_argument("--tile", type=int, default=256)
-    ap_e.add_argument("--quant", type=int, default=256, help="Quantization levels for residuals (e.g., 16, 32, 64, 256)")
     ap_e.add_argument("--resq", type=int, default=75, help="JPEG quality for residual encoding (0-100)")
     ap_e.add_argument("--max-parents", type=int, default=None)
+    ap_e.add_argument("--debug", action="store_true", help="Enable debug mode with image saving and statistics")
+    ap_e.add_argument("--debug-dir", help="Directory for debug output (default: {out}/debug_j{resq})")
+    ap_e.add_argument("--pac", action="store_true", help="Create PAC file in debug mode")
+    ap_e.add_argument("--baseq", type=int, default=95, help="JPEG quality for baseline tiles in debug mode")
+    ap_e.add_argument("--encoder", default="libjpeg-turbo",
+                     help="JPEG encoder: libjpeg-turbo (default) or jpegli")
 
     ap_p=sp.add_parser("pack")
-    ap_p.add_argument("--residuals", required=True, help="Path to residuals_qXX_jYY folder")
+    ap_p.add_argument("--residuals", required=True, help="Path to residuals_jYY folder")
     ap_p.add_argument("--out", required=True, help="Output folder for packfiles")
 
     args=ap.parse_args()
@@ -324,7 +347,11 @@ def main():
     if args.cmd=="build":
         dzsave(args.slide, out/"baseline_pyramid", tile_size=args.tile, q=args.q)
     elif args.cmd=="encode":
-        encode(pathlib.Path(args.pyramid), out, tile_size=args.tile, quant_levels=args.quant, jpeg_quality=args.resq, max_parents=args.max_parents)
+        enc = parse_encoder_arg(args.encoder)
+        debug_dir = args.debug_dir if args.debug_dir else out / f"debug_j{args.resq}" if args.debug else None
+        encode(pathlib.Path(args.pyramid), out, tile_size=args.tile,
+               jpeg_quality=args.resq, max_parents=args.max_parents, debug=args.debug,
+               debug_dir=debug_dir, create_pac=args.pac, baseline_quality=args.baseq, encoder=enc)
     elif args.cmd=="pack":
         pack_residuals(pathlib.Path(args.residuals), pathlib.Path(args.out))
 
