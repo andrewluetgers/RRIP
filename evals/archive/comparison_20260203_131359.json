@@ -1,0 +1,54 @@
+[
+  {
+    "capture": "/tmp/debug_q32_j10_fixed",
+    "configuration": {
+      "image": "paper/L0-1024.jpg",
+      "tile_size": 256,
+      "quantization": 32,
+      "jpeg_quality": 10
+    },
+    "compression_ratio": 10.85557653335181,
+    "savings_pct": 90.78814472057121,
+    "l1_psnr_avg": 31.60489989964474,
+    "l0_psnr_avg": 30.48353212846073
+  },
+  {
+    "capture": "/tmp/debug_q32_j20_fixed",
+    "configuration": {
+      "image": "paper/L0-1024.jpg",
+      "tile_size": 256,
+      "quantization": 32,
+      "jpeg_quality": 20
+    },
+    "compression_ratio": 8.426781224369059,
+    "savings_pct": 88.13307271929474,
+    "l1_psnr_avg": 31.60489989964474,
+    "l0_psnr_avg": 31.23009765671763
+  },
+  {
+    "capture": "/tmp/debug_test",
+    "configuration": {
+      "image": "../paper/L0-1024.jpg",
+      "tile_size": 256,
+      "quantization": 32,
+      "jpeg_quality": 75
+    },
+    "compression_ratio": 6.653626065631204,
+    "savings_pct": 84.97060114085126,
+    "l1_psnr_avg": 31.60489989964474,
+    "l0_psnr_avg": 32.05445064872245
+  },
+  {
+    "capture": "/tmp/debug_test2",
+    "configuration": {
+      "image": "paper/L0-1024.jpg",
+      "tile_size": 256,
+      "quantization": 64,
+      "jpeg_quality": 90
+    },
+    "compression_ratio": 4.303750094421898,
+    "savings_pct": 76.76445011767522,
+    "l1_psnr_avg": 31.60489989964474,
+    "l0_psnr_avg": 33.3428011717714
+  }
+]

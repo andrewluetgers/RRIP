@@ -1,0 +1,17 @@
+{
+  "name": "origami-viewer",
+  "version": "2.0.0",
+  "description": "ORIGAMI comparison viewer: Node.js server + standalone HTML frontend",
+  "main": "viewer-server.js",
+  "scripts": {
+    "start": "node viewer-server.js",
+    "dev": "PORT=8084 nodemon viewer-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

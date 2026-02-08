@@ -87,3 +87,10 @@ logs/
 # Local configuration
 config.local.toml
 .env.local
+
+# Evaluation run data and legacy archives (large, generated)
+evals/runs/
+evals/test-images/
+evals/archive/legacy-data/
+evals/archive/legacy-runs/
+evals/viewer/node_modules/
