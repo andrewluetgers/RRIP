@@ -18,13 +18,28 @@ from datetime import datetime
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from skimage.color import rgb2lab, deltaE_cie76
-from jpeg_encoder import JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes, parse_encoder_arg
+from jpeg_encoder import (
+    JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes,
+    parse_encoder_arg, is_jxl_encoder, decode_jxl_to_image, file_extension,
+)
+
 try:
     from sewar.full_ref import vifp
     HAS_VIF = True
 except ImportError:
     HAS_VIF = False
     print("Warning: VIF metric not available. Install with: pip install sewar")
+
+# Try to import lpips for perceptual similarity
+try:
+    import torch
+    import lpips as lpips_lib
+    _lpips_net = None
+    HAS_LPIPS = True
+except ImportError:
+    HAS_LPIPS = False
+    print("Warning: lpips/torch not available, LPIPS metrics will be skipped")
+
 
 def calculate_mse(img1, img2):
     """Calculate Mean Squared Error between two images."""
@@ -72,6 +87,25 @@ def calculate_delta_e(img1, img2):
         print(f"Delta E calculation error: {e}")
         return None
 
+def calculate_lpips(img1, img2):
+    """Calculate LPIPS perceptual similarity between two RGB images.
+    Returns a float where lower = more similar (0 = identical)."""
+    if not HAS_LPIPS:
+        return None
+    try:
+        global _lpips_net
+        if _lpips_net is None:
+            _lpips_net = lpips_lib.LPIPS(net='alex', verbose=False)
+        # LPIPS expects tensors in [-1, 1] range, shape (N, 3, H, W)
+        img1_t = torch.from_numpy(img1.copy()).float().permute(2, 0, 1).unsqueeze(0) / 127.5 - 1.0
+        img2_t = torch.from_numpy(img2.copy()).float().permute(2, 0, 1).unsqueeze(0) / 127.5 - 1.0
+        with torch.no_grad():
+            d = _lpips_net(img1_t, img2_t)
+        return float(d.item())
+    except Exception as e:
+        print(f"LPIPS calculation error: {e}")
+        return None
+
 def get_file_size(path):
     """Get file size in bytes."""
     return os.path.getsize(path) if os.path.exists(path) else 0
@@ -106,15 +140,32 @@ def save_image_with_stats(arr, path, step_num, name_suffix, normalize=False,
 
     # Save with appropriate quality
     full_path = path / filename
+    use_jxl = is_jxl_encoder(encoder)
+
     if filename.endswith('.jpg'):
-        encode_jpeg_to_file(img, full_path, quality or 75, encoder)
+        if use_jxl:
+            # Encode as JXL, keep source, decode to PNG (lossless) for viewer
+            jxl_filename = filename.replace('.jpg', '.jxl')
+            jxl_path = path / jxl_filename
+            jxl_size = encode_jpeg_to_file(img, jxl_path, quality or 75, encoder)
+            decoded_img = decode_jxl_to_image(jxl_path)
+            png_path = path / filename.replace('.jpg', '.png')
+            decoded_img.save(str(png_path), format="PNG")
+            # Keep .jxl source; viewer/reconstruction uses .png
+            encoded_size = jxl_size
+            full_path = png_path  # return png path for reconstruction
+            filename = filename.replace('.jpg', '.png')
+        else:
+            encode_jpeg_to_file(img, full_path, quality or 75, encoder)
+            encoded_size = get_file_size(full_path)
     else:
         img.save(full_path, format="PNG")
+        encoded_size = get_file_size(full_path)
 
     # Calculate statistics
     stats = {
         "filename": filename,
-        "file_size": get_file_size(full_path),
+        "file_size": encoded_size,
         "dimensions": f"{arr.shape[1]}x{arr.shape[0]}",
         "is_grayscale": is_grayscale,
         "data_range": {
@@ -147,6 +198,11 @@ def save_image_with_stats(arr, path, step_num, name_suffix, normalize=False,
             delta_e_val = calculate_delta_e(reference, arr)
             if delta_e_val is not None:
                 metrics["delta_e"] = delta_e_val
+
+            # Calculate LPIPS for RGB images
+            lpips_val = calculate_lpips(reference, arr)
+            if lpips_val is not None:
+                metrics["lpips"] = lpips_val
 
             stats["metrics_vs_reference"] = metrics
 
@@ -181,9 +237,18 @@ def save_baseline_jpeg(arr, path, name, quality=95, encoder=JpegEncoder.LIBJPEG_
     img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), mode="RGB")
     filename = f"{name}_baseline_q{quality}.jpg"
     full_path = path / filename
-    encode_jpeg_to_file(img, full_path, quality, encoder)
 
-    return full_path, get_file_size(full_path)
+    if is_jxl_encoder(encoder):
+        jxl_path = path / filename.replace('.jpg', '.jxl')
+        jxl_size = encode_jpeg_to_file(img, jxl_path, quality, encoder)
+        decoded_img = decode_jxl_to_image(jxl_path)
+        png_path = path / filename.replace('.jpg', '.png')
+        decoded_img.save(str(png_path), format="PNG")
+        # Keep .jxl source; return png path for viewer
+        return png_path, jxl_size
+    else:
+        encode_jpeg_to_file(img, full_path, quality, encoder)
+        return full_path, get_file_size(full_path)
 
 def rgb_to_ycbcr_bt601(rgb_u8):
     """Convert RGB to YCbCr using BT.601."""
@@ -252,13 +317,14 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
     print("\n=== COMPRESSION PHASE ===")
 
     # Initialize manifest
-    manifest = {
-        "configuration": {
+    config = {
             "tile_size": tile_size,
             "residual_jpeg_quality": jpeg_quality,
             "baseline_jpeg_quality": baseline_quality,
             "encoder": encoder.value
-        },
+    }
+    manifest = {
+        "configuration": config,
         "compression_phase": {
             "L2": {},
             "L1": {},
@@ -335,6 +401,8 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
                              reference=l1_gt, manifest_entry=tile_manifest)
 
         Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
+
+        # Denoise ground truth luma before residual computation
 
         # Compute residual
         residual_raw = Y_gt - Y_pred
@@ -422,6 +490,8 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
                              reference=l0_gt, manifest_entry=tile_manifest)
 
         Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
+
+        # Denoise ground truth luma before residual computation
 
         # Compute residual
         residual_raw = Y_gt - Y_pred
@@ -520,10 +590,13 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
             pred = l1_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
             Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
 
-            # Load residual JPEG - use tile index to find correct file
+            # Load residual - use tile index to find correct file (.png for JXL, .jpg otherwise)
             tile_idx = dy * 2 + dx
             residual_file = f"{10 + tile_idx * 10 + 8:03d}_L1_{dx}_{dy}_residual_jpeg.jpg"
             residual_path = compress_dir / residual_file
+            # For JXL runs, the .jpg was replaced with .png
+            if not residual_path.exists():
+                residual_path = compress_dir / residual_file.replace('.jpg', '.png')
             if residual_path.exists():
                 residual_loaded = np.array(Image.open(residual_path).convert("L"))
                 save_image_with_stats(residual_loaded, decompress_dir, step,
@@ -561,6 +634,9 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
                     delta_e_val = calculate_delta_e(original, rgb_recon)
                     if delta_e_val is not None:
                         tile_manifest["final_delta_e"] = delta_e_val
+                    lpips_val = calculate_lpips(original, rgb_recon)
+                    if lpips_val is not None:
+                        tile_manifest["final_lpips"] = lpips_val
 
                 manifest["decompression_phase"]["L1"][f"tile_{dx}_{dy}"] = tile_manifest
 
@@ -591,8 +667,10 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
             pred = l0_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
             Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
 
-            # Load residual JPEG - find the correct file with dynamic prefix
+            # Load residual - find the correct file with dynamic prefix (.jpg or .png for JXL)
             residual_files = list(compress_dir.glob(f"*_L0_{dx}_{dy}_residual_jpeg.jpg"))
+            if not residual_files:
+                residual_files = list(compress_dir.glob(f"*_L0_{dx}_{dy}_residual_jpeg.png"))
             if residual_files:
                 residual_path = residual_files[0]
                 residual_loaded = np.array(Image.open(residual_path).convert("L"))
@@ -631,6 +709,9 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
                         delta_e_val = calculate_delta_e(original, rgb_recon)
                         if delta_e_val is not None:
                             tile_manifest["final_delta_e"] = delta_e_val
+                        lpips_val = calculate_lpips(original, rgb_recon)
+                        if lpips_val is not None:
+                            tile_manifest["final_lpips"] = lpips_val
                         break
 
                 manifest["decompression_phase"]["L0"][f"tile_{dx}_{dy}"] = tile_manifest
@@ -676,10 +757,11 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             data_offset += len(data)
             return data
 
-        # Compress L2 baseline as JPEG
+        # Compress L2 baseline
         l2_img = Image.fromarray(np.clip(l2_tile, 0, 255).astype(np.uint8), mode="RGB")
         l2_bytes = encode_jpeg_to_bytes(l2_img, baseline_quality, encoder)
         l2_data = add_entry(2, 0, 0, l2_bytes)
+        use_jxl = is_jxl_encoder(encoder)
 
         # Process L1 residuals
         l1_data_list = []
@@ -701,12 +783,15 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             # Center and save as JPEG
             residual_centered = np.clip(np.round(residual_raw + 128.0), 0, 255).astype(np.uint8)
             residual_img = Image.fromarray(residual_centered, mode="L")
-            l1_jpeg_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
-            l1_data = add_entry(1, dx, dy, l1_jpeg_bytes)
+            l1_encoded_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
+            l1_data = add_entry(1, dx, dy, l1_encoded_bytes)
             l1_data_list.append(l1_data)
 
             # Reconstruct for L0 prediction
-            r_dec = np.array(Image.open(io.BytesIO(l1_data)).convert("L")).astype(np.float32) - 128.0
+            if is_jxl_encoder(encoder):
+                r_dec = np.array(decode_jxl_to_image(l1_data).convert("L")).astype(np.float32) - 128.0
+            else:
+                r_dec = np.array(Image.open(io.BytesIO(l1_data)).convert("L")).astype(np.float32) - 128.0
             Y_recon = np.clip(Y_pred + r_dec, 0, 255)
             l1_reconstructed[(dx, dy)] = ycbcr_to_rgb_bt601(Y_recon, Cb_pred, Cr_pred)
 
@@ -735,8 +820,8 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             # Center and save as JPEG
             residual_centered = np.clip(np.round(residual_raw + 128.0), 0, 255).astype(np.uint8)
             residual_img = Image.fromarray(residual_centered, mode="L")
-            l0_jpeg_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
-            l0_data = add_entry(0, dx, dy, l0_jpeg_bytes)
+            l0_encoded_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
+            l0_data = add_entry(0, dx, dy, l0_encoded_bytes)
             l0_data_list.append(l0_data)
 
         # Write index
@@ -771,22 +856,19 @@ def main():
     parser.add_argument("--baseq", type=int, default=95, help="JPEG quality for baseline tiles")
     parser.add_argument("--pac", action="store_true", help="Create PAC file for serving")
     parser.add_argument("--encoder", default="libjpeg-turbo",
-                       help="JPEG encoder: libjpeg-turbo (default) or jpegli")
+                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, or jpegxl")
 
     args = parser.parse_args()
     encoder = parse_encoder_arg(args.encoder)
 
     # Generate output directory name if not specified
     if args.out is None:
-        # Extract image name from path
-        image_path = pathlib.Path(args.image)
-        image_name = image_path.stem.replace(" ", "_").replace("/", "_")
-
-        # Generate timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Build directory name with PAC suffix if enabled
-        prefix = "jpegli_" if encoder == JpegEncoder.JPEGLI else ""
+        # Auto-generate: {encoder}_debug_j{J}_pac
+        # libjpeg-turbo is the default, no prefix needed
+        if encoder == JpegEncoder.LIBJPEG_TURBO:
+            prefix = ""
+        else:
+            prefix = encoder.value + "_"
         dir_parts = [f"{prefix}debug", f"j{args.resq}"]
         if args.pac:
             dir_parts.append("pac")

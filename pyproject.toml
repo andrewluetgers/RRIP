@@ -15,6 +15,10 @@ dependencies = [
   "ipykernel>=7.1.0",
   "scipy",
   "matplotlib",
+  "torch",
+  "lpips",
+  "sewar",
+  "lz4",
 ]
 
 [project.scripts]

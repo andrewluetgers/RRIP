@@ -29,15 +29,25 @@ async function scanCaptures() {
     const dirName = entry.name;
     const dirPath = path.join(RUNS_DIR, dirName);
 
-    // Jpegli JPEG baseline: jpegli_jpeg_baseline_q70
-    const jpegliBaselineMatch = dirName.match(/^jpegli_jpeg_baseline_q(\d+)$/);
-    if (jpegliBaselineMatch) {
-      const quality = parseInt(jpegliBaselineMatch[1]);
+    // Encoder short names for display keys
+    const encoderDisplayName = {
+      'libjpeg-turbo': 'turbo',
+      'jpegli': 'jpegli',
+      'mozjpeg': 'mozjpeg',
+      'jpegxl': 'jpegxl',
+    };
+
+    // --- JPEG Baseline patterns: {encoder}_jpeg_baseline_q{N} or jpeg_baseline_q{N} ---
+    const baselineMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl)_)?jpeg_baseline_q(\d+)$/);
+    if (baselineMatch) {
+      const encoder = baselineMatch[1] || 'libjpeg-turbo';
+      const quality = parseInt(baselineMatch[2]);
       const tilesDir = path.join(dirPath, 'tiles');
       if (fs.existsSync(tilesDir)) {
-        captures[`JPEGLI_JPEG_Q${quality}`] = {
+        const displayEncoder = encoderDisplayName[encoder] || encoder;
+        captures[`JPEG ${displayEncoder} ${quality}`] = {
           type: 'jpeg_baseline',
-          encoder: 'jpegli',
+          encoder,
           quality,
           q: quality,
           j: quality,
@@ -48,15 +58,15 @@ async function scanCaptures() {
       continue;
     }
 
-    // libjpeg-turbo JPEG baseline: jpeg_baseline_q70
-    const jpegBaselineMatch = dirName.match(/^jpeg_baseline_q(\d+)$/);
-    if (jpegBaselineMatch) {
-      const quality = parseInt(jpegBaselineMatch[1]);
+    // --- JPEG2000 baseline patterns: jp2_baseline_q{N} ---
+    const jp2Match = dirName.match(/^jp2_baseline_q(\d+)$/);
+    if (jp2Match) {
+      const quality = parseInt(jp2Match[1]);
       const tilesDir = path.join(dirPath, 'tiles');
       if (fs.existsSync(tilesDir)) {
-        captures[`JPEG_Q${quality}`] = {
+        captures[`JP2 ${quality}`] = {
           type: 'jpeg_baseline',
-          encoder: 'libjpeg-turbo',
+          encoder: 'jpeg2000',
           quality,
           q: quality,
           j: quality,
@@ -67,47 +77,43 @@ async function scanCaptures() {
       continue;
     }
 
-    // ORIGAMI patterns
-    let key, qVal = 0, jVal = 0, detectedEncoder = 'libjpeg-turbo';
+    // --- ORIGAMI patterns: {encoder}_debug_j{N}_pac or debug_j{N}_pac ---
+    const origamiMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl)_)?(?:debug_)?j(\d+)(?:_pac)?$/);
+    if (origamiMatch) {
+      const encoder = origamiMatch[1] || 'libjpeg-turbo';
+      const quality = parseInt(origamiMatch[2]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
 
-    // Jpegli ORIGAMI: jpegli_debug_j50_pac or jpegli_j50_pac
-    const jpegliPattern = /^jpegli_(?:debug_)?j(\d+)(?:_pac)?$/;
-    const jpegliMatch = dirName.match(jpegliPattern);
+      const hasImages = fs.existsSync(path.join(dirPath, 'images'));
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
 
-    // Standard ORIGAMI: debug_j50_pac or j50_pac
-    const newPattern = /^(?:debug_)?j(\d+)(?:_pac)?$/;
-    const newMatch = dirName.match(newPattern);
-
-    // Legacy ORIGAMI: debug_q32_j50_pac
-    const legacyPattern = /q(\d+)_j(\d+)/i;
-    const legacyMatch = dirName.match(legacyPattern);
-
-    if (jpegliMatch) {
-      jVal = parseInt(jpegliMatch[1]);
-      key = `JPEGLI_J${jVal}`;
-      detectedEncoder = 'jpegli';
-    } else if (newMatch) {
-      jVal = parseInt(newMatch[1]);
-      key = `J${jVal}`;
-    } else if (legacyMatch) {
-      qVal = parseInt(legacyMatch[1]);
-      jVal = parseInt(legacyMatch[2]);
-      key = `Q${qVal}_J${jVal}`;
-    } else {
-      key = dirName;
+      if (hasImages || hasCompress || hasDecompress) {
+        captures[`ORIGAMI ${displayEncoder} ${quality}`] = {
+          type: 'origami',
+          encoder,
+          q: quality,
+          j: quality,
+          name: dirName,
+          has_images: hasImages,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
     }
 
-    // Check if this capture has necessary files
+    // Fallback: unrecognized directories with content
     const hasImages = fs.existsSync(path.join(dirPath, 'images'));
     const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
     const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
 
     if (hasImages || hasCompress || hasDecompress) {
-      captures[key] = {
+      captures[dirName] = {
         type: 'origami',
-        encoder: detectedEncoder,
-        q: qVal,
-        j: jVal,
+        encoder: 'unknown',
+        q: 0,
+        j: 0,
         name: dirName,
         has_images: hasImages,
         has_compress: hasCompress,
@@ -200,21 +206,22 @@ app.get('/image/*', async (req, res) => {
     const runDir = path.join(RUNS_DIR, capture.name);
 
     // Handle JPEG baseline captures
+    // Baselines only have tile images (no pipeline stages), so map any request
+    // for original/reconstructed to the tile file, and 404 everything else.
     if (capture.type === 'jpeg_baseline') {
-      if (imagePath.includes('original') || imagePath.includes('reconstructed') || imagePath.endsWith('.jpg')) {
-        let jpegPath;
-        if (imagePath.endsWith('.jpg')) {
-          jpegPath = path.join(runDir, 'tiles', imagePath);
-        } else {
-          const tileId = imagePath.replace('_original.png', '').replace('_reconstructed.png', '');
-          jpegPath = path.join(runDir, 'tiles', `${tileId}.jpg`);
-        }
-
-        if (fs.existsSync(jpegPath)) {
-          return res.sendFile(jpegPath);
+      // Extract tile ID from paths like "L0_0_0_original.png" or "L0_0_0.jpg"
+      const tileIdMatch = imagePath.match(/^(L[012]_\d+_\d+)/);
+      if (tileIdMatch && (imagePath.includes('original') || imagePath.includes('reconstructed'))) {
+        const tileId = tileIdMatch[1];
+        // Try .jpg first, then .png (JXL runs use PNG display copies)
+        for (const ext of ['.jpg', '.png']) {
+          const tilePath = path.join(runDir, 'tiles', `${tileId}${ext}`);
+          if (fs.existsSync(tilePath)) {
+            return res.sendFile(tilePath);
+          }
         }
       }
-      return res.status(404).send('JPEG baseline does not have this image type');
+      return res.status(404).send('Not available for baseline');
     }
 
     // Handle ORIGAMI captures
@@ -282,6 +289,24 @@ app.get('/image/*', async (req, res) => {
     res.status(500).send('Error serving image');
   }
 });
+
+// Serve chart images from evals/charts/
+const CHARTS_DIR = path.join(__dirname, '../charts');
+
+// GET /charts.json - List available chart files (must be before static middleware)
+app.get('/charts.json', async (req, res) => {
+  try {
+    const files = await fsPromises.readdir(CHARTS_DIR);
+    const charts = files
+      .filter(f => f.endsWith('.png'))
+      .sort();
+    res.json(charts);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+app.use('/charts', express.static(CHARTS_DIR));
 
 // Serve run data files directly
 app.use('/static', express.static(RUNS_DIR));

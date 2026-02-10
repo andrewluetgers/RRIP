@@ -1,57 +1,208 @@
-# ORIGAMI Tile Server (MVP)
+# ORIGAMI
 
-This is a Rust HTTP server that serves DeepZoom tiles and reconstructs L1/L0 tiles on demand from L2 + residuals.
+ORIGAMI is a Rust tile server and residual encoder for Deep Zoom Image (DZI) pyramids. The `origami` binary provides two subcommands:
 
-## Core Parameters
+- **`origami serve`** — HTTP tile server with dynamic L0/L1 reconstruction and caching
+- **`origami encode`** — Residual encoder that generates luma residuals from a DZI pyramid
+
+## Install Rust
+
+If `cargo` is not available, install Rust with rustup:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Then restart your shell so `cargo` is on `PATH`.
+
+## Building
+
+### Default Build (turbojpeg only)
+
+The default build links against libjpeg-turbo for JPEG encoding/decoding. No extra setup is needed:
+
+```bash
+cd server
+cargo build --release
+```
+
+### Building with mozjpeg
+
+mozjpeg provides better JPEG compression via trellis quantization. It must be built as a static library first:
+
+```bash
+# 1. Build mozjpeg static library (one-time setup)
+#    Prerequisites: cmake, nasm
+./scripts/build_mozjpeg.sh
+# Installs to: vendor/mozjpeg/
+
+# 2. Build origami with mozjpeg support
+cd server
+cargo build --release --features mozjpeg
+```
+
+To use a custom mozjpeg install location, set `MOZJPEG_LIB_DIR` and `MOZJPEG_INCLUDE_DIR`:
+
+```bash
+MOZJPEG_LIB_DIR=/opt/mozjpeg/lib MOZJPEG_INCLUDE_DIR=/opt/mozjpeg/include \
+  cargo build --release --features mozjpeg
+```
+
+### Building with jpegli
+
+jpegli (from Google) achieves ~35% better compression than libjpeg-turbo at equivalent perceptual quality. It requires LLVM on macOS:
+
+```bash
+# 1. Install prerequisites (macOS)
+brew install llvm coreutils cmake giflib jpeg-turbo libpng ninja zlib
+
+# 2. Build jpegli static library (one-time setup)
+./scripts/build_jpegli.sh
+# Installs to: vendor/jpegli/
+
+# 3. Build origami with jpegli support
+cd server
+cargo build --release --features jpegli
+```
+
+To use a custom jpegli install location, set `JPEGLI_LIB_DIR` and `JPEGLI_INCLUDE_DIR`:
+
+```bash
+JPEGLI_LIB_DIR=/opt/jpegli/lib JPEGLI_INCLUDE_DIR=/opt/jpegli/include/jpegli \
+  cargo build --release --features jpegli
+```
+
+> **Note:** mozjpeg and jpegli are **mutually exclusive** — both define libjpeg62 symbols and cannot be linked together. Use `--features mozjpeg` OR `--features jpegli`, not both.
+
+### Using System libjpeg-turbo (Homebrew)
+
+To use Homebrew's libjpeg-turbo instead of building from source:
+
+```bash
+brew install libjpeg-turbo
+TURBOJPEG_SOURCE=pkg-config cargo build --release
+```
+
+Or with explicit paths:
+
+```bash
+TURBOJPEG_SOURCE=explicit \
+TURBOJPEG_DYNAMIC=1 \
+TURBOJPEG_LIB_DIR=$(brew --prefix jpeg-turbo)/lib \
+TURBOJPEG_INCLUDE_DIR=$(brew --prefix jpeg-turbo)/include \
+cargo build --release
+```
+
+### Running Tests
+
+```bash
+cd server
+cargo test --bins                     # Default (turbojpeg only)
+cargo test --bins --features mozjpeg  # With mozjpeg
+```
+
+## Encoder Comparison
+
+| Encoder | Speed | Compression | Use Case |
+|---------|-------|-------------|----------|
+| **turbojpeg** | Fastest | Baseline | Server decoding, fast encoding |
+| **mozjpeg** | Slower | ~10-15% smaller | Production residual encoding |
+| **jpegli** | Medium | ~35% smaller at same quality | Best compression for residuals |
+
+## Usage
+
+### Serve Subcommand
+
+Start the tile server:
+
+```bash
+origami serve \
+  --slides-root /path/to/slides \
+  --port 3007 \
+  --cache-dir /tmp/origami-cache \
+  --pack-dir residual_packs
+```
+
+Then open: `http://localhost:3007/viewer/{slide_id}`
+
+The server uses turbojpeg for decoding only — no encoder features are needed for serving.
+
+#### Full Production Config
+
+```bash
+origami serve \
+  --slides-root /data/slides \
+  --port 3007 \
+  --cache-dir /var/cache/origami \
+  --pack-dir residual_packs \
+  --hot-cache-mb 1024 \
+  --warm-cache-gb 10 \
+  --rayon-threads 16 \
+  --max-inflight-families 32 \
+  --timing-breakdown
+```
+
+### Encode Subcommand
+
+Generate residuals from a DZI pyramid:
+
+```bash
+# Encode with turbojpeg (default, no extra build flags needed)
+origami encode \
+  --pyramid /path/to/slide \
+  --out /path/to/output \
+  --resq 50
+
+# Encode with mozjpeg (requires --features mozjpeg at build time)
+origami encode \
+  --pyramid /path/to/slide \
+  --out /path/to/output \
+  --resq 50 \
+  --encoder mozjpeg
+
+# Encode with jpegli (requires --features jpegli at build time)
+origami encode \
+  --pyramid /path/to/slide \
+  --out /path/to/output \
+  --resq 30 \
+  --encoder jpegli
+
+# Also generate pack files
+origami encode \
+  --pyramid /path/to/slide \
+  --out /path/to/output \
+  --resq 50 \
+  --encoder mozjpeg \
+  --pack
+```
+
+#### Encode Options
+
+```
+--pyramid <path>        Path to DZI pyramid directory (containing baseline_pyramid.dzi)
+--out <path>            Output directory for residuals and pack files
+--tile <size>           Tile size, must match pyramid (default: 256)
+--resq <quality>        JPEG quality for residual encoding, 1-100 (default: 50)
+--encoder <name>        JPEG encoder backend: turbojpeg, mozjpeg, jpegli (default: turbojpeg)
+--max-parents <n>       Maximum L2 parent tiles to process (for testing)
+--pack                  Also create pack files
+```
+
+## Serve Parameters
 
 ### --slides-root (Required)
 Root directory containing all slide folders. The server recursively scans this directory at startup for valid slide structures.
 
-```bash
---slides-root /path/to/slides  # e.g., --slides-root ../data
-```
-
 ### --cache-dir
-Directory where RocksDB stores the persistent warm cache. This is a key-value database that caches reconstructed tiles across server restarts.
-
-```bash
---cache-dir /var/cache/origami  # Default: /tmp/origami-cache
-```
-
-**How it works:**
-- RocksDB creates SST (Sorted String Table) files in this directory
-- Keys: `tile:{slide_id}:{level}:{x}:{y}`
-- Values: Compressed JPEG bytes of reconstructed tiles
-- Survives server restarts - tiles don't need re-reconstruction
-- Can be shared between multiple server instances (read-only)
-- Typical size: 10-50GB depending on usage patterns
-
-**Cache directory structure:**
-```
-/var/cache/origami/
-├── 000003.log          # Write-ahead log
-├── 000004.sst          # Sorted String Table files
-├── 000005.sst          # (immutable tile data)
-├── CURRENT             # Points to current manifest
-├── IDENTITY            # DB identity file
-├── LOCK                # Process lock
-├── LOG                 # RocksDB logs
-├── MANIFEST-000002     # DB metadata
-└── OPTIONS-000006      # Configuration
-```
+Directory where RocksDB stores the persistent warm cache (default: `/tmp/origami-cache`).
 
 ### --pack-dir
-Subdirectory name within each slide folder containing pre-generated pack files. Pack files bundle all residuals for a tile family into a single file for faster I/O.
-
-```bash
---pack-dir residual_packs  # Default: looks for this name
-```
+Subdirectory name within each slide folder containing pre-generated pack files.
 
 **Pack file format:**
 - One pack per L2 tile coordinate: `{x2}_{y2}.pack`
 - Contains: 1 L2 + 4 L1 residuals + 16 L0 residuals
 - Reduces 21 file reads to 1 seek operation
-- ~100-400KB per pack file
 
 ## Data Layout
 
@@ -79,48 +230,6 @@ The server expects this directory structure under `--slides-root`:
     └── (same structure)
 ```
 
-## Quick Start
-
-```bash
-# Build with optimizations
-./build.sh --release
-
-# Run with essential parameters
-./run-server.sh \
-  --slides-root ../data \
-  --port 3007 \
-  --cache-dir /tmp/origami-cache \
-  --pack-dir residual_packs
-
-# Full production config
-cargo run --release --manifest-path server/Cargo.toml -- \
-  --slides-root /data/slides \
-  --port 3007 \
-  --cache-dir /var/cache/origami \
-  --pack-dir residual_packs \
-  --hot-cache-mb 1024 \
-  --warm-cache-gb 10 \
-  --rayon-threads 16 \
-  --max-inflight-families 32 \
-  --timing-breakdown
-```
-
-## Install Rust
-
-If `cargo` is not available, install Rust with rustup:
-
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Then restart your shell so `cargo` is on `PATH`.
-
-Then open:
-
-```
-http://localhost:3007/viewer/demo_out
-```
-
 ## Performance Tuning Guide
 
 ### Thread Pool Configuration
@@ -135,8 +244,6 @@ The server uses a layered concurrency design with separate thread pools for diff
 
 #### Apple Silicon (M1/M2/M3)
 
-For Apple M-series processors with unified memory architecture:
-
 | Processor | P-cores | E-cores | --rayon-threads | --tokio-workers | --tokio-blocking-threads | --max-inflight-families |
 |-----------|---------|---------|-----------------|-----------------|---------------------------|-------------------------|
 | M1/M2/M3  | 4       | 4       | 6               | 4               | 18                        | 12                      |
@@ -144,30 +251,7 @@ For Apple M-series processors with unified memory architecture:
 | M1/M2 Max | 8-10    | 2-4     | 10              | 6               | 30                        | 20                      |
 | M4/M5     | 4       | 6       | 8               | 4               | 24                        | 16                      |
 
-**Example for M5 (4P + 6E cores):**
-```bash
-cargo run --manifest-path server/Cargo.toml -- \
-  --slides-root data \
-  --port 3007 \
-  --rayon-threads 8 \
-  --tokio-workers 4 \
-  --tokio-blocking-threads 24 \
-  --max-inflight-families 16 \
-  --buffer-pool-size 256
-```
-
-**Rationale:**
-- **rayon-threads**: Slight undercommit (8 vs 10 logical cores) since E-cores are ~65% the throughput of P-cores
-- **tokio-workers**: Async coordination doesn't need much CPU
-- **tokio-blocking-threads**: 3× rayon threads (mostly parked waiting)
-- **max-inflight-families**: 2× rayon threads (real concurrency cap)
-- **buffer-pool-size**: 16 × max-inflight-families (adjust based on memory)
-
-⚠️ **Apple Silicon Note**: Unified memory means CPU and GPU share bandwidth. Display compositing or GPU work may affect performance.
-
 #### x86_64 Processors
-
-For Intel/AMD processors:
 
 | Cores | --rayon-threads | --tokio-workers | --tokio-blocking-threads | --max-inflight-families |
 |-------|-----------------|-----------------|---------------------------|-------------------------|
@@ -184,13 +268,7 @@ For Intel/AMD processors:
 --warm-cache-gb <gb>       # RocksDB cache size
 ```
 
-**Memory calculation:**
-- Each L0 tile: ~100-200KB encoded
-- Buffer pool: `buffer_pool_size × 256KB` (for 256×256 RGB buffers)
-- Hot cache: Store frequently accessed tiles in memory
-- Warm cache: Persistent storage for generated tiles
-
-### All Available Flags
+### All Serve Flags
 
 ```
 --timing-breakdown                    # Enable detailed timing logs
@@ -206,25 +284,9 @@ For Intel/AMD processors:
 --prewarm-on-l2                       # Pre-generate L1/L0 when L2 accessed
 ```
 
-## libjpeg-turbo (Homebrew)
-
-If you prefer using Homebrew’s libjpeg-turbo instead of building from source:
-
-```
-brew install libjpeg-turbo
-```
-
-Then build with:
-
-```
-TURBOJPEG_SOURCE=explicit \
-TURBOJPEG_DYNAMIC=1 \
-TURBOJPEG_LIB_DIR=$(brew --prefix jpeg-turbo)/lib \
-TURBOJPEG_INCLUDE_DIR=$(brew --prefix jpeg-turbo)/include \
-cargo build --manifest-path server/Cargo.toml
-```
-
 ## Notes
 
 - L2 and above are served from `baseline_pyramid_files`.
 - L1/L0 tiles are reconstructed from residuals when present; missing residuals fall back to baseline tiles.
+- The `serve` subcommand uses turbojpeg for decoding only — no encoder features needed.
+- The `encode` subcommand uses whichever encoder backend was compiled in via feature flags.

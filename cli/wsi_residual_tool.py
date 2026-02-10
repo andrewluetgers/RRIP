@@ -264,7 +264,7 @@ def pack_residuals(residuals_dir: pathlib.Path, out_dir: pathlib.Path):
         raise FileNotFoundError("Expected residuals/L1 and residuals/L0 directories")
 
     parents = sorted({p.name for p in l1_dir.iterdir() if p.is_dir()} | {p.name for p in l0_dir.iterdir() if p.is_dir()})
-    magic = b"RRIP"
+    magic = b"ORIG"
     version = 1
     tile_size = 256
 

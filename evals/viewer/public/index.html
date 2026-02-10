@@ -10,29 +10,29 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 6px;
             background: #f5f5f5;
         }
 
         .header {
             background: white;
-            padding: 15px;
+            padding: 10px 15px;
             border-radius: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         h1 {
-            margin: 0 0 10px 0;
+            margin: 0 0 6px 0;
             color: #333;
-            font-size: 24px;
+            font-size: 20px;
         }
 
         /* Process Diagram */
         .process-diagram {
             background: white;
-            padding: 20px;
-            margin-top: 20px;
+            padding: 10px;
+            margin-top: 6px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -115,21 +115,21 @@
         }
 
         select {
-            padding: 6px 10px;
+            padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             background: white;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         button {
-            padding: 6px 12px;
+            padding: 8px 14px;
             background: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         button:hover {
@@ -156,20 +156,32 @@
             resize: both;
             min-width: 400px;
             min-height: 400px;
+            max-height: 92vh;
         }
 
         .grid-container {
-            display: table;
             border-collapse: collapse;
             width: fit-content;
         }
 
-        .grid-row {
-            display: table-row;
+        .grid-container thead th {
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 10px 8px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            min-width: var(--cell-size, 150px);
+            height: 40px;
+            border: 1px solid #e0e0e0;
+            border-bottom: 2px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+            vertical-align: middle;
         }
 
-        .grid-cell {
-            display: table-cell;
+        .grid-container td {
             padding: 0;
             text-align: center;
             vertical-align: middle;
@@ -178,45 +190,31 @@
             position: relative;
         }
 
-        .header-cell {
-            background: #f8f9fa;
-            font-weight: bold;
-            font-size: 13px;
-            padding: 8px 5px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            min-width: var(--cell-size, 150px);
-            height: 32px;
-        }
-
         .row-label {
             background: #f8f9fa;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 15px;
             text-align: left;
-            padding: 8px 10px;
+            padding: 8px !important;
             position: sticky;
             left: 0;
             z-index: 5;
-            min-width: 200px;
-            height: var(--cell-size, 150px);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            min-width: 240px;
+            vertical-align: middle;
         }
 
         .row-label .stage-name {
             font-weight: bold;
             color: #007bff;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
+            font-size: 16px;
         }
 
         .row-label .stage-desc {
             font-weight: normal;
-            font-size: 10px;
+            font-size: 13px;
             color: #6c757d;
-            line-height: 1.3;
+            line-height: 1.4;
         }
 
         .image-cell {
@@ -284,37 +282,46 @@
 
         .no-image {
             color: #999;
-            font-size: 11px;
+            font-size: 14px;
             text-align: center;
             padding: 10px;
         }
 
+        .metric-td {
+            padding: 0;
+            min-width: var(--cell-size, 150px);
+            background: #f8f9fa;
+            height: 1px;
+        }
+
         .metric-cell {
-            padding: 10px;
+            padding: 10px 14px;
             background: #f8f9fa;
             font-family: monospace;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: var(--cell-size, 150px);
+            font-size: 18px;
+            text-align: center;
+            height: 100%;
         }
 
         .metric-value {
-            font-weight: bold;
+            font-weight: normal;
             color: #007bff;
-            font-size: 16px;
+            font-size: 20px;
+        }
+
+        .metric-value.best {
+            font-weight: bold;
         }
 
         .metric-unit {
             margin-left: 5px;
             color: #6c757d;
-            font-size: 12px;
+            font-size: 15px;
         }
 
         .metric-error {
             color: #dc3545;
-            font-size: 12px;
+            font-size: 15px;
         }
 
         .stage-label {
@@ -356,7 +363,7 @@
             gap: 10px;
             align-items: center;
             justify-content: center;
-            margin: 10px 0;
+            margin: 4px 0;
         }
 
         .zoom-btn {
@@ -410,15 +417,150 @@
             text-align: center;
             padding: 20px;
         }
+
+        .charts-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .charts-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .charts-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .chart-filters {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .chart-filter-btn {
+            padding: 5px 12px;
+            background: #f0f0f0;
+            color: #555;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+
+        .chart-filter-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .chart-filter-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+            gap: 12px;
+        }
+
+        .chart-card {
+            display: none;
+        }
+
+        .chart-card.visible {
+            display: block;
+        }
+
+        .chart-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .reference-footer {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .reference-footer h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .reference-footer blockquote {
+            margin: 8px 0 8px 16px;
+            padding: 6px 12px;
+            border-left: 3px solid #dee2e6;
+            background: #f8f9fa;
+            font-style: italic;
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.5;
+        }
+
+        .reference-footer blockquote .cite {
+            display: block;
+            margin-top: 4px;
+            font-style: normal;
+            font-size: 11px;
+            color: #6c757d;
+        }
+
+        .reference-footer blockquote .cite a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .reference-footer blockquote .cite a:hover {
+            text-decoration: underline;
+        }
+
+        .reference-footer h4 {
+            margin: 14px 0 6px 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .reference-footer p {
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.6;
+            margin: 6px 0;
+        }
+
+        .reference-footer .note {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 6px;
+            font-style: italic;
+        }
     </style>
 </head>
-<body>
+<body class="zoom-actual">
     <div class="header">
         <h1>ORIGAMI Multi-Run Comparison Viewer</h1>
 
-        <!-- Process Diagram -->
-        <div class="process-diagram">
-            <h2 style="text-align: center; color: #333;">ORIGAMI Compression &amp; Decompression Pipeline</h2>
+        <!-- Process Diagram (collapsed by default) -->
+        <details class="process-diagram">
+            <summary style="cursor: pointer; font-weight: bold; font-size: 16px; color: #333;">Pipeline Diagram</summary>
 
             <div class="process-title">Compression Process</div>
             <div class="pipeline">
@@ -484,7 +626,7 @@
             <div style="margin-top: 10px; font-size: 11px; color: #6c757d; text-align: center;">
                 <strong>Key:</strong> J = JPEG quality &bull; L2 = lowest resolution &bull; L1 = medium &bull; L0 = highest
             </div>
-        </div>
+        </details>
 
         <div class="controls">
             <div class="tile-selector">
@@ -497,19 +639,20 @@
 
             <div class="column-controls">
                 <label>Add Column:</label>
+                <input type="text" id="filterInput" placeholder="Filter runs..." oninput="filterAddColumnDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; width: 160px;">
                 <select id="addColumn">
-                    <option value="">Select Q/J...</option>
+                    <option value="">Select run...</option>
                 </select>
                 <button onclick="addSelectedColumn()">Add</button>
-                <button onclick="loadAllJpegQualities()" title="Load all JPEG qualities for current quantization">Load All J</button>
-                <button onclick="loadAllQuantizations()" title="Load all quantizations for current JPEG quality">Load All Q</button>
+                <button onclick="loadAllColumns()" title="Load all available runs">Load All</button>
+                <button onclick="clearAllColumns()" style="background: #6c757d;" title="Remove all columns">Clear All</button>
             </div>
         </div>
 
         <div class="zoom-controls">
             <label style="font-size: 14px;">Zoom:</label>
-            <button class="zoom-btn active" data-zoom="fit" onclick="setZoom('fit')">Fit</button>
-            <button class="zoom-btn" data-zoom="actual" onclick="setZoom('actual')">Actual (1:1)</button>
+            <button class="zoom-btn" data-zoom="fit" onclick="setZoom('fit')">Fit</button>
+            <button class="zoom-btn active" data-zoom="actual" onclick="setZoom('actual')">Actual (1:1)</button>
             <button class="zoom-btn" data-zoom="2x" onclick="setZoom('2x')">2x</button>
         </div>
     </div>
@@ -523,18 +666,113 @@
         <button onclick="nextTile()">Next Tile &rarr;</button>
     </div>
 
+    <div class="charts-section" id="chartsSection">
+        <div class="charts-header">
+            <h2>Metric Charts</h2>
+            <div class="chart-filters" id="chartFilters"></div>
+        </div>
+        <div class="charts-grid" id="chartsGrid">
+            <div class="loading">Loading charts...</div>
+        </div>
+    </div>
+
+    <div class="reference-footer">
+        <h3>On Image Quality Metrics in Digital Pathology</h3>
+
+        <p>
+            No validated clinical thresholds exist for PSNR, SSIM, LPIPS, or other full-reference image quality
+            metrics in digital pathology. The literature explicitly warns against treating these metrics as
+            reliable proxies for diagnostic quality. The values shown above are useful for <em>relative comparison</em>
+            between encoders and quality levels, but should not be interpreted as pass/fail criteria.
+        </p>
+
+        <h4>No Reliable Metric Predicts Diagnostic Impact</h4>
+        <blockquote>
+            &ldquo;There is no metric available that can reliably predict human judgments of image quality
+            in compressed images.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11889581/" target="_blank">Fischer et al. 2024, WSI Compression Baselines (PMC)</a></span>
+        </blockquote>
+
+        <h4>Compression Tolerance Is Higher Than Metrics Suggest</h4>
+        <p>
+            The only study to measure actual segmentation and pathologist performance across compression levels
+            found that 85% compression preserved 95% of deep learning performance, and that the practical
+            breakdown point aligned with where pathologists themselves reported difficulty &mdash; not where
+            metrics like PSNR or SSIM first begin to degrade.
+        </p>
+        <blockquote>
+            &ldquo;DP images can be compressed by 85% while still maintaining the performance of the DL algorithms
+            at 95% of what is achievable without any compression.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank">Chen et al. 2020, JCO Clinical Cancer Informatics</a></span>
+        </blockquote>
+        <blockquote>
+            &ldquo;The maximum compression level sustainable by DL algorithms is similar to where pathologists
+            also reported difficulties in providing accurate interpretations.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank">Chen et al. 2020, JCO Clinical Cancer Informatics</a></span>
+        </blockquote>
+
+        <h4>LPIPS Was Not Designed for Medical Imaging</h4>
+        <blockquote>
+            &ldquo;[LPIPS] has not been rigorously tested nor developed for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+
+        <h4>Metrics Systematically Fail in Medical Contexts</h4>
+        <blockquote>
+            &ldquo;Currently and to the best of our knowledge, there is no publicly available database
+            with full-reference ratings for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+        <blockquote>
+            &ldquo;Discrepancies in medical scenarios &hellip; might imply wrong judgement of novel methods
+            for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+
+        <h4>Codec-Specific Distortion Patterns Confound Metrics</h4>
+        <p>
+            Different codecs (JPEG, JPEG XL, WebP, learned methods) produce structurally different distortion
+            patterns. Pixel-level metrics like PSNR/SSIM and even learned metrics like LPIPS may penalize one
+            codec&rsquo;s artifacts more harshly than another&rsquo;s at equivalent perceptual quality. JPEG XL in particular
+            uses adaptive perceptual quantization that can produce lower metric scores while remaining
+            visually indistinguishable at moderate compression ratios.
+        </p>
+
+        <h4>References</h4>
+        <p style="font-size: 11px; color: #6c757d; line-height: 1.8;">
+            [1] Chen et al. &ldquo;Assessment of Computational Pathology Deep Learning Algorithms&rsquo; Robustness to Image Compression.&rdquo;
+            JCO Clinical Cancer Informatics, 2020.
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank" style="color: #007bff;">PMC</a>
+            &bull; Measures nuclei segmentation F-score and pathologist comfort across JPEG/JPEG2000 compression levels on uncompressed WSIs. Found 85% compression preserved 95% of DL performance. Recommends caution below PSNR 40 dB for new applications.<br>
+            [2] Fischer et al. &ldquo;Enhanced Diagnostic Fidelity in Pathology Whole Slide Image Compression via Deep Learning.&rdquo;
+            MLMI/MICCAI 2023. <a href="https://link.springer.com/chapter/10.1007/978-3-031-45676-3_43" target="_blank" style="color: #007bff;">Springer</a>
+            &bull; Tests JPEG, WebP, JPEG-XL, and deep learning codecs on pathology WSIs. Provides rate-distortion curves but establishes no diagnostic quality cutoffs.<br>
+            [3] Fischer et al. &ldquo;WSI Compression Baselines.&rdquo; PMC 2024.
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11889581/" target="_blank" style="color: #007bff;">PMC</a>
+            &bull; Evaluates JPEG, JPEG-XL, WebP, and learned codecs against uncompressed originals. Proposes foundation-model feature similarity as an alternative to pixel-level metrics. No thresholds recommended.<br>
+            [4] Kastryulin et al. &ldquo;Image Quality Assessment for Medical Imaging: A Reassessment.&rdquo; 2025.
+            <a href="https://arxiv.org/html/2405.19097v2" target="_blank" style="color: #007bff;">arXiv</a>
+            &bull; Comprehensive audit of PSNR, SSIM, and LPIPS across six medical imaging modalities. Finds systematic failures in all three metrics and recommends caution in their use for medical image evaluation.
+        </p>
+    </div>
+
     <script>
         let captures = {};
         let activeColumns = [];
         let availableTiles = [];
         let currentTileIndex = 0;
-        let currentZoom = 'fit';
+        let currentZoom = 'actual';
         let globalScale = 1;
         let globalPanX = 0;
         let globalPanY = 0;
         let isDragging = false;
         let dragStartX = 0;
         let dragStartY = 0;
+
+        // Sanitize capture keys for use as DOM element IDs
+        function colId(col) {
+            return col.replace(/\s+/g, '_');
+        }
 
         // Image stages to display as rows
         const imageStages = [
@@ -603,14 +841,6 @@
                 file: 'residual_centered'
             },
             {
-                id: 'jpeg_size',
-                label: 'JPEG Residual Size',
-                stage: 'Metric',
-                desc: 'Size of compressed luminance residual JPEG file',
-                type: 'metric',
-                metric: 'jpeg_size'
-            },
-            {
                 id: 'reconstructed_rgb',
                 label: 'Reconstructed RGB',
                 stage: 'Stage K',
@@ -619,83 +849,116 @@
                 file: 'reconstructed'
             },
             {
-                id: 'final_size',
-                label: 'Final Tile Size',
+                id: 'tile_size',
+                label: 'Tile Size \u2193',
                 stage: 'Metric',
-                desc: 'Total storage size for this tile (residual + metadata)',
+                desc: 'Per-tile encoded size (baseline: tile file, ORIGAMI: residual)',
                 type: 'metric',
-                metric: 'final_size'
+                metric: 'tile_size'
             },
             {
-                id: 'compression_ratio',
-                label: 'Compression Ratio',
+                id: 'tile_ratio',
+                label: 'Tile Ratio \u2191',
                 stage: 'Metric',
-                desc: 'Ratio compared to uncompressed RGB (196KB)',
+                desc: '(source \u00F7 20) \u00F7 tile size',
                 type: 'metric',
-                metric: 'compression_ratio'
+                metric: 'tile_ratio'
             },
             {
-                id: 'pack_size',
-                label: 'Family Pack Size',
+                id: 'family_size',
+                label: 'Family Size \u2193',
                 stage: 'Metric',
-                desc: 'LZ4-compressed family pack: L0+L1 tiles bundled with byte offset index',
+                desc: 'L0 (16) + L1 (4) = 20 tiles, LZ4 packed or summed',
                 type: 'metric',
-                metric: 'pack_size'
+                metric: 'family_size'
+            },
+            {
+                id: 'family_ratio',
+                label: 'Family Ratio \u2191',
+                stage: 'Metric',
+                desc: 'Original family size \u00F7 encoded family size',
+                type: 'metric',
+                metric: 'family_ratio'
             },
             {
                 id: 'psnr',
-                label: 'PSNR',
+                label: 'Avg PSNR \u2191',
                 stage: 'Metric',
-                desc: 'Peak Signal-to-Noise Ratio (dB) compared to original',
+                desc: 'Peak Signal-to-Noise Ratio (dB) \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'psnr'
             },
             {
                 id: 'ssim',
-                label: 'SSIM',
+                label: 'Avg SSIM \u2191',
                 stage: 'Metric',
-                desc: 'Structural Similarity Index (0-1) compared to original',
+                desc: 'Structural Similarity Index (0-1) \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'ssim'
             },
             {
                 id: 'mse',
-                label: 'MSE',
+                label: 'Avg MSE \u2193',
                 stage: 'Metric',
-                desc: 'Mean Squared Error (lower is better)',
+                desc: 'Mean Squared Error \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'mse'
             },
             {
                 id: 'vif',
-                label: 'VIF',
+                label: 'Avg VIF \u2191',
                 stage: 'Metric',
-                desc: 'Visual Information Fidelity (0-1, higher is better)',
+                desc: 'Visual Information Fidelity (0-1) \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'vif'
             },
             {
                 id: 'delta_e',
-                label: 'Delta E',
+                label: 'Avg Delta E \u2193',
                 stage: 'Metric',
-                desc: 'CIE Delta E color difference (lower is better)',
+                desc: 'CIE Delta E color difference \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'delta_e'
+            },
+            {
+                id: 'lpips',
+                label: 'Avg LPIPS \u2193',
+                stage: 'Metric',
+                desc: 'Learned Perceptual Image Patch Similarity (0=identical) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'lpips'
             }
         ];
 
         // Cell size variable for resizing
         let cellSize = 150;
 
+        function sortColumns(columns) {
+            // Sort: JPEG baselines left (ascending quality), ORIGAMI right (ascending quality)
+            return columns.slice().sort((a, b) => {
+                const aIsBaseline = a.startsWith('JPEG ');
+                const bIsBaseline = b.startsWith('JPEG ');
+                // Baselines before ORIGAMI
+                if (aIsBaseline && !bIsBaseline) return -1;
+                if (!aIsBaseline && bIsBaseline) return 1;
+                // Within same type, sort by quality number ascending
+                const aNum = parseInt(a.match(/(\d+)$/)?.[1] || '0');
+                const bNum = parseInt(b.match(/(\d+)$/)?.[1] || '0');
+                if (aNum !== bNum) return aNum - bNum;
+                // Same quality, sort by encoder name
+                return a.localeCompare(b);
+            });
+        }
+
         async function loadCaptures() {
             try {
                 const response = await fetch('/captures.json');
                 captures = await response.json();
 
-                // Initialize with just the first available column
-                const firstCapture = Object.keys(captures).sort()[0];
-                if (firstCapture) {
-                    activeColumns = [firstCapture];
+                // Restore saved state, or start with no columns
+                const restored = restoreState();
+                if (!restored) {
+                    activeColumns = [];
                 }
 
                 // Populate add column dropdown
@@ -704,9 +967,9 @@
                 // Build tile list
                 buildTileList();
 
-                // Load first tile
+                // Load saved tile index or first tile
                 if (availableTiles.length > 0) {
-                    loadTile(0);
+                    loadTile(currentTileIndex);
                 }
             } catch (error) {
                 console.error('Failed to load captures:', error);
@@ -746,22 +1009,29 @@
 
         function updateAddColumnDropdown() {
             const select = document.getElementById('addColumn');
-            select.innerHTML = '<option value="">Select Q/J...</option>';
+            const filterText = (document.getElementById('filterInput')?.value || '').toLowerCase();
+            select.innerHTML = '<option value="">Select run...</option>';
 
-            Object.keys(captures).forEach(key => {
+            sortColumns(Object.keys(captures)).forEach(key => {
                 if (!activeColumns.includes(key)) {
+                    if (filterText && !key.toLowerCase().includes(filterText)) return;
                     const option = document.createElement('option');
                     option.value = key;
-                    option.textContent = key.replace('_', '/');
+                    option.textContent = key;
                     select.appendChild(option);
                 }
             });
+        }
+
+        function filterAddColumnDropdown() {
+            updateAddColumnDropdown();
         }
 
         async function loadTile(index) {
             if (index < 0 || index >= availableTiles.length) return;
 
             currentTileIndex = index;
+            saveState();
             const tile = availableTiles[index];
 
             document.getElementById('tileSelect').value = index;
@@ -775,60 +1045,52 @@
         function buildComparisonGrid(tile) {
             const grid = document.getElementById('comparisonGrid');
 
-            let html = '<div class="grid-container">';
+            let html = '<table class="grid-container">';
 
             // Header row
-            html += '<div class="grid-row">';
-            html += '<div class="grid-cell header-cell">Stage</div>';
-            html += '<div class="grid-cell header-cell">Original</div>';
+            html += '<thead><tr>';
+            html += '<th>Stage</th>';
+            html += '<th>Original</th>';
 
             activeColumns.forEach(col => {
-                html += `<div class="grid-cell header-cell column-header">
-                    ${col.replace('_', '/')}
-                    <button class="remove-column" onclick="removeColumn('${col}')">&times;</button>
-                </div>`;
+                const escapedCol = col.replace(/'/g, "\\'");
+                html += `<th class="column-header">
+                    ${col}
+                    <button class="remove-column" onclick="removeColumn('${escapedCol}')">&times;</button>
+                </th>`;
             });
-            html += '</div>';
+            html += '</tr></thead>';
+
+            html += '<tbody>';
 
             // Data rows for each image stage
             imageStages.forEach(stage => {
-                html += '<div class="grid-row">';
-                html += `<div class="grid-cell row-label">
-                    <div class="stage-name">${stage.label} (${stage.stage})</div>
+                html += '<tr>';
+                html += `<td class="row-label">
+                    <div class="stage-name">${stage.label}</div>
                     <div class="stage-desc">${stage.desc}</div>
-                </div>`;
+                </td>`;
 
                 if (stage.type === 'metric') {
                     // Metric row - display text/numbers
                     // Original column for metrics (show baseline sizes)
-                    html += '<div class="grid-cell image-cell">';
+                    html += '<td class="metric-td">';
                     html += `<div class="metric-cell" id="orig_${stage.id}">`;
-                    if (stage.metric === 'compression_ratio') {
-                        html += '<span class="metric-value">1:1</span>';
-                    } else if (stage.metric === 'pack_size') {
-                        html += '<span class="metric-value">N/A</span>';
-                    } else if (stage.metric === 'jpeg_size' || stage.metric === 'final_size') {
-                        const baselinePerTileL0 = 27;
-                        const baselinePerTileL1 = 27.5;
-                        const baselinePerTileL2 = 28.5;
+                    // Source image: 604,392 bytes
+                    // Family = L0 (16) + L1 (4) = 20 tiles, no L2
+                    const sourceBytes = 604392;
+                    const sourcePerTile = sourceBytes / 20;
+                    const sourcePerTileKB = (sourcePerTile / 1024).toFixed(1);
+                    const sourceKB = (sourceBytes / 1024).toFixed(1);
 
-                        let totalKB = 0;
-                        if (stage.metric === 'jpeg_size') {
-                            if (tile.level === 'L0') {
-                                totalKB = baselinePerTileL0;
-                            } else if (tile.level === 'L1') {
-                                totalKB = baselinePerTileL1;
-                            }
-                        } else if (stage.metric === 'final_size') {
-                            if (tile.level === 'L0') {
-                                totalKB = baselinePerTileL0;
-                            } else if (tile.level === 'L1') {
-                                totalKB = baselinePerTileL1;
-                            } else if (tile.level === 'L2') {
-                                totalKB = baselinePerTileL2;
-                            }
-                        }
-                        html += `<span class="metric-value">${totalKB.toFixed(1)}</span><span class="metric-unit">KB</span>`;
+                    if (stage.metric === 'tile_size') {
+                        html += `<span class="metric-value">${sourcePerTileKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(source \u00F7 20)</span>`;
+                    } else if (stage.metric === 'tile_ratio') {
+                        html += '<span class="metric-value">1:1</span>';
+                    } else if (stage.metric === 'family_size') {
+                        html += `<span class="metric-value">${sourceKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(1024px source)</span>`;
+                    } else if (stage.metric === 'family_ratio') {
+                        html += '<span class="metric-value">1:1</span>';
                     } else if (stage.metric === 'psnr') {
                         html += '<span class="metric-value">&infin;</span><span class="metric-unit">dB</span>';
                     } else if (stage.metric === 'ssim') {
@@ -839,43 +1101,45 @@
                         html += '<span class="metric-value">1.0000</span>';
                     } else if (stage.metric === 'delta_e') {
                         html += '<span class="metric-value">0.00</span>';
+                    } else if (stage.metric === 'lpips') {
+                        html += '<span class="metric-value">0.0000</span>';
                     } else {
                         html += '<span class="metric-value">Baseline</span>';
                     }
                     html += '</div>';
-                    html += '</div>';
+                    html += '</td>';
 
                     // Capture columns for metrics
                     activeColumns.forEach(col => {
-                        html += '<div class="grid-cell image-cell">';
-                        html += `<div class="metric-cell" id="${col}_${stage.id}">`;
+                        html += '<td class="metric-td">';
+                        html += `<div class="metric-cell" id="${colId(col)}_${stage.id}">`;
                         html += '<span class="metric-value">Loading...</span>';
                         html += '</div>';
-                        html += '</div>';
+                        html += '</td>';
                     });
                 } else {
                     // Image row - display images
                     // Original column
-                    html += '<div class="grid-cell image-cell">';
+                    html += '<td class="image-cell">';
                     html += '<div class="image-viewport">';
                     html += `<div id="orig_${stage.id}" class="loading">...</div>`;
                     html += '</div>';
-                    html += '</div>';
+                    html += '</td>';
 
                     // Capture columns
                     activeColumns.forEach(col => {
-                        html += '<div class="grid-cell image-cell">';
+                        html += '<td class="image-cell">';
                         html += '<div class="image-viewport">';
-                        html += `<div id="${col}_${stage.id}" class="loading">...</div>`;
+                        html += `<div id="${colId(col)}_${stage.id}" class="loading">...</div>`;
                         html += '</div>';
-                        html += '</div>';
+                        html += '</td>';
                     });
                 }
 
-                html += '</div>';
+                html += '</tr>';
             });
 
-            html += '</div>';
+            html += '</tbody></table>';
             grid.innerHTML = html;
 
             // Load images for all columns
@@ -886,20 +1150,23 @@
         }
 
         async function loadTileImages(tile) {
-            // Load original column - always use Q256_J90 or highest quality available as reference
+            // Load original column - use the highest quality ORIGAMI run as reference
             let referenceCapture = null;
 
-            if (captures['Q256_J90']) {
-                referenceCapture = 'Q256_J90';
-            } else if (captures['Q32_J50']) {
-                referenceCapture = 'Q32_J50';
+            // Prefer highest quality ORIGAMI run, then highest JPEG baseline
+            const origamiRuns = Object.keys(captures)
+                .filter(k => captures[k].type === 'origami')
+                .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
+                .sort((a, b) => b.quality - a.quality);
+            if (origamiRuns.length > 0) {
+                referenceCapture = origamiRuns[0].key;
             } else {
-                const jpegQualities = Object.keys(captures)
-                    .filter(k => k.startsWith('JPEG_Q'))
-                    .map(k => ({ key: k, quality: parseInt(k.replace('JPEG_Q', '')) }))
+                const baselineRuns = Object.keys(captures)
+                    .filter(k => captures[k].type === 'jpeg_baseline')
+                    .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
                     .sort((a, b) => b.quality - a.quality);
-                if (jpegQualities.length > 0) {
-                    referenceCapture = jpegQualities[0].key;
+                if (baselineRuns.length > 0) {
+                    referenceCapture = baselineRuns[0].key;
                 }
             }
 
@@ -911,22 +1178,83 @@
                 });
             }
 
-            // Load each capture column
+            // Load each capture column, collecting metric promises
+            const metricPromises = [];
             activeColumns.forEach(col => {
                 if (captures[col]) {
                     imageStages.forEach(stage => {
                         if (stage.type === 'metric') {
-                            loadMetric(col, stage, tile, col);
+                            metricPromises.push(loadMetric(col, stage, tile, col));
                         } else {
                             loadStageImage(col, stage, tile, col, false);
                         }
                     });
                 }
             });
+
+            // After all metrics load, colorize by relative quality
+            Promise.all(metricPromises).then(() => colorizeMetrics());
+        }
+
+        // Which metrics are "higher is better" (true) vs "lower is better" (false)
+        const metricDirection = {
+            tile_size: false,
+            tile_ratio: true,
+            family_size: false,
+            family_ratio: true,
+            psnr: true,
+            ssim: true,
+            mse: false,
+            vif: true,
+            delta_e: false,
+            lpips: false,
+        };
+
+        function colorizeMetrics() {
+            const metricStages = imageStages.filter(s => s.type === 'metric');
+
+            metricStages.forEach(stage => {
+                const higherBetter = metricDirection[stage.metric] ?? true;
+                const cells = [];
+
+                activeColumns.forEach(col => {
+                    const el = document.getElementById(`${colId(col)}_${stage.id}`);
+                    if (el && el.dataset.metricValue !== undefined) {
+                        cells.push({ el, value: parseFloat(el.dataset.metricValue) });
+                    }
+                });
+
+                if (cells.length < 2) return;
+
+                const values = cells.map(c => c.value);
+                const bestVal = higherBetter ? Math.max(...values) : Math.min(...values);
+                const worstVal = higherBetter ? Math.min(...values) : Math.max(...values);
+                const range = Math.abs(bestVal - worstVal);
+
+                cells.forEach(({ el, value }) => {
+                    // Bold only the best value(s)
+                    const valSpan = el.querySelector('.metric-value');
+                    if (valSpan) {
+                        valSpan.classList.toggle('best', value === bestVal);
+                    }
+
+                    if (range === 0) {
+                        el.style.background = 'rgba(40, 167, 69, 0.15)';
+                        return;
+                    }
+                    // 0 = worst, 1 = best
+                    const normalized = higherBetter
+                        ? (value - worstVal) / range
+                        : (worstVal - value) / range;
+                    // Best gets strong green, worst gets nearly transparent
+                    const alpha = (0.08 + normalized * 0.25).toFixed(3);
+                    el.style.background = `rgba(40, 167, 69, ${alpha})`;
+                });
+            });
         }
 
         async function loadMetric(columnId, stage, tile, captureKey) {
-            const container = document.getElementById(`${columnId}_${stage.id}`);
+            const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
             if (!container) return;
 
             try {
@@ -954,150 +1282,164 @@
                         return null;
                     }
 
+                    // Source image: 604,392 bytes, family = 20 tiles (L0+L1)
+                    const sourceBytes = 604392;
+                    const sourcePerTile = sourceBytes / 20;
+
+                    // Helper: get L0+L1 family bytes (no L2)
+                    function getFamilyBytes(manifest, isBaseline) {
+                        if (isBaseline) {
+                            // Pack has 20 entries (L0+L1)
+                            if (manifest.pack && manifest.pack.size) return manifest.pack.size;
+                            // Fallback: sum L0+L1 tile sizes
+                            if (manifest.tiles) {
+                                let sum = 0;
+                                for (const k in manifest.tiles) {
+                                    if (k.startsWith('L0_') || k.startsWith('L1_')) {
+                                        sum += manifest.tiles[k].size_bytes;
+                                    }
+                                }
+                                if (sum > 0) return sum;
+                            }
+                        } else {
+                            // ORIGAMI: L0 + L1 residuals only (no L2 baseline)
+                            if (manifest.size_comparison) {
+                                const l0 = manifest.size_comparison.origami_L0_residuals || 0;
+                                const l1 = manifest.size_comparison.origami_L1_residuals || 0;
+                                if (l0 + l1 > 0) return l0 + l1;
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Helper: get per-tile bytes for current tile (L0/L1 only)
+                    function getTileBytes(manifest, tile, isBaseline) {
+                        if (tile.level === 'L2') return null; // excluded
+                        if (isBaseline) {
+                            if (manifest.tiles && manifest.tiles[tile.id]) {
+                                return manifest.tiles[tile.id].size_bytes;
+                            }
+                        } else {
+                            // ORIGAMI: find actual residual file_size from compression_phase
+                            const coords = tile.id.split('_').slice(1).join('_');
+                            const tileKey = `tile_${coords}`;
+                            const phase = manifest.compression_phase && manifest.compression_phase[tile.level];
+                            if (phase && phase[tileKey]) {
+                                for (const fname in phase[tileKey]) {
+                                    if (fname.includes('residual_jpeg') && phase[tileKey][fname].file_size) {
+                                        return phase[tileKey][fname].file_size;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Average a visual metric across all L0+L1 family tiles
+                    function avgFamilyMetric(manifest, isBaseline, baselineKey, origamiKey) {
+                        const vals = [];
+                        if (isBaseline) {
+                            if (manifest.tiles) {
+                                for (const k in manifest.tiles) {
+                                    if ((k.startsWith('L0_') || k.startsWith('L1_')) && manifest.tiles[k][baselineKey] != null) {
+                                        vals.push(manifest.tiles[k][baselineKey]);
+                                    }
+                                }
+                            }
+                        } else {
+                            for (const level of ['L0', 'L1']) {
+                                const phase = manifest.decompression_phase && manifest.decompression_phase[level];
+                                if (phase) {
+                                    for (const tk in phase) {
+                                        if (phase[tk][origamiKey] != null) {
+                                            vals.push(phase[tk][origamiKey]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                    }
+
                     switch(stage.metric) {
-                        case 'jpeg_size':
-                            if (isJpegBaseline) {
-                                html = `<span class="metric-value">Baseline</span>`;
-                            } else {
-                                if (manifest.size_comparison) {
-                                    if (tile.level === 'L0') {
-                                        value = manifest.size_comparison.origami_L0_residuals;
-                                    } else if (tile.level === 'L1') {
-                                        value = manifest.size_comparison.origami_L1_residuals;
-                                    }
-                                    if (value) {
-                                        const tilesAtLevel = tile.level === 'L0' ? 16 : 4;
-                                        const bytesPerTile = value / tilesAtLevel;
-                                        const kb = (bytesPerTile / 1024).toFixed(2);
-                                        html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
-                                    }
-                                }
+                        case 'tile_size': {
+                            const tileBytes = getTileBytes(manifest, tile, isJpegBaseline);
+                            if (tileBytes) {
+                                value = tileBytes;
+                                const kb = (tileBytes / 1024).toFixed(2);
+                                const label = isJpegBaseline ? '' : '<br><span class="metric-unit">(residual)</span>';
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>${label}`;
                             }
                             break;
-                        case 'final_size':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].size_bytes;
-                                    const kb = (value / 1024).toFixed(2);
-                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
-                                }
-                            } else {
-                                if (manifest.size_comparison && manifest.size_comparison.origami_total) {
-                                    value = manifest.size_comparison.origami_total;
-                                    const tilesTotal = 20;
-                                    const bytesPerTile = value / tilesTotal;
-                                    const kb = (bytesPerTile / 1024).toFixed(2);
-                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
-                                }
+                        }
+                        case 'tile_ratio': {
+                            const tileBytes = getTileBytes(manifest, tile, isJpegBaseline);
+                            if (tileBytes) {
+                                value = sourcePerTile / tileBytes;
+                                html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
                             }
                             break;
-                        case 'compression_ratio':
-                            if (isJpegBaseline) {
-                                if (manifest.statistics && manifest.statistics.compression_ratio) {
-                                    value = manifest.statistics.compression_ratio;
-                                    html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
-                                }
-                            } else {
-                                if (manifest.size_comparison && manifest.size_comparison.overall_compression_ratio) {
-                                    value = manifest.size_comparison.overall_compression_ratio;
-                                    html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
-                                }
+                        }
+                        case 'family_size': {
+                            const familyBytes = getFamilyBytes(manifest, isJpegBaseline);
+                            if (familyBytes) {
+                                value = familyBytes;
+                                const kb = (familyBytes / 1024).toFixed(1);
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
                             }
                             break;
-                        case 'pack_size':
-                            if (isJpegBaseline) {
-                                if (manifest.pack && manifest.pack.size) {
-                                    value = manifest.pack.size;
-                                    const kb = (value / 1024).toFixed(1);
-                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
-                                }
-                            } else {
-                                if (manifest.pac_file && manifest.pac_file.size) {
-                                    value = manifest.pac_file.size;
-                                    const kb = (value / 1024).toFixed(1);
-                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
-                                }
+                        }
+                        case 'family_ratio': {
+                            const familyBytes = getFamilyBytes(manifest, isJpegBaseline);
+                            if (familyBytes) {
+                                value = sourceBytes / familyBytes;
+                                html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
                             }
                             break;
+                        }
                         case 'psnr':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].psnr;
-                                    if (value) {
-                                        html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
-                                    }
-                                }
-                            } else {
-                                value = getOrigamiMetric(manifest, tile, 'final_psnr');
-                                if (value !== null) {
-                                    html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
-                                }
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'psnr', 'final_psnr');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
                             }
                             break;
                         case 'ssim':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].ssim;
-                                    if (value) {
-                                        html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                                    }
-                                }
-                            } else {
-                                value = getOrigamiMetric(manifest, tile, 'final_ssim');
-                                if (value !== null) {
-                                    html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                                }
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'ssim', 'final_ssim');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
                             }
                             break;
                         case 'mse':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].mse;
-                                    if (value) {
-                                        html = `<span class="metric-value">${value.toFixed(1)}</span>`;
-                                    }
-                                }
-                            } else {
-                                value = getOrigamiMetric(manifest, tile, 'final_mse');
-                                if (value !== null) {
-                                    html = `<span class="metric-value">${value.toFixed(1)}</span>`;
-                                }
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'mse', 'final_mse');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(1)}</span>`;
                             }
                             break;
                         case 'vif':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].vif;
-                                    if (value) {
-                                        html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                                    }
-                                }
-                            } else {
-                                value = getOrigamiMetric(manifest, tile, 'final_vif');
-                                if (value !== null) {
-                                    html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                                }
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'vif', 'final_vif');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
                             }
                             break;
                         case 'delta_e':
-                            if (isJpegBaseline) {
-                                if (manifest.tiles && manifest.tiles[tile.id]) {
-                                    value = manifest.tiles[tile.id].delta_e;
-                                    if (value) {
-                                        html = `<span class="metric-value">${value.toFixed(2)}</span>`;
-                                    }
-                                }
-                            } else {
-                                value = getOrigamiMetric(manifest, tile, 'final_delta_e');
-                                if (value !== null) {
-                                    html = `<span class="metric-value">${value.toFixed(2)}</span>`;
-                                }
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'delta_e', 'final_delta_e');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(2)}</span>`;
+                            }
+                            break;
+                        case 'lpips':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'lpips', 'final_lpips');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
                             }
                             break;
                     }
 
                     if (html) {
                         container.innerHTML = html;
+                        if (value !== null) {
+                            container.dataset.metricValue = value;
+                        }
                     } else {
                         container.innerHTML = '<span class="metric-error">N/A</span>';
                     }
@@ -1111,7 +1453,7 @@
         }
 
         function loadStageImage(columnId, stage, tile, captureKey, isOriginal) {
-            const container = document.getElementById(`${columnId}_${stage.id}`);
+            const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
             if (!container) return;
 
             const capture = captures[captureKey];
@@ -1156,17 +1498,19 @@
 
             if (col && !activeColumns.includes(col)) {
                 activeColumns.push(col);
-                activeColumns.sort();
+                activeColumns = sortColumns(activeColumns);
                 updateAddColumnDropdown();
+                saveState();
                 loadTile(currentTileIndex);
             }
         }
 
         function removeColumn(col) {
             const index = activeColumns.indexOf(col);
-            if (index > -1 && activeColumns.length > 1) {
+            if (index > -1) {
                 activeColumns.splice(index, 1);
                 updateAddColumnDropdown();
+                saveState();
                 loadTile(currentTileIndex);
             }
         }
@@ -1199,6 +1543,8 @@
             document.querySelectorAll('.zoom-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.zoom === zoom);
             });
+
+            saveState();
         }
 
         function applyTransform() {
@@ -1324,46 +1670,55 @@
             });
         }
 
-        function loadAllJpegQualities() {
-            if (activeColumns.length === 0) return;
-
-            const firstCol = activeColumns[0];
-            const match = firstCol.match(/Q(\d+)_J(\d+)/);
-            if (!match) return;
-
-            const targetQ = match[1];
-
-            const newColumns = Object.keys(captures).filter(key => {
-                const m = key.match(/Q(\d+)_J(\d+)/);
-                return m && m[1] === targetQ;
-            }).sort();
-
-            if (newColumns.length > 0) {
-                activeColumns = newColumns;
-                updateAddColumnDropdown();
-                loadTile(currentTileIndex);
-            }
+        function loadAllColumns() {
+            activeColumns = sortColumns(Object.keys(captures));
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
         }
 
-        function loadAllQuantizations() {
-            if (activeColumns.length === 0) return;
+        function clearAllColumns() {
+            activeColumns = [];
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
+        }
 
-            const firstCol = activeColumns[0];
-            const match = firstCol.match(/Q(\d+)_J(\d+)/);
-            if (!match) return;
+        // --- LocalStorage persistence ---
+        const STORAGE_KEY = 'origami_viewer_state';
 
-            const targetJ = match[2];
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    activeColumns,
+                    currentTileIndex,
+                    currentZoom,
+                    cellSize,
+                }));
+            } catch (e) { /* ignore */ }
+        }
 
-            const newColumns = Object.keys(captures).filter(key => {
-                const m = key.match(/Q(\d+)_J(\d+)/);
-                return m && m[2] === targetJ;
-            }).sort();
-
-            if (newColumns.length > 0) {
-                activeColumns = newColumns;
-                updateAddColumnDropdown();
-                loadTile(currentTileIndex);
-            }
+        function restoreState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return false;
+                const state = JSON.parse(raw);
+                if (state.activeColumns && Array.isArray(state.activeColumns)) {
+                    // Only keep columns that still exist in captures
+                    activeColumns = state.activeColumns.filter(c => captures[c]);
+                }
+                if (typeof state.currentTileIndex === 'number') {
+                    currentTileIndex = state.currentTileIndex;
+                }
+                if (state.currentZoom) {
+                    setZoom(state.currentZoom);
+                }
+                if (typeof state.cellSize === 'number') {
+                    cellSize = state.cellSize;
+                    document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
+                }
+                return activeColumns.length > 0;
+            } catch (e) { return false; }
         }
 
         // Setup global event handlers once
@@ -1391,8 +1746,77 @@
             loadTile(parseInt(this.value));
         });
 
+        // Chart filter categories
+        const chartCategories = {
+            'all':            { label: 'All',              match: () => true },
+            'vs_quality':     { label: 'Metric vs Quality', match: f => f.includes('_vs_quality') && !f.includes('size_vs_quality') && !f.includes('pack_size_vs_quality') },
+            'size_quality':   { label: 'Size vs Quality',   match: f => f === 'size_vs_quality.png' || f === 'pack_size_vs_quality.png' },
+            'rd_size':        { label: 'Metric vs Size',    match: f => f.includes('_vs_size.png') && !f.includes('pack') },
+            'rd_pack':        { label: 'Metric vs Pack Size', match: f => f.includes('_vs_pack_size.png') },
+            'psnr':           { label: 'PSNR',             match: f => f.startsWith('psnr_') },
+            'ssim':           { label: 'SSIM',             match: f => f.startsWith('ssim_') },
+            'vif':            { label: 'VIF',              match: f => f.startsWith('vif_') },
+            'delta_e':        { label: 'Delta E',          match: f => f.startsWith('delta_e_') },
+            'mse':            { label: 'MSE',              match: f => f.startsWith('mse_') },
+            'lpips':          { label: 'LPIPS',            match: f => f.startsWith('lpips_') },
+        };
+
+        let activeChartFilter = 'all';
+        let allChartFiles = [];
+
+        function setChartFilter(category) {
+            activeChartFilter = category;
+
+            // Update button states
+            document.querySelectorAll('.chart-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === category);
+            });
+
+            // Show/hide chart cards
+            const matcher = chartCategories[category].match;
+            document.querySelectorAll('.chart-card').forEach(card => {
+                const file = card.dataset.file;
+                card.classList.toggle('visible', matcher(file));
+            });
+        }
+
+        async function loadCharts() {
+            try {
+                const response = await fetch('/charts.json');
+                allChartFiles = await response.json();
+                const grid = document.getElementById('chartsGrid');
+                const filters = document.getElementById('chartFilters');
+
+                if (allChartFiles.length === 0) {
+                    grid.innerHTML = '<div class="loading">No charts found. Run: uv run python evals/scripts/generate_charts.py</div>';
+                    return;
+                }
+
+                // Build filter buttons
+                filters.innerHTML = Object.entries(chartCategories).map(([key, cat]) => {
+                    const count = allChartFiles.filter(f => cat.match(f)).length;
+                    if (count === 0 && key !== 'all') return '';
+                    const active = key === activeChartFilter ? ' active' : '';
+                    return `<button class="chart-filter-btn${active}" data-category="${key}" onclick="setChartFilter('${key}')">${cat.label} (${count})</button>`;
+                }).join('');
+
+                // Build chart cards
+                grid.innerHTML = allChartFiles.map(file => {
+                    const name = file.replace('.png', '').replace(/_/g, ' ');
+                    const visible = chartCategories[activeChartFilter].match(file) ? ' visible' : '';
+                    return `<div class="chart-card${visible}" data-file="${file}">
+                        <img src="/charts/${file}" alt="${name}" loading="lazy">
+                    </div>`;
+                }).join('');
+            } catch (error) {
+                document.getElementById('chartsGrid').innerHTML =
+                    '<div class="loading">Failed to load charts</div>';
+            }
+        }
+
         // Initialize on load
         loadCaptures();
+        loadCharts();
     </script>
 </body>
 </html>

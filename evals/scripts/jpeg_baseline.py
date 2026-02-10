@@ -13,7 +13,10 @@ from PIL import Image
 from datetime import datetime
 from skimage.metrics import structural_similarity as ssim, mean_squared_error
 from skimage.color import rgb2lab, deltaE_cie76
-from jpeg_encoder import JpegEncoder, encode_jpeg_to_file, parse_encoder_arg
+from jpeg_encoder import (
+    JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes,
+    parse_encoder_arg, is_jxl_encoder, decode_jxl_to_image, file_extension,
+)
 
 # Try to import lz4 for pack compression
 try:
@@ -30,6 +33,16 @@ try:
 except ImportError:
     HAS_VIF = False
     print("Warning: sewar library not available, VIF metrics will be skipped")
+
+# Try to import lpips for perceptual similarity
+try:
+    import torch
+    import lpips as lpips_lib
+    _lpips_net = None
+    HAS_LPIPS = True
+except ImportError:
+    HAS_LPIPS = False
+    print("Warning: lpips/torch not available, LPIPS metrics will be skipped")
 
 def calculate_psnr(img1, img2):
     """Calculate PSNR between two images."""
@@ -86,6 +99,26 @@ def calculate_delta_e(img1, img2):
 
     except Exception as e:
         print(f"Delta E calculation error: {e}")
+        return None
+
+def calculate_lpips(img1, img2):
+    """Calculate LPIPS perceptual similarity between two RGB images.
+    Returns a float where lower = more similar (0 = identical)."""
+    if not HAS_LPIPS:
+        return None
+    try:
+        global _lpips_net
+        if _lpips_net is None:
+            _lpips_net = lpips_lib.LPIPS(net='alex', verbose=False)
+        # LPIPS expects tensors in [-1, 1] range, shape (N, 3, H, W)
+        # Input images are uint8 [0, 255] RGB (H, W, 3)
+        img1_t = torch.from_numpy(img1.copy()).float().permute(2, 0, 1).unsqueeze(0) / 127.5 - 1.0
+        img2_t = torch.from_numpy(img2.copy()).float().permute(2, 0, 1).unsqueeze(0) / 127.5 - 1.0
+        with torch.no_grad():
+            d = _lpips_net(img1_t, img2_t)
+        return float(d.item())
+    except Exception as e:
+        print(f"LPIPS calculation error: {e}")
         return None
 
 def create_family_pack(tiles_dir, output_dir, tile_size=256):
@@ -203,10 +236,14 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
         }
     }
 
+    use_jxl = is_jxl_encoder(encoder)
+    ext = file_extension(encoder)
+
     # Process L0 tiles (4x4 grid from top-left 1024x1024)
     l0_stats = []
     vif_stats = []
     delta_e_stats = []
+    lpips_stats = []
     print(f"Processing L0 tiles (4x4 grid)...")
     for dy in range(4):
         for dx in range(4):
@@ -214,21 +251,33 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
             x_start = dx * tile_size
             tile = img_array[y_start:y_start+tile_size, x_start:x_start+tile_size]
 
-            # Save at specified JPEG quality
-            tile_path = tiles_dir / f"L0_{dx}_{dy}.jpg"
             tile_img = Image.fromarray(tile)
-            file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+
+            if use_jxl:
+                # Encode to JXL, measure size, decode to PNG (lossless) for viewer
+                jxl_path = tiles_dir / f"L0_{dx}_{dy}.jxl"
+                file_size = encode_jpeg_to_file(tile_img, jxl_path, jpeg_quality, encoder)
+                decoded_img = decode_jxl_to_image(jxl_path)
+                png_path = tiles_dir / f"L0_{dx}_{dy}.png"
+                decoded_img.save(str(png_path), format="PNG")
+                compressed = np.array(decoded_img.convert("RGB"))
+                # Keep both .jxl source and .png for viewer
+            else:
+                tile_path = tiles_dir / f"L0_{dx}_{dy}.jpg"
+                file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+                compressed = np.array(Image.open(tile_path).convert("RGB"))
 
             # Calculate metrics vs original
-            compressed = np.array(Image.open(tile_path).convert("RGB"))
             psnr_val = calculate_psnr(tile, compressed)
             ssim_val = ssim(tile, compressed, channel_axis=2, data_range=255)
             mse_val = mean_squared_error(tile, compressed)
             vif_val = calculate_vif(tile, compressed)
             delta_e_val = calculate_delta_e(tile, compressed)
+            lpips_val = calculate_lpips(tile, compressed)
 
+            display_ext = ".png" if use_jxl else ".jpg"
             tile_info = {
-                "file": f"L0_{dx}_{dy}.jpg",
+                "file": f"L0_{dx}_{dy}{display_ext}",
                 "size_bytes": file_size,
                 "psnr": float(psnr_val),
                 "ssim": float(ssim_val),
@@ -239,6 +288,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 tile_info["vif"] = vif_val
             if delta_e_val is not None:
                 tile_info["delta_e"] = delta_e_val
+            if lpips_val is not None:
+                tile_info["lpips"] = lpips_val
 
             manifest["tiles"][f"L0_{dx}_{dy}"] = tile_info
             manifest["statistics"]["total_bytes"] += file_size
@@ -247,6 +298,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 vif_stats.append(vif_val)
             if delta_e_val is not None:
                 delta_e_stats.append(delta_e_val)
+            if lpips_val is not None:
+                lpips_stats.append(lpips_val)
 
     # Process L1 tiles (2x2 grid, downsampled from 1024x1024 to 512x512)
     print(f"Processing L1 tiles (2x2 grid)...")
@@ -260,21 +313,31 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
             x_start = dx * tile_size
             tile = l1_array[y_start:y_start+tile_size, x_start:x_start+tile_size]
 
-            # Save at specified JPEG quality
-            tile_path = tiles_dir / f"L1_{dx}_{dy}.jpg"
             tile_img = Image.fromarray(tile)
-            file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+
+            if use_jxl:
+                jxl_path = tiles_dir / f"L1_{dx}_{dy}.jxl"
+                file_size = encode_jpeg_to_file(tile_img, jxl_path, jpeg_quality, encoder)
+                decoded_img = decode_jxl_to_image(jxl_path)
+                png_path = tiles_dir / f"L1_{dx}_{dy}.png"
+                decoded_img.save(str(png_path), format="PNG")
+                compressed = np.array(decoded_img.convert("RGB"))
+            else:
+                tile_path = tiles_dir / f"L1_{dx}_{dy}.jpg"
+                file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+                compressed = np.array(Image.open(tile_path).convert("RGB"))
 
             # Calculate metrics vs original
-            compressed = np.array(Image.open(tile_path).convert("RGB"))
             psnr_val = calculate_psnr(tile, compressed)
             ssim_val = ssim(tile, compressed, channel_axis=2, data_range=255)
             mse_val = mean_squared_error(tile, compressed)
             vif_val = calculate_vif(tile, compressed)
             delta_e_val = calculate_delta_e(tile, compressed)
+            lpips_val = calculate_lpips(tile, compressed)
 
+            display_ext = ".png" if use_jxl else ".jpg"
             tile_info = {
-                "file": f"L1_{dx}_{dy}.jpg",
+                "file": f"L1_{dx}_{dy}{display_ext}",
                 "size_bytes": file_size,
                 "psnr": float(psnr_val),
                 "ssim": float(ssim_val),
@@ -285,6 +348,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 tile_info["vif"] = vif_val
             if delta_e_val is not None:
                 tile_info["delta_e"] = delta_e_val
+            if lpips_val is not None:
+                tile_info["lpips"] = lpips_val
 
             manifest["tiles"][f"L1_{dx}_{dy}"] = tile_info
             manifest["statistics"]["total_bytes"] += file_size
@@ -293,6 +358,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 vif_stats.append(vif_val)
             if delta_e_val is not None:
                 delta_e_stats.append(delta_e_val)
+            if lpips_val is not None:
+                lpips_stats.append(lpips_val)
 
     # Process L2 tile (single tile, downsampled from 1024x1024 to 256x256)
     print(f"Processing L2 tile...")
@@ -300,21 +367,32 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
     l2_downsampled = Image.fromarray(l2_source).resize((256, 256), Image.LANCZOS)
     l2_array = np.array(l2_downsampled)
 
-    # Save at specified JPEG quality
-    tile_path = tiles_dir / f"L2_0_0.jpg"
+    # Save at specified quality
     tile_img = Image.fromarray(l2_array)
-    file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+
+    if use_jxl:
+        jxl_path = tiles_dir / "L2_0_0.jxl"
+        file_size = encode_jpeg_to_file(tile_img, jxl_path, jpeg_quality, encoder)
+        decoded_img = decode_jxl_to_image(jxl_path)
+        png_path = tiles_dir / "L2_0_0.png"
+        decoded_img.save(str(png_path), format="PNG")
+        compressed = np.array(decoded_img.convert("RGB"))
+    else:
+        tile_path = tiles_dir / "L2_0_0.jpg"
+        file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
+        compressed = np.array(Image.open(tile_path).convert("RGB"))
 
     # Calculate metrics vs original
-    compressed = np.array(Image.open(tile_path).convert("RGB"))
     psnr_val = calculate_psnr(l2_array, compressed)
     ssim_val = ssim(l2_array, compressed, channel_axis=2, data_range=255)
     mse_val = mean_squared_error(l2_array, compressed)
     vif_val = calculate_vif(l2_array, compressed)
     delta_e_val = calculate_delta_e(l2_array, compressed)
+    lpips_val = calculate_lpips(l2_array, compressed)
 
+    display_ext = ".png" if use_jxl else ".jpg"
     tile_info = {
-        "file": f"L2_0_0.jpg",
+        "file": f"L2_0_0{display_ext}",
         "size_bytes": file_size,
         "psnr": float(psnr_val),
         "ssim": float(ssim_val),
@@ -325,6 +403,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
         tile_info["vif"] = vif_val
     if delta_e_val is not None:
         tile_info["delta_e"] = delta_e_val
+    if lpips_val is not None:
+        tile_info["lpips"] = lpips_val
 
     manifest["tiles"]["L2_0_0"] = tile_info
     manifest["statistics"]["total_bytes"] += file_size
@@ -333,6 +413,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
         vif_stats.append(vif_val)
     if delta_e_val is not None:
         delta_e_stats.append(delta_e_val)
+    if lpips_val is not None:
+        lpips_stats.append(lpips_val)
 
     # Calculate statistics
     manifest["statistics"]["tile_count"] = len(manifest["tiles"])
@@ -349,6 +431,9 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
 
     if delta_e_stats:
         manifest["statistics"]["average_delta_e"] = float(np.mean(delta_e_stats))
+
+    if lpips_stats:
+        manifest["statistics"]["average_lpips"] = float(np.mean(lpips_stats))
 
     # Calculate reference size (at quality 95)
     reference_bytes = 0
@@ -392,6 +477,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
             f.write(f"Average VIF: {manifest['statistics']['average_vif']:.4f}\n")
         if 'average_delta_e' in manifest['statistics']:
             f.write(f"Average Delta E: {manifest['statistics']['average_delta_e']:.2f}\n")
+        if 'average_lpips' in manifest['statistics']:
+            f.write(f"Average LPIPS: {manifest['statistics']['average_lpips']:.4f}\n")
 
     print(f"\n{'-' * 50}")
     print(f"JPEG Q{jpeg_quality} Baseline Complete")
@@ -403,6 +490,8 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
         print(f"Average VIF: {manifest['statistics']['average_vif']:.4f}")
     if 'average_delta_e' in manifest['statistics']:
         print(f"Average Delta E: {manifest['statistics']['average_delta_e']:.2f}")
+    if 'average_lpips' in manifest['statistics']:
+        print(f"Average LPIPS: {manifest['statistics']['average_lpips']:.4f}")
 
 def main():
     parser = argparse.ArgumentParser(description="Create JPEG baseline captures")
@@ -410,16 +499,21 @@ def main():
     parser.add_argument("--quality", type=int, required=True, help="JPEG quality (1-100)")
     parser.add_argument("--output", help="Output directory (auto-generated if not specified)")
     parser.add_argument("--encoder", default="libjpeg-turbo",
-                       help="JPEG encoder: libjpeg-turbo (default) or jpegli")
+                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, or jpegxl")
 
     args = parser.parse_args()
     encoder = parse_encoder_arg(args.encoder)
 
     if args.output is None:
-        prefix = "jpegli_" if encoder == JpegEncoder.JPEGLI else ""
+        # Auto-generate: {encoder}_jpeg_baseline_q{Q}
+        # libjpeg-turbo is the default, no prefix needed
+        if encoder == JpegEncoder.LIBJPEG_TURBO:
+            prefix = ""
+        else:
+            prefix = encoder.value + "_"
         args.output = f"evals/runs/{prefix}jpeg_baseline_q{args.quality}"
 
-    print(f"Creating JPEG baseline at quality {args.quality} with {encoder.value}")
+    print(f"Creating baseline at quality {args.quality} with {encoder.value}")
     print(f"Output directory: {args.output}")
 
     tile_and_compress(args.image, args.output, jpeg_quality=args.quality, encoder=encoder)
