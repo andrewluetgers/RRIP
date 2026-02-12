@@ -30,6 +30,7 @@ parking_lot = "0.12"
 lz4_flex = "0.11"
 libc = "0.2"
 jpegxl-rs = { version = "0.11", optional = true, features = ["vendored"] }
+webp = "0.3"
 
 [features]
 default = []

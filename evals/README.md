@@ -51,11 +51,22 @@ bash evals/scripts/run_jpegli_captures.sh
 
 Parameters for ORIGAMI runs:
 - `--resq` - JPEG quality for residual images (10-100)
+- `--l1q` - Override quality for L1 residuals (default: use `--resq`)
+- `--l0q` - Override quality for L0 residuals (default: use `--resq`)
 - `--baseq` - JPEG quality for baseline L2 tile (default 95)
 - `--pac` - Create a PAC file for tile serving
 - `--tile` - Tile size in pixels (default 256)
-- `--encoder` - `libjpeg-turbo` (default) or `jpegli`
+- `--encoder` - `libjpeg-turbo` (default), `jpegli`, `mozjpeg`, `jpegxl`, or `webp`
 - `--out` - Output directory (defaults to `evals/runs/...`)
+
+Split-quality example (higher L1, lower L0):
+```bash
+python evals/scripts/wsi_residual_debug_with_manifest.py \
+    --image evals/test-images/L0-1024.jpg \
+    --l1q 70 --l0q 40 --pac
+```
+
+See [split-quality-research.md](split-quality-research.md) for the full analysis showing that balanced splits gain +1.5 dB for free.
 
 ### Viewing Results
 
@@ -73,8 +84,11 @@ The viewer automatically scans `evals/runs/` for all run directories.
 |----------|---------|-------------|
 | JPEG Baseline | libjpeg-turbo | `jpeg_baseline_q{Q}` |
 | JPEG Baseline | jpegli | `jpegli_jpeg_baseline_q{Q}` |
-| ORIGAMI | libjpeg-turbo | `debug_j{J}_pac` |
-| ORIGAMI | jpegli | `jpegli_debug_j{J}_pac` |
+| JPEG Baseline | webp | `webp_jpeg_baseline_q{Q}` |
+| ORIGAMI (uniform) | libjpeg-turbo | `debug_j{J}_pac` |
+| ORIGAMI (uniform) | jpegli | `jpegli_debug_j{J}_pac` |
+| ORIGAMI (uniform) | webp | `webp_debug_j{J}_pac` |
+| ORIGAMI (split) | libjpeg-turbo | `debug_l1q{N}_l0q{N}_pac` |
 | ORIGAMI (legacy) | libjpeg-turbo | `debug_q{Q}_j{J}_pac` |
 
 ## Metrics

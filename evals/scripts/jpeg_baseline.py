@@ -15,7 +15,7 @@ from skimage.metrics import structural_similarity as ssim, mean_squared_error
 from skimage.color import rgb2lab, deltaE_cie76
 from jpeg_encoder import (
     JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes,
-    parse_encoder_arg, is_jxl_encoder, decode_jxl_to_image, file_extension,
+    parse_encoder_arg, is_jxl_encoder, is_webp_encoder, decode_jxl_to_image, file_extension,
 )
 
 # Try to import lz4 for pack compression
@@ -137,16 +137,20 @@ def create_family_pack(tiles_dir, output_dir, tile_size=256):
     # L1: 4 tiles (level_kind=1)
     for dy in range(2):
         for dx in range(2):
-            p = tiles_dir / f"L1_{dx}_{dy}.jpg"
-            if p.exists():
-                entries.append((1, dy * 2 + dx, p.read_bytes()))
+            for tile_ext in ['.jpg', '.webp', '.jxl']:
+                p = tiles_dir / f"L1_{dx}_{dy}{tile_ext}"
+                if p.exists():
+                    entries.append((1, dy * 2 + dx, p.read_bytes()))
+                    break
 
     # L0: 16 tiles (level_kind=0)
     for dy in range(4):
         for dx in range(4):
-            p = tiles_dir / f"L0_{dx}_{dy}.jpg"
-            if p.exists():
-                entries.append((0, dy * 4 + dx, p.read_bytes()))
+            for tile_ext in ['.jpg', '.webp', '.jxl']:
+                p = tiles_dir / f"L0_{dx}_{dy}{tile_ext}"
+                if p.exists():
+                    entries.append((0, dy * 4 + dx, p.read_bytes()))
+                    break
 
     if not entries:
         return None
@@ -263,7 +267,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 compressed = np.array(decoded_img.convert("RGB"))
                 # Keep both .jxl source and .png for viewer
             else:
-                tile_path = tiles_dir / f"L0_{dx}_{dy}.jpg"
+                tile_path = tiles_dir / f"L0_{dx}_{dy}{ext}"
                 file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
                 compressed = np.array(Image.open(tile_path).convert("RGB"))
 
@@ -275,7 +279,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
             delta_e_val = calculate_delta_e(tile, compressed)
             lpips_val = calculate_lpips(tile, compressed)
 
-            display_ext = ".png" if use_jxl else ".jpg"
+            display_ext = ".png" if use_jxl else ext
             tile_info = {
                 "file": f"L0_{dx}_{dy}{display_ext}",
                 "size_bytes": file_size,
@@ -323,7 +327,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
                 decoded_img.save(str(png_path), format="PNG")
                 compressed = np.array(decoded_img.convert("RGB"))
             else:
-                tile_path = tiles_dir / f"L1_{dx}_{dy}.jpg"
+                tile_path = tiles_dir / f"L1_{dx}_{dy}{ext}"
                 file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
                 compressed = np.array(Image.open(tile_path).convert("RGB"))
 
@@ -335,7 +339,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
             delta_e_val = calculate_delta_e(tile, compressed)
             lpips_val = calculate_lpips(tile, compressed)
 
-            display_ext = ".png" if use_jxl else ".jpg"
+            display_ext = ".png" if use_jxl else ext
             tile_info = {
                 "file": f"L1_{dx}_{dy}{display_ext}",
                 "size_bytes": file_size,
@@ -378,7 +382,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
         decoded_img.save(str(png_path), format="PNG")
         compressed = np.array(decoded_img.convert("RGB"))
     else:
-        tile_path = tiles_dir / "L2_0_0.jpg"
+        tile_path = tiles_dir / f"L2_0_0{ext}"
         file_size = encode_jpeg_to_file(tile_img, tile_path, jpeg_quality, encoder)
         compressed = np.array(Image.open(tile_path).convert("RGB"))
 
@@ -390,7 +394,7 @@ def tile_and_compress(image_path, output_dir, jpeg_quality=90, tile_size=256, re
     delta_e_val = calculate_delta_e(l2_array, compressed)
     lpips_val = calculate_lpips(l2_array, compressed)
 
-    display_ext = ".png" if use_jxl else ".jpg"
+    display_ext = ".png" if use_jxl else ext
     tile_info = {
         "file": f"L2_0_0{display_ext}",
         "size_bytes": file_size,
@@ -499,7 +503,7 @@ def main():
     parser.add_argument("--quality", type=int, required=True, help="JPEG quality (1-100)")
     parser.add_argument("--output", help="Output directory (auto-generated if not specified)")
     parser.add_argument("--encoder", default="libjpeg-turbo",
-                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, or jpegxl")
+                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, jpegxl, or webp")
 
     args = parser.parse_args()
     encoder = parse_encoder_arg(args.encoder)

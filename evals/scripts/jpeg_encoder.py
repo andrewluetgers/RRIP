@@ -2,7 +2,7 @@
 jpeg_encoder.py
 
 Shared encoder module supporting libjpeg-turbo (Pillow), jpegli (cjpegli CLI),
-mozjpeg (vendor/mozjpeg/bin/cjpeg), and JPEG XL (cjxl/djxl).
+mozjpeg (vendor/mozjpeg/bin/cjpeg), JPEG XL (cjxl/djxl), and WebP (Pillow).
 
 Usage:
     from jpeg_encoder import JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes
@@ -18,6 +18,9 @@ Usage:
 
     # With JPEG XL encoder (output is .jxl, not .jpg)
     encode_jpeg_to_file(image, "output.jxl", quality=75, encoder=JpegEncoder.JPEGXL)
+
+    # With WebP encoder (output is .webp)
+    encode_jpeg_to_file(image, "output.webp", quality=75, encoder=JpegEncoder.WEBP)
 
     # Get encoded bytes in memory
     data = encode_jpeg_to_bytes(image, quality=75, encoder=JpegEncoder.JPEGXL)
@@ -47,11 +50,17 @@ class JpegEncoder(enum.Enum):
     JPEGLI = "jpegli"
     MOZJPEG = "mozjpeg"
     JPEGXL = "jpegxl"
+    WEBP = "webp"
 
 
 def is_jxl_encoder(encoder: JpegEncoder) -> bool:
     """Return True if the encoder produces JXL output instead of JPEG."""
     return encoder == JpegEncoder.JPEGXL
+
+
+def is_webp_encoder(encoder: JpegEncoder) -> bool:
+    """Return True if the encoder produces WebP output instead of JPEG."""
+    return encoder == JpegEncoder.WEBP
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +263,23 @@ def decode_jxl_to_image(source) -> Image.Image:
 
 
 # ---------------------------------------------------------------------------
+# WebP (Pillow — native support, no external tools needed)
+# ---------------------------------------------------------------------------
+
+def _encode_webp_to_file(image: Image.Image, output_path: str, quality: int) -> int:
+    """Encode WebP using Pillow. Returns file size in bytes."""
+    image.save(output_path, format="WEBP", quality=quality)
+    return Path(output_path).stat().st_size
+
+
+def _encode_webp_to_bytes(image: Image.Image, quality: int) -> bytes:
+    """Encode WebP using Pillow. Returns WebP bytes."""
+    buf = io.BytesIO()
+    image.save(buf, format="WEBP", quality=quality)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -285,6 +311,8 @@ def encode_jpeg_to_file(
         if not _check_cjxl():
             raise RuntimeError("cjxl not found. Install libjxl.")
         return _encode_jxl_to_file(image, output_path, quality)
+    elif encoder == JpegEncoder.WEBP:
+        return _encode_webp_to_file(image, output_path, quality)
     else:
         return _encode_libjpeg(image, output_path, quality)
 
@@ -315,6 +343,8 @@ def encode_jpeg_to_bytes(
         if not _check_cjxl():
             raise RuntimeError("cjxl not found. Install libjxl.")
         return _encode_jxl_to_bytes(image, quality)
+    elif encoder == JpegEncoder.WEBP:
+        return _encode_webp_to_bytes(image, quality)
     else:
         buf = io.BytesIO()
         image.save(buf, format="JPEG", quality=quality, optimize=True)
@@ -322,9 +352,11 @@ def encode_jpeg_to_bytes(
 
 
 def file_extension(encoder: JpegEncoder) -> str:
-    """Return the file extension for the given encoder (.jpg or .jxl)."""
+    """Return the file extension for the given encoder (.jpg, .jxl, or .webp)."""
     if encoder == JpegEncoder.JPEGXL:
         return ".jxl"
+    if encoder == JpegEncoder.WEBP:
+        return ".webp"
     return ".jpg"
 
 
@@ -338,11 +370,12 @@ def parse_encoder_arg(value: str) -> JpegEncoder:
         "mozjpeg": JpegEncoder.MOZJPEG,
         "jpegxl": JpegEncoder.JPEGXL,
         "jxl": JpegEncoder.JPEGXL,
+        "webp": JpegEncoder.WEBP,
     }
     key = value.lower().strip()
     if key not in mapping:
         raise ValueError(
             f"Unknown encoder: {value}. "
-            "Choose from: libjpeg-turbo, jpegli, mozjpeg, jpegxl"
+            "Choose from: libjpeg-turbo, jpegli, mozjpeg, jpegxl, webp"
         )
     return mapping[key]

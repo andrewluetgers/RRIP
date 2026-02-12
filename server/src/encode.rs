@@ -16,6 +16,28 @@ use crate::turbojpeg_optimized::load_rgb_turbo;
 
 /// Decode grayscale residual bytes, dispatching to the correct codec.
 fn decode_residual_bytes(data: &[u8]) -> Result<Vec<u8>> {
+    // WebP detection: bytes 0-3 = "RIFF", bytes 8-11 = "WEBP"
+    let is_webp = data.len() >= 12
+        && &data[0..4] == b"RIFF"
+        && &data[8..12] == b"WEBP";
+    if is_webp {
+        let decoder = webp::Decoder::new(data);
+        let img = decoder
+            .decode()
+            .ok_or_else(|| anyhow::anyhow!("webp decode failed"))?;
+        let rgb = img.to_vec();
+        let w = img.width() as usize;
+        let h = img.height() as usize;
+        // Extract R channel (all channels identical for gray-encoded WebP)
+        let mut gray = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                gray.push(rgb[(y * w + x) * 3]);
+            }
+        }
+        return Ok(gray);
+    }
+
     #[cfg(feature = "jpegxl")]
     {
         // JXL codestream: 0xFF 0x0A; JXL container: 12-byte signature
@@ -62,7 +84,7 @@ pub struct EncodeArgs {
     #[arg(long, default_value_t = 50)]
     pub resq: u8,
 
-    /// Encoder backend: turbojpeg, mozjpeg, jpegli, jpegxl
+    /// Encoder backend: turbojpeg, mozjpeg, jpegli, jpegxl, webp
     #[arg(long, default_value = "turbojpeg")]
     pub encoder: String,
 
@@ -74,6 +96,15 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub pack: bool,
 
+}
+
+/// Return the file extension for the given encoder name.
+fn output_extension(encoder_name: &str) -> &'static str {
+    match encoder_name {
+        "webp" => ".webp",
+        "jpegxl" => ".jxl",
+        _ => ".jpg",
+    }
 }
 
 pub fn run(args: EncodeArgs) -> Result<()> {
@@ -124,6 +155,7 @@ pub fn run(args: EncodeArgs) -> Result<()> {
 
     let tile_size = pyramid.tile_size;
     let resq = args.resq;
+    let ext = output_extension(encoder.name());
     let mut total_l1 = 0usize;
     let mut total_l0 = 0usize;
     let mut total_bytes = 0usize;
@@ -195,7 +227,7 @@ pub fn run(args: EncodeArgs) -> Result<()> {
                 total_bytes += jpeg_data.len();
 
                 // Write residual file
-                let out_path = l1_parent_dir.join(format!("{}_{}.jpg", x1, y1));
+                let out_path = l1_parent_dir.join(format!("{}_{}{}", x1, y1, ext));
                 fs::write(&out_path, &jpeg_data)?;
 
                 // Decode the residual back to get the actual reconstructed Y
@@ -274,7 +306,7 @@ pub fn run(args: EncodeArgs) -> Result<()> {
                 total_l0 += 1;
                 total_bytes += jpeg_data.len();
 
-                let out_path = l0_parent_dir.join(format!("{}_{}.jpg", x0, y0));
+                let out_path = l0_parent_dir.join(format!("{}_{}{}", x0, y0, ext));
                 fs::write(&out_path, &jpeg_data)?;
 
                 if args.pack {

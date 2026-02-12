@@ -20,7 +20,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage.color import rgb2lab, deltaE_cie76
 from jpeg_encoder import (
     JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes,
-    parse_encoder_arg, is_jxl_encoder, decode_jxl_to_image, file_extension,
+    parse_encoder_arg, is_jxl_encoder, is_webp_encoder, decode_jxl_to_image, file_extension,
 )
 
 try:
@@ -141,6 +141,7 @@ def save_image_with_stats(arr, path, step_num, name_suffix, normalize=False,
     # Save with appropriate quality
     full_path = path / filename
     use_jxl = is_jxl_encoder(encoder)
+    use_webp = is_webp_encoder(encoder)
 
     if filename.endswith('.jpg'):
         if use_jxl:
@@ -155,6 +156,13 @@ def save_image_with_stats(arr, path, step_num, name_suffix, normalize=False,
             encoded_size = jxl_size
             full_path = png_path  # return png path for reconstruction
             filename = filename.replace('.jpg', '.png')
+        elif use_webp:
+            # Encode as WebP (browsers display natively, no PNG copy needed)
+            webp_filename = filename.replace('.jpg', '.webp')
+            webp_path = path / webp_filename
+            encoded_size = encode_jpeg_to_file(img, webp_path, quality or 75, encoder)
+            full_path = webp_path
+            filename = webp_filename
         else:
             encode_jpeg_to_file(img, full_path, quality or 75, encoder)
             encoded_size = get_file_size(full_path)
@@ -246,6 +254,10 @@ def save_baseline_jpeg(arr, path, name, quality=95, encoder=JpegEncoder.LIBJPEG_
         decoded_img.save(str(png_path), format="PNG")
         # Keep .jxl source; return png path for viewer
         return png_path, jxl_size
+    elif is_webp_encoder(encoder):
+        webp_path = path / filename.replace('.jpg', '.webp')
+        webp_size = encode_jpeg_to_file(img, webp_path, quality, encoder)
+        return webp_path, webp_size
     else:
         encode_jpeg_to_file(img, full_path, quality, encoder)
         return full_path, get_file_size(full_path)
@@ -309,8 +321,13 @@ def tile_image(image_path, tile_size=256):
     return l2_tile, l1_tiles, l0_tiles
 
 def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
-                        jpeg_quality=75, baseline_quality=95, encoder=JpegEncoder.LIBJPEG_TURBO):
+                        jpeg_quality=75, baseline_quality=95, encoder=JpegEncoder.LIBJPEG_TURBO,
+                        l1_quality=None, l0_quality=None):
     """Compress tiles with debug output and detailed statistics."""
+    # Resolve per-level quality (overrides fall back to jpeg_quality)
+    l1_quality = l1_quality if l1_quality is not None else jpeg_quality
+    l0_quality = l0_quality if l0_quality is not None else jpeg_quality
+
     out_dir = pathlib.Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -320,6 +337,8 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
     config = {
             "tile_size": tile_size,
             "residual_jpeg_quality": jpeg_quality,
+            "l1_quality": l1_quality,
+            "l0_quality": l0_quality,
             "baseline_jpeg_quality": baseline_quality,
             "encoder": encoder.value
     }
@@ -418,7 +437,7 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
         # Save as JPEG
         jpeg_path, jpeg_stats = save_image_with_stats(
             residual_centered, out_dir / "compress", step+8,
-            f"L1_{dx}_{dy}_residual_jpeg.jpg", quality=jpeg_quality, manifest_entry=tile_manifest,
+            f"L1_{dx}_{dy}_residual_jpeg.jpg", quality=l1_quality, manifest_entry=tile_manifest,
             encoder=encoder)
 
         total_residual_L1 += jpeg_stats["file_size"]
@@ -507,7 +526,7 @@ def compress_with_debug(l2_tile, l1_tiles, l0_tiles, out_dir, tile_size=256,
         # Save as JPEG
         jpeg_path, jpeg_stats = save_image_with_stats(
             residual_centered, out_dir / "compress", step+8,
-            f"L0_{dx}_{dy}_residual_jpeg.jpg", quality=jpeg_quality, manifest_entry=tile_manifest,
+            f"L0_{dx}_{dy}_residual_jpeg.jpg", quality=l0_quality, manifest_entry=tile_manifest,
             encoder=encoder)
 
         total_residual_L0 += jpeg_stats["file_size"]
@@ -590,11 +609,13 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
             pred = l1_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
             Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
 
-            # Load residual - use tile index to find correct file (.png for JXL, .jpg otherwise)
+            # Load residual - use tile index to find correct file (.png for JXL, .webp for WebP, .jpg otherwise)
             tile_idx = dy * 2 + dx
             residual_file = f"{10 + tile_idx * 10 + 8:03d}_L1_{dx}_{dy}_residual_jpeg.jpg"
             residual_path = compress_dir / residual_file
-            # For JXL runs, the .jpg was replaced with .png
+            # For JXL runs, the .jpg was replaced with .png; for WebP, with .webp
+            if not residual_path.exists():
+                residual_path = compress_dir / residual_file.replace('.jpg', '.webp')
             if not residual_path.exists():
                 residual_path = compress_dir / residual_file.replace('.jpg', '.png')
             if residual_path.exists():
@@ -667,8 +688,10 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
             pred = l0_pred[dy*tile_size:(dy+1)*tile_size, dx*tile_size:(dx+1)*tile_size]
             Y_pred, Cb_pred, Cr_pred = rgb_to_ycbcr_bt601(pred)
 
-            # Load residual - find the correct file with dynamic prefix (.jpg or .png for JXL)
+            # Load residual - find the correct file with dynamic prefix (.jpg, .webp, or .png for JXL)
             residual_files = list(compress_dir.glob(f"*_L0_{dx}_{dy}_residual_jpeg.jpg"))
+            if not residual_files:
+                residual_files = list(compress_dir.glob(f"*_L0_{dx}_{dy}_residual_jpeg.webp"))
             if not residual_files:
                 residual_files = list(compress_dir.glob(f"*_L0_{dx}_{dy}_residual_jpeg.png"))
             if residual_files:
@@ -721,10 +744,14 @@ def decompress_with_debug(out_dir, manifest, tile_size=256):
 
     return manifest
 
-def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_quality, baseline_quality, encoder=JpegEncoder.LIBJPEG_TURBO):
+def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_quality, baseline_quality, encoder=JpegEncoder.LIBJPEG_TURBO, l1_quality=None, l0_quality=None):
     """Create a PAC file with all tiles needed for serving."""
     import struct
     import io
+
+    # Resolve per-level quality
+    l1_quality = l1_quality if l1_quality is not None else jpeg_quality
+    l0_quality = l0_quality if l0_quality is not None else jpeg_quality
 
     pac_path = pathlib.Path(out_dir) / "tiles.pac"
 
@@ -783,7 +810,7 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             # Center and save as JPEG
             residual_centered = np.clip(np.round(residual_raw + 128.0), 0, 255).astype(np.uint8)
             residual_img = Image.fromarray(residual_centered, mode="L")
-            l1_encoded_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
+            l1_encoded_bytes = encode_jpeg_to_bytes(residual_img, l1_quality, encoder)
             l1_data = add_entry(1, dx, dy, l1_encoded_bytes)
             l1_data_list.append(l1_data)
 
@@ -791,6 +818,7 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             if is_jxl_encoder(encoder):
                 r_dec = np.array(decode_jxl_to_image(l1_data).convert("L")).astype(np.float32) - 128.0
             else:
+                # Pillow handles JPEG and WebP natively via BytesIO
                 r_dec = np.array(Image.open(io.BytesIO(l1_data)).convert("L")).astype(np.float32) - 128.0
             Y_recon = np.clip(Y_pred + r_dec, 0, 255)
             l1_reconstructed[(dx, dy)] = ycbcr_to_rgb_bt601(Y_recon, Cb_pred, Cr_pred)
@@ -820,7 +848,7 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
             # Center and save as JPEG
             residual_centered = np.clip(np.round(residual_raw + 128.0), 0, 255).astype(np.uint8)
             residual_img = Image.fromarray(residual_centered, mode="L")
-            l0_encoded_bytes = encode_jpeg_to_bytes(residual_img, jpeg_quality, encoder)
+            l0_encoded_bytes = encode_jpeg_to_bytes(residual_img, l0_quality, encoder)
             l0_data = add_entry(0, dx, dy, l0_encoded_bytes)
             l0_data_list.append(l0_data)
 
@@ -853,10 +881,12 @@ def main():
     parser.add_argument("--out", help="Output directory for debug images (auto-generated if not specified)")
     parser.add_argument("--tile", type=int, default=256, help="Tile size")
     parser.add_argument("--resq", type=int, default=75, help="JPEG quality for residuals")
+    parser.add_argument("--l1q", type=int, default=None, help="Override quality for L1 residuals (default: use --resq)")
+    parser.add_argument("--l0q", type=int, default=None, help="Override quality for L0 residuals (default: use --resq)")
     parser.add_argument("--baseq", type=int, default=95, help="JPEG quality for baseline tiles")
     parser.add_argument("--pac", action="store_true", help="Create PAC file for serving")
     parser.add_argument("--encoder", default="libjpeg-turbo",
-                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, or jpegxl")
+                       help="Encoder: libjpeg-turbo, jpegli, mozjpeg, jpegxl, or webp")
 
     args = parser.parse_args()
     encoder = parse_encoder_arg(args.encoder)
@@ -869,7 +899,13 @@ def main():
             prefix = ""
         else:
             prefix = encoder.value + "_"
-        dir_parts = [f"{prefix}debug", f"j{args.resq}"]
+        if args.l1q is not None or args.l0q is not None:
+            # Split quality: debug_l1q{N}_l0q{N}_pac
+            l1q = args.l1q if args.l1q is not None else args.resq
+            l0q = args.l0q if args.l0q is not None else args.resq
+            dir_parts = [f"{prefix}debug", f"l1q{l1q}", f"l0q{l0q}"]
+        else:
+            dir_parts = [f"{prefix}debug", f"j{args.resq}"]
         if args.pac:
             dir_parts.append("pac")
         args.out = "evals/runs/" + "_".join(dir_parts)
@@ -886,7 +922,8 @@ def main():
 
     # Compress with debug output
     manifest = compress_with_debug(l2_tile, l1_tiles, l0_tiles, args.out,
-                                  args.tile, args.resq, args.baseq, encoder)
+                                  args.tile, args.resq, args.baseq, encoder,
+                                  l1_quality=args.l1q, l0_quality=args.l0q)
 
     # Decompress with debug output
     manifest = decompress_with_debug(args.out, manifest, args.tile)
@@ -894,7 +931,8 @@ def main():
     # Create PAC file if requested
     if args.pac:
         pac_path, pac_size = create_pac_file(args.out, l2_tile, l1_tiles, l0_tiles,
-                                            args.tile, args.resq, args.baseq, encoder)
+                                            args.tile, args.resq, args.baseq, encoder,
+                                            l1_quality=args.l1q, l0_quality=args.l0q)
         manifest["pac_file"] = {
             "path": str(pac_path),
             "size": pac_size
@@ -914,7 +952,13 @@ def main():
         f.write("=" * 50 + "\n\n")
         f.write(f"Input Image: {args.image}\n")
         f.write(f"Tile Size: {args.tile}x{args.tile}\n")
-        f.write(f"Residual JPEG Quality: {args.resq}\n")
+        l1q_eff = args.l1q if args.l1q is not None else args.resq
+        l0q_eff = args.l0q if args.l0q is not None else args.resq
+        if l1q_eff != l0q_eff:
+            f.write(f"L1 Residual Quality: {l1q_eff}\n")
+            f.write(f"L0 Residual Quality: {l0q_eff}\n")
+        else:
+            f.write(f"Residual JPEG Quality: {args.resq}\n")
         f.write(f"Baseline JPEG Quality: {args.baseq}\n\n")
 
         f.write("SIZE COMPARISON\n")

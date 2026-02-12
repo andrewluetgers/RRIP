@@ -159,6 +159,32 @@ pub struct ReconstructInput<'a> {
 }
 
 // ---------------------------------------------------------------------------
+// OutputFormat — what image format to produce for reconstructed tiles
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputFormat {
+    Jpeg,
+    Webp,
+}
+
+impl OutputFormat {
+    pub fn content_type(&self) -> &'static str {
+        match self {
+            OutputFormat::Jpeg => "image/jpeg",
+            OutputFormat::Webp => "image/webp",
+        }
+    }
+
+    pub fn extension(&self) -> &'static str {
+        match self {
+            OutputFormat::Jpeg => ".jpg",
+            OutputFormat::Webp => ".webp",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ReconstructOpts — controls reconstruction behavior
 // ---------------------------------------------------------------------------
 
@@ -166,6 +192,7 @@ pub struct ReconstructOpts {
     pub quality: u8,
     pub timing: bool,
     pub grayscale_only: bool,
+    pub output_format: OutputFormat,
 }
 
 // ---------------------------------------------------------------------------
@@ -188,10 +215,18 @@ fn residual_tile_path(
     y: u32,
 ) -> PathBuf {
     let subdir = if level == l1_level { "L1" } else { "L0" };
-    residuals_dir
+    let parent = residuals_dir
         .join(subdir)
-        .join(format!("{}_{}", x2, y2))
-        .join(format!("{}_{}.jpg", x, y))
+        .join(format!("{}_{}", x2, y2));
+    // Try multiple extensions: .jpg (default), .webp, .jxl
+    for ext in &[".jpg", ".webp", ".jxl"] {
+        let p = parent.join(format!("{}_{}{}", x, y, ext));
+        if p.exists() {
+            return p;
+        }
+    }
+    // Fallback to .jpg (caller will handle missing file)
+    parent.join(format!("{}_{}.jpg", x, y))
 }
 
 fn load_rgb(path: &Path) -> Result<RgbImage> {
@@ -201,8 +236,24 @@ fn load_rgb(path: &Path) -> Result<RgbImage> {
 }
 
 fn load_luma(path: &Path) -> Result<Vec<u8>> {
-    let (pixels, _width, _height) = load_luma_turbo(path)?;
-    Ok(pixels)
+    // For non-JPEG formats, read bytes and dispatch to the correct decoder
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ext {
+        "webp" => {
+            let data = fs::read(path)
+                .with_context(|| format!("reading WebP residual {}", path.display()))?;
+            decode_luma_webp(&data)
+        }
+        "jxl" => {
+            let data = fs::read(path)
+                .with_context(|| format!("reading JXL residual {}", path.display()))?;
+            decode_luma_from_bytes(&data)
+        }
+        _ => {
+            let (pixels, _width, _height) = load_luma_turbo(path)?;
+            Ok(pixels)
+        }
+    }
 }
 
 /// Detect if bytes are JPEG-XL format.
@@ -240,7 +291,34 @@ fn decode_luma_jxl(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
+/// Detect if bytes are WebP format (RIFF/WEBP magic).
+fn is_webp(bytes: &[u8]) -> bool {
+    bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP"
+}
+
+/// Decode grayscale luma from WebP-encoded bytes.
+/// WebP is always RGB — extract R channel (all channels identical for gray-encoded WebP).
+fn decode_luma_webp(bytes: &[u8]) -> Result<Vec<u8>> {
+    let decoder = webp::Decoder::new(bytes);
+    let img = decoder
+        .decode()
+        .ok_or_else(|| anyhow!("webp decode failed"))?;
+    let rgb = img.to_vec();
+    let w = img.width() as usize;
+    let h = img.height() as usize;
+    let mut gray = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            gray.push(rgb[(y * w + x) * 3]);
+        }
+    }
+    Ok(gray)
+}
+
 fn decode_luma_from_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
+    if is_webp(bytes) {
+        return decode_luma_webp(bytes);
+    }
     #[cfg(feature = "jpegxl")]
     if is_jxl(bytes) {
         return decode_luma_jxl(bytes);
@@ -253,13 +331,39 @@ fn decode_luma_from_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-fn encode_jpeg_from_rgb_bytes(
+fn encode_tile_rgb(
     bytes: &[u8],
     width: u32,
     height: u32,
     quality: u8,
+    format: OutputFormat,
 ) -> Result<Vec<u8>> {
-    encode_jpeg_turbo(bytes, width, height, quality)
+    match format {
+        OutputFormat::Jpeg => encode_jpeg_turbo(bytes, width, height, quality),
+        OutputFormat::Webp => {
+            let encoder = webp::Encoder::from_rgb(bytes, width, height);
+            let mem = encoder.encode(quality as f32);
+            Ok(mem.to_vec())
+        }
+    }
+}
+
+fn encode_tile_gray(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    quality: u8,
+    format: OutputFormat,
+) -> Result<Vec<u8>> {
+    match format {
+        OutputFormat::Jpeg => encode_luma_turbo(bytes, width, height, quality),
+        OutputFormat::Webp => {
+            let rgb: Vec<u8> = bytes.iter().flat_map(|&g| [g, g, g]).collect();
+            let encoder = webp::Encoder::from_rgb(&rgb, width, height);
+            let mem = encoder.encode(quality as f32);
+            Ok(mem.to_vec())
+        }
+    }
 }
 
 fn ycbcr_planes(img: &RgbImage) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
@@ -298,6 +402,7 @@ pub fn reconstruct_family(
     let timing = opts.timing;
     let quality = opts.quality;
     let grayscale_only = opts.grayscale_only;
+    let output_format = opts.output_format;
     let tile_size = input.tile_size;
 
     // --- L2 decode ---
@@ -425,9 +530,9 @@ pub fn reconstruct_family(
                     let y = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
                     y_bytes.push(y);
                 }
-                encode_luma_turbo(&y_bytes, tile_size, tile_size, quality)?
+                encode_tile_gray(&y_bytes, tile_size, tile_size, quality, output_format)?
             } else {
-                encode_jpeg_from_rgb_bytes(buf, tile_size, tile_size, quality)?
+                encode_tile_rgb(buf, tile_size, tile_size, quality, output_format)?
             };
             let enc_ms = if timing { enc_start.elapsed().as_millis() } else { 0 };
             Ok((idx, x1, y1, bytes, used_residual, res_ms, enc_ms))
@@ -568,9 +673,9 @@ pub fn reconstruct_family(
                         let y = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
                         y_bytes.push(y);
                     }
-                    encode_luma_turbo(&y_bytes, tile_size, tile_size, quality)?
+                    encode_tile_gray(&y_bytes, tile_size, tile_size, quality, output_format)?
                 } else {
-                    encode_jpeg_from_rgb_bytes(&buf, tile_size, tile_size, quality)?
+                    encode_tile_rgb(&buf, tile_size, tile_size, quality, output_format)?
                 };
                 let enc_ms = if timing { enc_start.elapsed().as_millis() } else { 0 };
                 (used_residual, bytes, enc_ms)
@@ -630,20 +735,21 @@ pub fn reconstruct_family(
 // ---------------------------------------------------------------------------
 
 /// Write a FamilyResult's tiles to disk under out_dir/L1/ and out_dir/L0/.
-pub fn write_family_tiles(result: &FamilyResult, out_dir: &Path) -> Result<()> {
+pub fn write_family_tiles(result: &FamilyResult, out_dir: &Path, format: OutputFormat) -> Result<()> {
+    let ext = format.extension();
     let l1_dir = out_dir.join("L1");
     let l0_dir = out_dir.join("L0");
     fs::create_dir_all(&l1_dir)?;
     fs::create_dir_all(&l0_dir)?;
 
     for (x, y, bytes) in &result.l1 {
-        let path = l1_dir.join(format!("{}_{}.jpg", x, y));
+        let path = l1_dir.join(format!("{}_{}{}", x, y, ext));
         fs::write(&path, bytes)
             .with_context(|| format!("writing L1 tile {}", path.display()))?;
     }
 
     for (x, y, bytes) in &result.l0 {
-        let path = l0_dir.join(format!("{}_{}.jpg", x, y));
+        let path = l0_dir.join(format!("{}_{}{}", x, y, ext));
         fs::write(&path, bytes)
             .with_context(|| format!("writing L0 tile {}", path.display()))?;
     }
@@ -751,6 +857,7 @@ mod tests {
             quality: 90,
             timing: true,
             grayscale_only: false,
+            output_format: OutputFormat::Jpeg,
         };
         let pool = BufferPool::new(32);
 
@@ -818,6 +925,7 @@ mod tests {
             quality: 90,
             timing: false,
             grayscale_only: false,
+            output_format: OutputFormat::Jpeg,
         };
         let pool = BufferPool::new(32);
 
@@ -852,6 +960,7 @@ mod tests {
             quality: 95,
             timing: false,
             grayscale_only: false,
+            output_format: OutputFormat::Jpeg,
         };
 
         // Reconstruct from loose residuals
@@ -925,6 +1034,7 @@ mod tests {
             quality: 90,
             timing: false,
             grayscale_only: true,
+            output_format: OutputFormat::Jpeg,
         };
         let pool = BufferPool::new(32);
 
@@ -959,7 +1069,7 @@ mod tests {
             stats: None,
         };
 
-        write_family_tiles(&result, &out_dir).unwrap();
+        write_family_tiles(&result, &out_dir, OutputFormat::Jpeg).unwrap();
 
         assert!(out_dir.join("L1/10_20.jpg").exists());
         assert!(out_dir.join("L1/11_20.jpg").exists());
@@ -997,11 +1107,12 @@ mod tests {
             quality: 90,
             timing: false,
             grayscale_only: false,
+            output_format: OutputFormat::Jpeg,
         };
         let pool = BufferPool::new(32);
 
         let result = reconstruct_family(&input, 50, 50, &opts, &pool).unwrap();
-        write_family_tiles(&result, &out_dir).unwrap();
+        write_family_tiles(&result, &out_dir, OutputFormat::Jpeg).unwrap();
 
         // Verify L1 tiles on disk
         for (x, y, _) in &result.l1 {

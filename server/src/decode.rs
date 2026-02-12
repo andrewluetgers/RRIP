@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::core::pyramid::{discover_pyramid, parse_tile_coords};
 use crate::core::reconstruct::{
-    BufferPool, ReconstructInput, ReconstructOpts, reconstruct_family, write_family_tiles,
+    BufferPool, OutputFormat, ReconstructInput, ReconstructOpts, reconstruct_family, write_family_tiles,
 };
 
 #[derive(Args, Debug)]
@@ -52,10 +52,20 @@ pub struct DecodeArgs {
     /// Print per-family timing breakdown
     #[arg(long, default_value_t = false)]
     timing: bool,
+
+    /// Output format for reconstructed tiles: jpeg or webp
+    #[arg(long, default_value = "jpeg")]
+    output_format: String,
 }
 
 pub fn run(args: DecodeArgs) -> Result<()> {
     let start = Instant::now();
+
+    let output_format = match args.output_format.as_str() {
+        "jpeg" | "jpg" => OutputFormat::Jpeg,
+        "webp" => OutputFormat::Webp,
+        other => return Err(anyhow!("unknown output format: '{}'. Available: jpeg, webp", other)),
+    };
 
     // Validate: exactly one residual source must be provided
     let source_count = args.residuals.is_some() as u8
@@ -170,6 +180,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
             quality: args.quality,
             timing: args.timing,
             grayscale_only: args.grayscale,
+            output_format,
         };
 
         let result = reconstruct_family(&input, x2, y2, &opts, &buffer_pool)?;
@@ -180,7 +191,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
         total_l0 += l0_count;
 
         // Write tiles to disk
-        write_family_tiles(&result, &args.out)?;
+        write_family_tiles(&result, &args.out, output_format)?;
 
         let family_ms = family_start.elapsed().as_millis();
 
@@ -262,6 +273,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         let result = run(args);
         assert!(result.is_err());
@@ -287,6 +299,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         let result = run(args);
         assert!(result.is_err());
@@ -321,6 +334,7 @@ mod tests {
             max_parents: Some(1),
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(args).unwrap();
 
@@ -382,6 +396,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(args).unwrap();
 
@@ -417,6 +432,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(args).unwrap();
 
@@ -452,6 +468,7 @@ mod tests {
             max_parents: Some(1),
             grayscale: false,
             timing: true,
+            output_format: "jpeg".to_string(),
         };
         // Should not panic and should complete successfully
         run(args).unwrap();
@@ -485,6 +502,7 @@ mod tests {
             max_parents: Some(1),
             grayscale: true,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(args).unwrap();
 
@@ -679,6 +697,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: true,
+            output_format: "jpeg".to_string(),
         };
         run(decode_args).unwrap();
 
@@ -725,6 +744,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(decode_pack_args).unwrap();
 
@@ -1096,6 +1116,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(decode_res_args).unwrap();
         let decode_residuals_ms = decode_res_start.elapsed().as_millis();
@@ -1113,6 +1134,7 @@ mod tests {
             max_parents: None,
             grayscale: false,
             timing: false,
+            output_format: "jpeg".to_string(),
         };
         run(decode_pack_args).unwrap();
         let decode_packs_ms = decode_pack_start.elapsed().as_millis();

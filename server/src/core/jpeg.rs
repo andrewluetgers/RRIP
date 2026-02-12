@@ -102,6 +102,30 @@ impl JpegEncoder for JpegXlEncoder {
     }
 }
 
+/// WebP encoder backend (better than JPEG without JXL's aggressive perceptual smoothing).
+/// Always available — no feature flag or external tools needed.
+pub struct WebpEncoder;
+
+impl JpegEncoder for WebpEncoder {
+    fn encode_rgb(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
+        let encoder = webp::Encoder::from_rgb(pixels, width, height);
+        let mem = encoder.encode(quality as f32);
+        Ok(mem.to_vec())
+    }
+
+    fn encode_gray(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
+        // libwebp only accepts RGB/RGBA — expand gray to RGB (repeat each byte 3x)
+        let rgb: Vec<u8> = pixels.iter().flat_map(|&g| [g, g, g]).collect();
+        let encoder = webp::Encoder::from_rgb(&rgb, width, height);
+        let mem = encoder.encode(quality as f32);
+        Ok(mem.to_vec())
+    }
+
+    fn name(&self) -> &str {
+        "webp"
+    }
+}
+
 /// Create an encoder by name
 pub fn create_encoder(name: &str) -> Result<Box<dyn JpegEncoder>> {
     match name {
@@ -112,8 +136,9 @@ pub fn create_encoder(name: &str) -> Result<Box<dyn JpegEncoder>> {
         "jpegli" => Ok(Box::new(JpegliEncoder)),
         #[cfg(feature = "jpegxl")]
         "jpegxl" => Ok(Box::new(JpegXlEncoder)),
+        "webp" => Ok(Box::new(WebpEncoder)),
         other => {
-            let mut available = String::from("turbojpeg");
+            let mut available = String::from("turbojpeg, webp");
             if cfg!(feature = "mozjpeg") {
                 available.push_str(", mozjpeg");
             }

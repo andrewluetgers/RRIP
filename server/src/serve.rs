@@ -21,7 +21,7 @@ use tracing::info;
 
 use crate::core::pyramid::{parse_tile_size, max_level_from_files};
 use crate::core::reconstruct::{
-    BufferPool, ReconstructInput, ReconstructOpts, reconstruct_family,
+    BufferPool, OutputFormat, ReconstructInput, ReconstructOpts, reconstruct_family,
 };
 
 #[derive(Args, Debug)]
@@ -63,6 +63,9 @@ pub struct ServeArgs {
     /// Cache directory for saving reconstructed tiles to disk
     #[arg(long)]
     cache_dir: Option<String>,
+    /// Output format for reconstructed tiles: jpeg or webp
+    #[arg(long, default_value = "jpeg")]
+    output_format: String,
 }
 
 #[derive(Clone)]
@@ -82,6 +85,7 @@ struct AppState {
     prewarm_on_l2: bool,
     grayscale_only: bool,
     cache_dir: Option<PathBuf>,
+    output_format: OutputFormat,
 }
 
 #[derive(serde::Deserialize)]
@@ -240,6 +244,12 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         );
     }
 
+    let output_format = match args.output_format.as_str() {
+        "jpeg" | "jpg" => OutputFormat::Jpeg,
+        "webp" => OutputFormat::Webp,
+        other => return Err(anyhow!("unknown output format: '{}'. Available: jpeg, webp", other)),
+    };
+
     let slides = Arc::new(slides);
     let write_generated_dir = args.write_generated_dir.clone();
     let writer = if let Some(dir) = write_generated_dir.clone() {
@@ -298,6 +308,7 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         prewarm_on_l2: args.prewarm_on_l2,
         grayscale_only: args.grayscale_only,
         cache_dir: args.cache_dir.map(PathBuf::from),
+        output_format,
     };
 
     let metrics = state.metrics.clone();
@@ -482,7 +493,15 @@ async fn get_residual_tile(
         y,
         residual_path.display()
     );
-    Ok(jpeg_response(bytes))
+    let content_type = match residual_path.extension().and_then(|e| e.to_str()) {
+        Some("webp") => "image/webp",
+        Some("jxl") => "image/jxl",
+        _ => "image/jpeg",
+    };
+    let mut resp = Response::new(bytes.into());
+    resp.headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    Ok(resp)
 }
 
 async fn serve_tile(
@@ -537,7 +556,7 @@ async fn serve_tile(
             y,
             start.elapsed().as_millis()
         );
-        return Ok(jpeg_response(bytes.to_vec()));
+        return Ok(tile_response(bytes.to_vec(), state.output_format));
     }
 
     let slide = slide.clone();
@@ -550,6 +569,7 @@ async fn serve_tile(
     let inflight = state.inflight.clone();
     let inflight_limit = state.inflight_limit.clone();
     let grayscale_only = state.grayscale_only;
+    let output_format = state.output_format;
     let cache_dir = state.cache_dir.clone();
     let permit = inflight_limit
         .acquire_owned()
@@ -567,7 +587,7 @@ async fn serve_tile(
             return Err(anyhow!("unsupported level {}", level));
         };
         let result = generate_family_server(
-            &slide, x2, y2, quality, timing, grayscale_only,
+            &slide, x2, y2, quality, timing, grayscale_only, output_format,
             &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
         );
         match result {
@@ -645,13 +665,14 @@ async fn serve_tile(
         y,
         start.elapsed().as_millis()
     );
-    Ok(jpeg_response(bytes.0.to_vec()))
+    Ok(tile_response(bytes.0.to_vec(), state.output_format))
 }
 
 fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
     let cache = state.cache.clone();
     let quality = state.tile_quality;
     let grayscale_only = state.grayscale_only;
+    let output_format = state.output_format;
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
@@ -667,7 +688,7 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
         let _permit = permit;
         let _ = task::spawn_blocking(move || {
             let result = generate_family_server(
-                &slide, x2, y2, quality, false, grayscale_only,
+                &slide, x2, y2, quality, false, grayscale_only, output_format,
                 &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
             );
             if let Ok(result) = result {
@@ -751,18 +772,25 @@ async fn viewer(
 }
 
 fn parse_tile_name(name: &str) -> Option<(u32, u32)> {
-    let trimmed = name.strip_suffix(".jpg").unwrap_or(name);
+    let trimmed = name
+        .strip_suffix(".jpg")
+        .or_else(|| name.strip_suffix(".webp"))
+        .unwrap_or(name);
     let mut parts = trimmed.split('_');
     let x = parts.next()?.parse().ok()?;
     let y = parts.next()?.parse().ok()?;
     Some((x, y))
 }
 
-fn jpeg_response(bytes: Vec<u8>) -> Response {
+fn tile_response(bytes: Vec<u8>, format: OutputFormat) -> Response {
     let mut resp = Response::new(bytes.into());
     resp.headers_mut()
-        .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(format.content_type()));
     resp
+}
+
+fn jpeg_response(bytes: Vec<u8>) -> Response {
+    tile_response(bytes, OutputFormat::Jpeg)
 }
 
 fn baseline_tile_path(slide: &Slide, level: u32, x: u32, y: u32) -> PathBuf {
@@ -774,25 +802,33 @@ fn baseline_tile_path(slide: &Slide, level: u32, x: u32, y: u32) -> PathBuf {
 
 fn residual_tile_path(slide: &Slide, level: u32, x2: u32, y2: u32, x: u32, y: u32) -> PathBuf {
     let subdir = if level == slide.l1 { "L1" } else { "L0" };
-    slide
+    let parent = slide
         .residuals_dir
         .join(subdir)
-        .join(format!("{}_{}", x2, y2))
-        .join(format!("{}_{}.jpg", x, y))
+        .join(format!("{}_{}", x2, y2));
+    for ext in &[".jpg", ".webp", ".jxl"] {
+        let p = parent.join(format!("{}_{}{}", x, y, ext));
+        if p.exists() {
+            return p;
+        }
+    }
+    parent.join(format!("{}_{}.jpg", x, y))
 }
 
 fn enqueue_generated(
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     tiles: &HashMap<TileKey, Bytes>,
+    format: OutputFormat,
 ) {
     let Some(writer) = writer else { return };
     let Some(root) = write_root else { return };
+    let ext = format.extension();
     for (key, bytes) in tiles.iter() {
         let mut path = root.clone();
         path.push(&key.slide_id);
         path.push(key.level.to_string());
-        path.push(format!("{}_{}.jpg", key.x, key.y));
+        path.push(format!("{}_{}{}", key.x, key.y, ext));
         let job = WriteJob {
             path,
             bytes: bytes.clone(),
@@ -860,6 +896,7 @@ fn generate_family_server(
     quality: u8,
     timing: bool,
     grayscale_only: bool,
+    output_format: OutputFormat,
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
@@ -878,6 +915,7 @@ fn generate_family_server(
         quality,
         timing,
         grayscale_only,
+        output_format,
     };
 
     let core_result = reconstruct_family(&input, x2, y2, &opts, buffer_pool)?;
@@ -908,15 +946,16 @@ fn generate_family_server(
     }
 
     // Enqueue async disk writes if configured
-    enqueue_generated(writer, write_root, &out);
+    enqueue_generated(writer, write_root, &out, output_format);
 
     // Write to cache dir if configured
     if let Some(cache_dir) = cache_dir {
+        let ext = output_format.extension();
         for (tile_key, tile_data) in &out {
             let tile_path = cache_dir
                 .join(&slide.slide_id)
                 .join(format!("{}", tile_key.level))
-                .join(format!("{}_{}.jpg", tile_key.x, tile_key.y));
+                .join(format!("{}_{}{}", tile_key.x, tile_key.y, ext));
             if let Some(parent) = tile_path.parent() {
                 if let Err(err) = fs::create_dir_all(parent) {
                     info!("Failed to create cache dir {}: {}", parent.display(), err);
