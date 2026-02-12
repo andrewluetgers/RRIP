@@ -51,19 +51,45 @@ import numpy as np
 RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "charts"
 
-QUALITIES = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+QUALITIES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90]
 
-# Run directory patterns
-BASELINE_DIRS = {
+# Finer quality grid for split series (includes 5-step increments)
+SPLIT_QUALITIES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
+
+# --- "turbo" chart set: just turbo-based series ---
+TURBO_BASELINE_DIRS = {
+    "JPEG turbo": "jpeg_baseline_q{q}",
+}
+
+TURBO_ORIGAMI_DIRS = {
+    "ORIGAMI turbo": "debug_j{q}_pac",
+    "OptL2 turbo": "optl2_debug_j{q}_pac",
+}
+
+TURBO_SPLIT_SERIES = {
+    "+20 split": {"offset": 20, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
+    "balanced split": {"offset": 30, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
+    "OptL2 +20 split": {"offset": 20, "dir": "optl2_debug_l1q{l1q}_l0q{l0q}_pac"},
+}
+
+# --- "all" chart set: all encoder backends ---
+ALL_BASELINE_DIRS = {
     "JPEG turbo": "jpeg_baseline_q{q}",
     "JPEG mozjpeg": "mozjpeg_jpeg_baseline_q{q}",
     "JPEG jpegxl": "jpegxl_jpeg_baseline_q{q}",
 }
 
-ORIGAMI_DIRS = {
+ALL_ORIGAMI_DIRS = {
     "ORIGAMI turbo": "debug_j{q}_pac",
     "ORIGAMI mozjpeg": "mozjpeg_debug_j{q}_pac",
     "ORIGAMI jpegxl": "jpegxl_debug_j{q}_pac",
+    "OptL2 turbo": "optl2_debug_j{q}_pac",
+}
+
+ALL_SPLIT_SERIES = {
+    "+20 split": {"offset": 20, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
+    "balanced split": {"offset": 30, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
+    "OptL2 +20 split": {"offset": 20, "dir": "optl2_debug_l1q{l1q}_l0q{l0q}_pac"},
 }
 
 # Colors and markers for each series
@@ -74,6 +100,10 @@ STYLES = {
     "ORIGAMI turbo":  {"color": "#1f77b4", "marker": "o", "linestyle": "-"},
     "ORIGAMI mozjpeg":{"color": "#ff7f0e", "marker": "o", "linestyle": "-"},
     "ORIGAMI jpegxl": {"color": "#2ca02c", "marker": "o", "linestyle": "-"},
+    "OptL2 turbo":    {"color": "#17becf", "marker": "o", "linestyle": "-"},
+    "+20 split":      {"color": "#d62728", "marker": "D", "linestyle": "-"},
+    "balanced split": {"color": "#9467bd", "marker": "^", "linestyle": "-"},
+    "OptL2 +20 split":{"color": "#bcbd22", "marker": "D", "linestyle": "-"},
 }
 
 METRICS = {
@@ -184,12 +214,12 @@ def load_origami_metrics(run_dir):
     return metrics
 
 
-def collect_all_data():
-    """Collect metric data for all series across all quality levels."""
+def collect_data(baseline_dirs, origami_dirs, split_series):
+    """Collect metric data for the given series across all quality levels."""
     data = {}
 
     # Baselines
-    for series_name, dir_pattern in BASELINE_DIRS.items():
+    for series_name, dir_pattern in baseline_dirs.items():
         series = {"qualities": [], "metrics": {k: [] for k in METRICS}, "sizes": [], "pack_sizes": []}
         for q in QUALITIES:
             run_dir = RUNS_DIR / dir_pattern.format(q=q)
@@ -203,13 +233,32 @@ def collect_all_data():
         data[series_name] = series
 
     # ORIGAMI
-    for series_name, dir_pattern in ORIGAMI_DIRS.items():
+    for series_name, dir_pattern in origami_dirs.items():
         series = {"qualities": [], "metrics": {k: [] for k in METRICS}, "sizes": [], "pack_sizes": []}
         for q in QUALITIES:
             run_dir = RUNS_DIR / dir_pattern.format(q=q)
             m = load_origami_metrics(run_dir)
             if m:
                 series["qualities"].append(q)
+                for metric_key in METRICS:
+                    series["metrics"][metric_key].append(m.get(metric_key))
+                series["sizes"].append(m.get("total_size_bytes", 0))
+                series["pack_sizes"].append(m.get("pack_size_bytes", 0))
+        data[series_name] = series
+
+    # Split-quality ORIGAMI series
+    for series_name, spec in split_series.items():
+        offset = spec["offset"]
+        dir_pattern = spec["dir"]
+        series = {"qualities": [], "metrics": {k: [] for k in METRICS}, "sizes": [], "pack_sizes": []}
+        for l0q in SPLIT_QUALITIES:
+            l1q = l0q + offset
+            if l1q > 90:
+                continue
+            run_dir = RUNS_DIR / dir_pattern.format(l1q=l1q, l0q=l0q)
+            m = load_origami_metrics(run_dir)
+            if m:
+                series["qualities"].append(l0q)
                 for metric_key in METRICS:
                     series["metrics"][metric_key].append(m.get(metric_key))
                 series["sizes"].append(m.get("total_size_bytes", 0))
@@ -242,7 +291,7 @@ def make_chart(data, metric_key, metric_info, output_path):
     ax.set_xlabel("Quality", fontsize=13)
     ax.set_ylabel(f'{metric_info["label"]} {arrow}', fontsize=13)
     ax.set_title(f'{metric_info["label"]} {arrow} vs Quality', fontsize=15)
-    ax.set_xticks(QUALITIES)
+    ax.set_xticks([10, 20, 30, 40, 50, 60, 70, 80, 90])
     ax.legend(fontsize=10, loc="best")
     ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=11)
@@ -276,7 +325,7 @@ def make_size_chart(data, output_path):
     ax.set_xlabel("Quality", fontsize=13)
     ax.set_ylabel("Total Size \u2193 (KB)", fontsize=13)
     ax.set_title("Total Size \u2193 vs Quality", fontsize=15)
-    ax.set_xticks(QUALITIES)
+    ax.set_xticks([10, 20, 30, 40, 50, 60, 70, 80, 90])
     ax.legend(fontsize=10, loc="best")
     ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=11)
@@ -353,7 +402,7 @@ def make_pack_size_chart(data, output_path):
     ax.set_xlabel("Quality", fontsize=13)
     ax.set_ylabel("Pack Size \u2193 (KB)", fontsize=13)
     ax.set_title("Pack Size \u2193 vs Quality", fontsize=15)
-    ax.set_xticks(QUALITIES)
+    ax.set_xticks([10, 20, 30, 40, 50, 60, 70, 80, 90])
     ax.legend(fontsize=10, loc="best")
     ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=11)
@@ -446,53 +495,63 @@ def make_zoomed_chart(data, metric_key, metric_info, output_path, min_quality=50
     print(f"  Saved: {output_path}")
 
 
-def main():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    print("Collecting data from runs...")
-    data = collect_all_data()
-
-    # Print summary
-    for name, series in data.items():
-        print(f"  {name}: {len(series['qualities'])} quality levels")
+def generate_chart_set(data, out_dir):
+    """Generate all chart types for a given dataset into out_dir."""
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Metric vs Quality charts
-    print("\nGenerating metric vs quality charts...")
+    print("\n  Metric vs quality charts...")
     for metric_key, metric_info in METRICS.items():
-        output_path = OUTPUT_DIR / f"{metric_key}_vs_quality.png"
-        make_chart(data, metric_key, metric_info, output_path)
+        make_chart(data, metric_key, metric_info, out_dir / f"{metric_key}_vs_quality.png")
 
     # Size vs Quality chart
-    print("\nGenerating size chart...")
-    make_size_chart(data, OUTPUT_DIR / "size_vs_quality.png")
+    print("  Size chart...")
+    make_size_chart(data, out_dir / "size_vs_quality.png")
 
     # Rate-distortion charts (metric vs size)
-    # SSIM and LPIPS are zoomed to Q50+ for better detail
-    print("\nGenerating rate-distortion charts...")
+    print("  Rate-distortion charts...")
     for metric_key in ["psnr", "ssim"]:
         metric_info = METRICS[metric_key]
         zoom = 50 if metric_key in ("ssim", "lpips") else None
-        output_path = OUTPUT_DIR / f"{metric_key}_vs_size.png"
-        make_rd_chart(data, metric_key, metric_info, output_path, min_quality=zoom)
+        make_rd_chart(data, metric_key, metric_info, out_dir / f"{metric_key}_vs_size.png", min_quality=zoom)
 
     # Pack size charts
-    print("\nGenerating pack size charts...")
-    make_pack_size_chart(data, OUTPUT_DIR / "pack_size_vs_quality.png")
+    print("  Pack size charts...")
+    make_pack_size_chart(data, out_dir / "pack_size_vs_quality.png")
 
     # Metric vs Pack Size charts
-    # SSIM and LPIPS are zoomed to Q50+ for better detail
-    print("\nGenerating metric vs pack size charts...")
+    print("  Metric vs pack size charts...")
     for metric_key, metric_info in METRICS.items():
         zoom = 50 if metric_key in ("ssim", "lpips") else None
-        output_path = OUTPUT_DIR / f"{metric_key}_vs_pack_size.png"
-        make_metric_vs_pack_chart(data, metric_key, metric_info, output_path, min_quality=zoom)
+        make_metric_vs_pack_chart(data, metric_key, metric_info, out_dir / f"{metric_key}_vs_pack_size.png", min_quality=zoom)
 
-    # Zoomed charts (Q50–Q90)
-    print("\nGenerating zoomed charts...")
+    # Zoomed charts (Q50-Q90)
+    print("  Zoomed charts...")
     for metric_key in ["ssim", "lpips"]:
         metric_info = METRICS[metric_key]
-        output_path = OUTPUT_DIR / f"{metric_key}_vs_quality_zoomed.png"
-        make_zoomed_chart(data, metric_key, metric_info, output_path, min_quality=50)
+        make_zoomed_chart(data, metric_key, metric_info, out_dir / f"{metric_key}_vs_quality_zoomed.png", min_quality=50)
+
+
+def main():
+    # --- Turbo-only chart set ---
+    print("=== Turbo-only charts ===")
+    print("Collecting turbo data...")
+    turbo_data = collect_data(TURBO_BASELINE_DIRS, TURBO_ORIGAMI_DIRS, TURBO_SPLIT_SERIES)
+    for name, series in turbo_data.items():
+        print(f"  {name}: {len(series['qualities'])} quality levels")
+    turbo_dir = OUTPUT_DIR / "turbo"
+    generate_chart_set(turbo_data, turbo_dir)
+    print(f"Turbo charts saved to {turbo_dir}")
+
+    # --- All-encoders chart set ---
+    print("\n=== All-encoders charts ===")
+    print("Collecting all-encoder data...")
+    all_data = collect_data(ALL_BASELINE_DIRS, ALL_ORIGAMI_DIRS, ALL_SPLIT_SERIES)
+    for name, series in all_data.items():
+        print(f"  {name}: {len(series['qualities'])} quality levels")
+    all_dir = OUTPUT_DIR / "all"
+    generate_chart_set(all_data, all_dir)
+    print(f"All-encoder charts saved to {all_dir}")
 
     print(f"\nAll charts saved to {OUTPUT_DIR}")
 

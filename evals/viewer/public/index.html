@@ -639,12 +639,17 @@
 
             <div class="column-controls">
                 <label>Add Column:</label>
-                <input type="text" id="filterInput" placeholder="Filter runs..." oninput="filterAddColumnDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; width: 160px;">
+                <select id="filterType" onchange="updateFilteredDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                    <option value="">All Types</option>
+                </select>
+                <select id="filterCodec" onchange="updateFilteredDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                    <option value="">All Codecs</option>
+                </select>
                 <select id="addColumn">
                     <option value="">Select run...</option>
                 </select>
                 <button onclick="addSelectedColumn()">Add</button>
-                <button onclick="loadAllColumns()" title="Load all available runs">Load All</button>
+                <button onclick="addAllFiltered()" title="Add all runs matching current filters">Add Filtered</button>
                 <button onclick="clearAllColumns()" style="background: #6c757d;" title="Remove all columns">Clear All</button>
             </div>
         </div>
@@ -881,6 +886,14 @@
                 metric: 'family_ratio'
             },
             {
+                id: 'l2_size',
+                label: 'L2 Tile Size',
+                stage: 'Metric',
+                desc: 'Size of the L2 baseline JPEG tile (q=95). Included in total but not in residual family size.',
+                type: 'metric',
+                metric: 'l2_size'
+            },
+            {
                 id: 'psnr',
                 label: 'Avg PSNR \u2191',
                 stage: 'Metric',
@@ -934,18 +947,23 @@
         let cellSize = 150;
 
         function sortColumns(columns) {
-            // Sort: JPEG baselines left (ascending quality), ORIGAMI right (ascending quality)
+            // Sort order: JPEG/JP2 baselines -> YCbCr subsample -> SINGLE ORIGAMI -> tiled ORIGAMI
+            function typeOrder(name) {
+                if (name.startsWith('JPEG ') || name.startsWith('JP2 ')) return 0;
+                if (name.startsWith('YCbCr ')) return 1;
+                if (name.startsWith('SINGLE ')) return 2;
+                if (name.startsWith('ORIGAMI ')) return 3;
+                return 4;
+            }
             return columns.slice().sort((a, b) => {
-                const aIsBaseline = a.startsWith('JPEG ');
-                const bIsBaseline = b.startsWith('JPEG ');
-                // Baselines before ORIGAMI
-                if (aIsBaseline && !bIsBaseline) return -1;
-                if (!aIsBaseline && bIsBaseline) return 1;
-                // Within same type, sort by quality number ascending
+                const aOrder = typeOrder(a);
+                const bOrder = typeOrder(b);
+                if (aOrder !== bOrder) return aOrder - bOrder;
+                // Within same type, sort by trailing quality number ascending
                 const aNum = parseInt(a.match(/(\d+)$/)?.[1] || '0');
                 const bNum = parseInt(b.match(/(\d+)$/)?.[1] || '0');
                 if (aNum !== bNum) return aNum - bNum;
-                // Same quality, sort by encoder name
+                // Same quality, sort by name
                 return a.localeCompare(b);
             });
         }
@@ -961,7 +979,8 @@
                     activeColumns = [];
                 }
 
-                // Populate add column dropdown
+                // Populate filter dropdowns and add column dropdown
+                populateFilterDropdowns();
                 updateAddColumnDropdown();
 
                 // Build tile list
@@ -1007,14 +1026,91 @@
             });
         }
 
+        // Classify a capture key into type and codec
+        function classifyCapture(key) {
+            const cap = captures[key];
+            let type = 'Other';
+            let codec = 'unknown';
+
+            if (key.startsWith('JPEG ') || key.startsWith('JP2 ')) {
+                type = 'Baseline';
+            } else if (key.startsWith('OPTL2 ')) {
+                if (key.includes('L1=')) {
+                    type = 'OPTL2 Split';
+                } else {
+                    type = 'OPTL2';
+                }
+            } else if (key.startsWith('ORIGAMI ')) {
+                // Check for split-quality
+                if (key.includes('L1=')) {
+                    type = 'ORIGAMI Split';
+                } else {
+                    type = 'ORIGAMI';
+                }
+            } else if (key.startsWith('SINGLE ')) {
+                type = 'Single';
+            } else if (key.startsWith('YCbCr ')) {
+                type = 'YCbCr';
+            }
+
+            // Extract codec from key
+            const codecMatch = key.match(/(?:JPEG|ORIGAMI|OPTL2|SINGLE|YCbCr)\s+(turbo|mozjpeg|jpegli|jpegxl|webp|jpeg2000)/i);
+            if (codecMatch) {
+                codec = codecMatch[1].toLowerCase();
+            } else if (key.startsWith('JP2 ')) {
+                codec = 'jpeg2000';
+            }
+
+            return { type, codec };
+        }
+
+        function populateFilterDropdowns() {
+            const types = new Set();
+            const codecs = new Set();
+
+            Object.keys(captures).forEach(key => {
+                const { type, codec } = classifyCapture(key);
+                types.add(type);
+                codecs.add(codec);
+            });
+
+            const typeSelect = document.getElementById('filterType');
+            typeSelect.innerHTML = '<option value="">All Types</option>';
+            [...types].sort().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                typeSelect.appendChild(opt);
+            });
+
+            const codecSelect = document.getElementById('filterCodec');
+            codecSelect.innerHTML = '<option value="">All Codecs</option>';
+            [...codecs].sort().forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                codecSelect.appendChild(opt);
+            });
+        }
+
+        function getFilteredKeys() {
+            const typeFilter = document.getElementById('filterType').value;
+            const codecFilter = document.getElementById('filterCodec').value;
+
+            return sortColumns(Object.keys(captures)).filter(key => {
+                const { type, codec } = classifyCapture(key);
+                if (typeFilter && type !== typeFilter) return false;
+                if (codecFilter && codec !== codecFilter) return false;
+                return true;
+            });
+        }
+
         function updateAddColumnDropdown() {
             const select = document.getElementById('addColumn');
-            const filterText = (document.getElementById('filterInput')?.value || '').toLowerCase();
             select.innerHTML = '<option value="">Select run...</option>';
 
-            sortColumns(Object.keys(captures)).forEach(key => {
+            getFilteredKeys().forEach(key => {
                 if (!activeColumns.includes(key)) {
-                    if (filterText && !key.toLowerCase().includes(filterText)) return;
                     const option = document.createElement('option');
                     option.value = key;
                     option.textContent = key;
@@ -1023,8 +1119,17 @@
             });
         }
 
-        function filterAddColumnDropdown() {
+        function updateFilteredDropdown() {
             updateAddColumnDropdown();
+        }
+
+        function addAllFiltered() {
+            const toAdd = getFilteredKeys().filter(k => !activeColumns.includes(k));
+            if (toAdd.length === 0) return;
+            activeColumns = sortColumns([...activeColumns, ...toAdd]);
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
         }
 
         async function loadTile(index) {
@@ -1091,6 +1196,8 @@
                         html += `<span class="metric-value">${sourceKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(1024px source)</span>`;
                     } else if (stage.metric === 'family_ratio') {
                         html += '<span class="metric-value">1:1</span>';
+                    } else if (stage.metric === 'l2_size') {
+                        html += '<span class="metric-value">\u2014</span>';
                     } else if (stage.metric === 'psnr') {
                         html += '<span class="metric-value">&infin;</span><span class="metric-unit">dB</span>';
                     } else if (stage.metric === 'ssim') {
@@ -1268,6 +1375,59 @@
                     let html = '';
 
                     const isJpegBaseline = capture.type === 'jpeg_baseline' || manifest.type === 'jpeg_baseline';
+                    const isSingleType = manifest.type === 'single_origami' || manifest.type === 'single_ycbcr';
+
+                    // Handle single_origami and single_ycbcr types
+                    if (isSingleType) {
+                        const sizes = manifest.sizes || {};
+                        const metrics = (manifest.metrics && manifest.metrics.reconstruction) || {};
+                        const totalKB = (sizes.total_compressed_size || 0) / 1024;
+
+                        switch(stage.metric) {
+                            case 'tile_size':
+                            case 'family_size':
+                                value = sizes.total_compressed_size || null;
+                                if (value) html = `<span class="metric-value">${totalKB.toFixed(1)}</span><span class="metric-unit">KB</span>`;
+                                break;
+                            case 'tile_ratio':
+                            case 'family_ratio':
+                                value = sizes.compression_ratio || null;
+                                if (value) html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
+                                break;
+                            case 'psnr':
+                                value = metrics.psnr ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
+                                break;
+                            case 'ssim':
+                                value = metrics.ssim ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'mse':
+                                value = metrics.mse ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(1)}</span>`;
+                                break;
+                            case 'vif':
+                                value = metrics.vif ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'delta_e':
+                                value = metrics.delta_e ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(2)}</span>`;
+                                break;
+                            case 'lpips':
+                                value = metrics.lpips ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                        }
+
+                        if (html) {
+                            container.innerHTML = html;
+                            if (value !== null) container.dataset.metricValue = value;
+                        } else {
+                            container.innerHTML = '<span class="metric-error">N/A</span>';
+                        }
+                        return;
+                    }
 
                     function getOrigamiMetric(manifest, tile, metricName) {
                         const level = tile.level;
@@ -1397,6 +1557,28 @@
                             }
                             break;
                         }
+                        case 'l2_size': {
+                            let l2Bytes = null;
+                            if (isJpegBaseline) {
+                                // Baseline runs: look for L2_0_0 tile size
+                                if (manifest.tiles && manifest.tiles['L2_0_0']) {
+                                    l2Bytes = manifest.tiles['L2_0_0'].size_bytes;
+                                }
+                            } else {
+                                // ORIGAMI runs: L2 baseline size from size_comparison
+                                if (manifest.size_comparison && manifest.size_comparison.origami_L2_baseline) {
+                                    l2Bytes = manifest.size_comparison.origami_L2_baseline;
+                                } else if (manifest.size_comparison && manifest.size_comparison.baseline_L2) {
+                                    l2Bytes = manifest.size_comparison.baseline_L2;
+                                }
+                            }
+                            if (l2Bytes) {
+                                value = l2Bytes;
+                                const kb = (l2Bytes / 1024).toFixed(1);
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                            }
+                            break;
+                        }
                         case 'psnr':
                             value = avgFamilyMetric(manifest, isJpegBaseline, 'psnr', 'final_psnr');
                             if (value !== null) {
@@ -1452,12 +1634,74 @@
             }
         }
 
+        // Map viewer stage IDs to manifest image keys for single_origami type
+        const singleOrigamiStageMap = {
+            'original_rgb': 'original',
+            'l2_parent_original': 'prior_decoded',
+            'l2_parent_upsampled': 'prediction',    // Not used as l2_parent type
+            'y_original': 'Y_original',
+            'residual_raw': 'residual_raw',
+            'residual_encoded': 'residual_centered',
+            'reconstructed_rgb': 'reconstructed',
+        };
+
+        // Map viewer stage IDs to manifest image keys for single_ycbcr type
+        const singleYcbcrStageMap = {
+            'original_rgb': 'original',
+            'y_original': 'Y_original',
+            'cb_chroma': 'Cb_original_half',
+            'cr_chroma': 'Cr_original_half',
+            'reconstructed_rgb': 'reconstructed',
+        };
+
         function loadStageImage(columnId, stage, tile, captureKey, isOriginal) {
             const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
             if (!container) return;
 
             const capture = captures[captureKey];
             let imagePath = null;
+
+            // Handle single_origami and single_ycbcr types
+            const isSingleOrigami = capture && capture.type === 'single_origami';
+            const isSingleYcbcr = capture && capture.type === 'single_ycbcr';
+
+            if (isSingleOrigami || isSingleYcbcr) {
+                const stageMap = isSingleOrigami ? singleOrigamiStageMap : singleYcbcrStageMap;
+                let imageKey = stageMap[stage.id];
+
+                // For non-original columns, skip showing original/reference data
+                if (!isOriginal && (stage.id === 'original_rgb' || stage.id === 'y_original' ||
+                    stage.id === 'l2_parent_original')) {
+                    return;
+                }
+
+                // Special case: Original column for reconstructed shows original
+                if (isOriginal && stage.id === 'reconstructed_rgb') {
+                    imageKey = 'original';
+                }
+
+                // For single_origami, map the l2_parent_upsampled stage
+                if (isSingleOrigami && stage.id === 'l2_parent_upsampled') {
+                    imageKey = 'prediction';
+                }
+
+                if (imageKey) {
+                    imagePath = `/image/${imageKey}.png?capture=${captureKey}`;
+                }
+
+                if (imagePath) {
+                    const img = document.createElement('img');
+                    img.src = imagePath;
+                    img.onerror = () => {
+                        container.innerHTML = '<div class="no-image">N/A</div>';
+                    };
+                    container.innerHTML = '';
+                    container.appendChild(img);
+                } else {
+                    container.innerHTML = '<div class="no-image">N/A</div>';
+                }
+                return;
+            }
 
             // Special case: Show original RGB in the Original column for reconstructed stage
             if (isOriginal && stage.id === 'reconstructed_rgb') {

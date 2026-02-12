@@ -35,10 +35,11 @@ async function scanCaptures() {
       'jpegli': 'jpegli',
       'mozjpeg': 'mozjpeg',
       'jpegxl': 'jpegxl',
+      'webp': 'webp',
     };
 
     // --- JPEG Baseline patterns: {encoder}_jpeg_baseline_q{N} or jpeg_baseline_q{N} ---
-    const baselineMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl)_)?jpeg_baseline_q(\d+)$/);
+    const baselineMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?jpeg_baseline_q(\d+)$/);
     if (baselineMatch) {
       const encoder = baselineMatch[1] || 'libjpeg-turbo';
       const quality = parseInt(baselineMatch[2]);
@@ -77,8 +78,124 @@ async function scanCaptures() {
       continue;
     }
 
+    // --- Single ORIGAMI: single_origami_p{N}_r{N} ---
+    const singleMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?single_origami_p(\d+)_r(\d+)$/);
+    if (singleMatch) {
+      const encoder = singleMatch[1] || 'libjpeg-turbo';
+      const priorQ = parseInt(singleMatch[2]);
+      const residualQ = parseInt(singleMatch[3]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
+      captures[`SINGLE ${displayEncoder} p${priorQ} r${residualQ}`] = {
+        type: 'single_origami', encoder, q: residualQ, j: residualQ,
+        prior_quality: priorQ, residual_quality: residualQ,
+        name: dirName, has_compress: fs.existsSync(path.join(dirPath, 'compress'))
+      };
+      continue;
+    }
+
+    // --- Single YCbCr subsample: single_ycbcr_y{N}_c{N} ---
+    const ycbcrMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?single_ycbcr_y(\d+)_c(\d+)$/);
+    if (ycbcrMatch) {
+      const encoder = ycbcrMatch[1] || 'libjpeg-turbo';
+      const lumaQ = parseInt(ycbcrMatch[2]);
+      const chromaQ = parseInt(ycbcrMatch[3]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
+      captures[`YCbCr ${displayEncoder} y${lumaQ} c${chromaQ}`] = {
+        type: 'single_ycbcr', encoder, q: lumaQ, j: lumaQ,
+        luma_quality: lumaQ, chroma_quality: chromaQ,
+        name: dirName, has_compress: fs.existsSync(path.join(dirPath, 'compress'))
+      };
+      continue;
+    }
+
+    // --- OptL2 split-quality ORIGAMI: optl2_{encoder}_debug_l1q{N}_l0q{N}_pac ---
+    const optl2SplitMatch = dirName.match(/^optl2_(?:(jpegli|mozjpeg|jpegxl|webp)_)?debug_l1q(\d+)_l0q(\d+)(?:_pac)?$/);
+    if (optl2SplitMatch) {
+      const encoder = optl2SplitMatch[1] || 'libjpeg-turbo';
+      const l1q = parseInt(optl2SplitMatch[2]);
+      const l0q = parseInt(optl2SplitMatch[3]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
+
+      const hasImages = fs.existsSync(path.join(dirPath, 'images'));
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+
+      if (hasImages || hasCompress || hasDecompress) {
+        captures[`OPTL2 ${displayEncoder} L1=${l1q} L0=${l0q}`] = {
+          type: 'origami',
+          encoder,
+          q: l0q,
+          j: l0q,
+          l1q,
+          l0q,
+          optl2: true,
+          name: dirName,
+          has_images: hasImages,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- OptL2 flat-quality ORIGAMI: optl2_{encoder}_debug_j{N}_pac ---
+    const optl2FlatMatch = dirName.match(/^optl2_(?:(jpegli|mozjpeg|jpegxl|webp)_)?(?:debug_)?j(\d+)(?:_pac)?$/);
+    if (optl2FlatMatch) {
+      const encoder = optl2FlatMatch[1] || 'libjpeg-turbo';
+      const quality = parseInt(optl2FlatMatch[2]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
+
+      const hasImages = fs.existsSync(path.join(dirPath, 'images'));
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+
+      if (hasImages || hasCompress || hasDecompress) {
+        captures[`OPTL2 ${displayEncoder} ${quality}`] = {
+          type: 'origami',
+          encoder,
+          q: quality,
+          j: quality,
+          optl2: true,
+          name: dirName,
+          has_images: hasImages,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- Split-quality ORIGAMI: {encoder}_debug_l1q{N}_l0q{N}_pac ---
+    const splitMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?debug_l1q(\d+)_l0q(\d+)(?:_pac)?$/);
+    if (splitMatch) {
+      const encoder = splitMatch[1] || 'libjpeg-turbo';
+      const l1q = parseInt(splitMatch[2]);
+      const l0q = parseInt(splitMatch[3]);
+      const displayEncoder = encoderDisplayName[encoder] || encoder;
+
+      const hasImages = fs.existsSync(path.join(dirPath, 'images'));
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+
+      if (hasImages || hasCompress || hasDecompress) {
+        captures[`ORIGAMI ${displayEncoder} L1=${l1q} L0=${l0q}`] = {
+          type: 'origami',
+          encoder,
+          q: l0q,
+          j: l0q,
+          l1q,
+          l0q,
+          name: dirName,
+          has_images: hasImages,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
     // --- ORIGAMI patterns: {encoder}_debug_j{N}_pac or debug_j{N}_pac ---
-    const origamiMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl)_)?(?:debug_)?j(\d+)(?:_pac)?$/);
+    const origamiMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?(?:debug_)?j(\d+)(?:_pac)?$/);
     if (origamiMatch) {
       const encoder = origamiMatch[1] || 'libjpeg-turbo';
       const quality = parseInt(origamiMatch[2]);
@@ -213,8 +330,8 @@ app.get('/image/*', async (req, res) => {
       const tileIdMatch = imagePath.match(/^(L[012]_\d+_\d+)/);
       if (tileIdMatch && (imagePath.includes('original') || imagePath.includes('reconstructed'))) {
         const tileId = tileIdMatch[1];
-        // Try .jpg first, then .png (JXL runs use PNG display copies)
-        for (const ext of ['.jpg', '.png']) {
+        // Try .jpg first, then .webp, then .png (JXL runs use PNG display copies)
+        for (const ext of ['.jpg', '.webp', '.png']) {
           const tilePath = path.join(runDir, 'tiles', `${tileId}${ext}`);
           if (fs.existsSync(tilePath)) {
             return res.sendFile(tilePath);
@@ -224,12 +341,51 @@ app.get('/image/*', async (req, res) => {
       return res.status(404).send('Not available for baseline');
     }
 
+    // Handle single_origami and single_ycbcr captures
+    if (capture.type === 'single_origami' || capture.type === 'single_ycbcr') {
+      // Read manifest to get image key -> file path mapping
+      let manifestData = null;
+      const manifestPath = path.join(runDir, 'manifest.json');
+      if (fs.existsSync(manifestPath)) {
+        try {
+          manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        } catch (e) { /* ignore parse errors */ }
+      }
+
+      if (manifestData && manifestData.images) {
+        // Extract the image key from the request path
+        // e.g. "original.png" -> key "original", "reconstructed.png" -> "reconstructed"
+        const baseName = imagePath.replace(/\.(png|jpg|jxl|webp)$/, '');
+        // Also try removing tile prefix like "L0_0_0_" since viewer may send it
+        const cleanKey = baseName.replace(/^L[012]_\d+_\d+_/, '');
+
+        const relPath = manifestData.images[cleanKey];
+        if (relPath) {
+          const absPath = path.join(runDir, relPath);
+          if (fs.existsSync(absPath)) {
+            return res.sendFile(absPath);
+          }
+        }
+
+        // Fallback: try finding numbered file in compress/
+        const compDir = path.join(runDir, 'compress');
+        if (fs.existsSync(compDir)) {
+          const files = fs.readdirSync(compDir);
+          for (const ext of ['.png', '.jpg', '.webp']) {
+            const match = files.find(f => f.endsWith(`_${cleanKey}${ext}`) || f.endsWith(`_${cleanKey}_rgb${ext}`));
+            if (match) return res.sendFile(path.join(compDir, match));
+          }
+        }
+      }
+      return res.status(404).send('Image not found');
+    }
+
     // Handle ORIGAMI captures
     const compressDir = path.join(runDir, 'compress');
     const decompressDir = path.join(runDir, 'decompress');
     const imagesDir = path.join(runDir, 'images');
 
-    const baseName = imagePath.replace('.png', '').replace('.jpg', '');
+    const baseName = imagePath.replace('.png', '').replace('.jpg', '').replace('.webp', '');
 
     // L2 files don't have coordinates: L2_0_0_original -> L2_original
     let l2BaseName = null;
@@ -244,8 +400,8 @@ app.get('/image/*', async (req, res) => {
     function findNumberedFile(dir, base) {
       if (!fs.existsSync(dir)) return null;
       const files = fs.readdirSync(dir);
-      // Try matching *_{baseName}.png then *_{baseName}.jpg
-      for (const ext of ['.png', '.jpg']) {
+      // Try matching *_{baseName}.png then *_{baseName}.jpg then *_{baseName}.webp
+      for (const ext of ['.png', '.jpg', '.webp']) {
         const match = files.find(f => f.endsWith(`_${base}${ext}`));
         if (match) return path.join(dir, match);
       }
