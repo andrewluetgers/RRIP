@@ -1,22 +1,90 @@
 use anyhow::Result;
+use std::fmt;
+use std::str::FromStr;
+
+/// Chroma subsampling mode for JPEG encoding
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChromaSubsampling {
+    /// 4:4:4 — no chroma subsampling, best quality, largest files
+    Css444,
+    /// 4:2:0 — standard chroma subsampling (naive downsample), smallest files
+    Css420,
+    /// 4:2:0 with gradient-descent-optimized chroma planes, near-4:4:4 quality at 4:2:0 size
+    Css420Opt,
+}
+
+impl Default for ChromaSubsampling {
+    fn default() -> Self {
+        ChromaSubsampling::Css444
+    }
+}
+
+impl fmt::Display for ChromaSubsampling {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChromaSubsampling::Css444 => write!(f, "444"),
+            ChromaSubsampling::Css420 => write!(f, "420"),
+            ChromaSubsampling::Css420Opt => write!(f, "420opt"),
+        }
+    }
+}
+
+impl FromStr for ChromaSubsampling {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "444" => Ok(ChromaSubsampling::Css444),
+            "420" => Ok(ChromaSubsampling::Css420),
+            "420opt" => Ok(ChromaSubsampling::Css420Opt),
+            other => Err(format!("unknown subsampling: '{}'. Use 444, 420, or 420opt", other)),
+        }
+    }
+}
 
 /// Trait for JPEG encoding backends
 pub trait JpegEncoder: Send + Sync {
     fn encode_rgb(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>>;
     fn encode_gray(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>>;
+    /// Encode RGB with a specific chroma subsampling mode.
+    /// Default impl ignores subsamp and calls encode_rgb (for non-turbojpeg backends).
+    fn encode_rgb_with_subsamp(
+        &self, pixels: &[u8], width: u32, height: u32, quality: u8, subsamp: ChromaSubsampling,
+    ) -> Result<Vec<u8>> {
+        let _ = subsamp;
+        self.encode_rgb(pixels, width, height, quality)
+    }
     fn name(&self) -> &str;
 }
 
-/// TurboJPEG encoder backend (default, fastest)
+/// TurboJPEG encoder backend (default, uses libjpeg API with Huffman optimization)
 pub struct TurboJpegEncoder;
 
 impl JpegEncoder for TurboJpegEncoder {
     fn encode_rgb(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::turbojpeg_optimized::encode_jpeg_turbo(pixels, width, height, quality)
+        // Use libjpeg API with Huffman optimization (4:4:4)
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false, false, true)
     }
 
     fn encode_gray(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::turbojpeg_optimized::encode_luma_turbo(pixels, width, height, quality)
+        // Grayscale: subsamp is irrelevant
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, true, false, true)
+    }
+
+    fn encode_rgb_with_subsamp(
+        &self, pixels: &[u8], width: u32, height: u32, quality: u8, subsamp: ChromaSubsampling,
+    ) -> Result<Vec<u8>> {
+        match subsamp {
+            ChromaSubsampling::Css444 => {
+                crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false, false, true)
+            }
+            ChromaSubsampling::Css420 => {
+                crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false, true, true)
+            }
+            ChromaSubsampling::Css420Opt => {
+                // 420opt uses turbojpeg's tjCompressFromYUVPlanes for precise chroma control
+                crate::turbojpeg_optimized::encode_jpeg_turbo_420opt(pixels, width, height, quality)
+            }
+        }
     }
 
     fn name(&self) -> &str {
@@ -32,11 +100,12 @@ pub struct MozJpegEncoder;
 #[cfg(feature = "mozjpeg")]
 impl JpegEncoder for MozJpegEncoder {
     fn encode_rgb(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false)
+        // mozjpeg does its own Huffman optimization internally
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false, false, true)
     }
 
     fn encode_gray(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, true)
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, true, false, true)
     }
 
     fn name(&self) -> &str {
@@ -52,11 +121,11 @@ pub struct JpegliEncoder;
 #[cfg(feature = "jpegli")]
 impl JpegEncoder for JpegliEncoder {
     fn encode_rgb(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false)
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, false, false, true)
     }
 
     fn encode_gray(&self, pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
-        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, true)
+        crate::core::libjpeg_ffi::encode_libjpeg(pixels, width, height, quality, true, false, true)
     }
 
     fn name(&self) -> &str {

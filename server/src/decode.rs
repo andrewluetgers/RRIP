@@ -663,13 +663,21 @@ mod tests {
 
         // Step 2: Encode residuals + pack
         let encode_args = crate::encode::EncodeArgs {
-            pyramid: pyramid_dir.clone(),
+            pyramid: Some(pyramid_dir.clone()),
+            image: None,
             out: encode_out.clone(),
             tile: 256,
             resq: 50,
+            l1q: None,
+            l0q: None,
+            baseq: 95,
+            subsamp: "444".to_string(),
             encoder: "turbojpeg".to_string(),
             max_parents: None,
             pack: true,
+            manifest: false,
+            optl2: false,
+            debug_images: false,
         };
         crate::encode::run(encode_args).unwrap();
 
@@ -1062,13 +1070,21 @@ mod tests {
         // Step 3: Encode (timed)
         let encode_start = Instant::now();
         let encode_args = crate::encode::EncodeArgs {
-            pyramid: pyramid_dir.clone(),
+            pyramid: Some(pyramid_dir.clone()),
+            image: None,
             out: encode_out.clone(),
             tile: 256,
             resq: 90,
+            l1q: None,
+            l0q: None,
+            baseq: 95,
+            subsamp: "444".to_string(),
             encoder: "turbojpeg".to_string(),
             max_parents: None,
             pack: true,
+            manifest: false,
+            optl2: false,
+            debug_images: false,
         };
         crate::encode::run(encode_args).unwrap();
         let encode_ms = encode_start.elapsed().as_millis();

@@ -23,6 +23,7 @@ tower-http = { version = "0.5", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 turbojpeg = "0.5"
+turbojpeg-sys = { version = "0.2", default-features = false }
 memmap2 = "0.9"
 sysinfo = "0.30"
 crossbeam = "0.8"

@@ -165,20 +165,27 @@ async function scanCaptures() {
       continue;
     }
 
-    // --- Split-quality ORIGAMI: {encoder}_debug_l1q{N}_l0q{N}_pac ---
-    const splitMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?debug_l1q(\d+)_l0q(\d+)(?:_pac)?$/);
+    // --- Split-quality ORIGAMI: {prefix_}{encoder}_debug_l1q{N}_l0q{N}_{subsamp}_{optl2}_pac ---
+    const splitMatch = dirName.match(/^(?:(py|rs)_)?(?:(jpegli|mozjpeg|jpegxl|webp)_)?debug_l1q(\d+)_l0q(\d+)(?:_s(420opt|420|444))?(?:_(optl2))?(?:_pac)?$/);
     if (splitMatch) {
-      const encoder = splitMatch[1] || 'libjpeg-turbo';
-      const l1q = parseInt(splitMatch[2]);
-      const l0q = parseInt(splitMatch[3]);
+      const implPrefix = splitMatch[1];
+      const encoder = splitMatch[2] || 'libjpeg-turbo';
+      const l1q = parseInt(splitMatch[3]);
+      const l0q = parseInt(splitMatch[4]);
+      const subsamp = splitMatch[5];
+      const optl2 = splitMatch[6];
       const displayEncoder = encoderDisplayName[encoder] || encoder;
 
       const hasImages = fs.existsSync(path.join(dirPath, 'images'));
       const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
       const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
 
-      if (hasImages || hasCompress || hasDecompress) {
-        captures[`ORIGAMI ${displayEncoder} L1=${l1q} L0=${l0q}`] = {
+      if (hasImages || hasCompress || hasDecompress || hasManifest) {
+        const prefix = implPrefix ? implPrefix.toUpperCase() + ' ' : '';
+        const subsampDisplay = subsamp || '444';
+        const optl2Suffix = optl2 ? ' optL2' : '';
+        captures[`${prefix}ORIGAMI ${displayEncoder} L1=${l1q} L0=${l0q} ${subsampDisplay}${optl2Suffix}`] = {
           type: 'origami',
           encoder,
           q: l0q,
@@ -194,25 +201,94 @@ async function scanCaptures() {
       continue;
     }
 
-    // --- ORIGAMI patterns: {encoder}_debug_j{N}_pac or debug_j{N}_pac ---
-    const origamiMatch = dirName.match(/^(?:(jpegli|mozjpeg|jpegxl|webp)_)?(?:debug_)?j(\d+)(?:_pac)?$/);
+    // --- ORIGAMI patterns: {prefix_}{encoder}_debug_j{N}_{subsamp}_{optl2}_pac or debug_j{N}_pac ---
+    // Supports optional py_/rs_ prefix for implementation comparison runs
+    // Supports optional _s{420|420opt|444} suffix for chroma subsampling
+    // Supports optional _optl2 suffix for L2 optimization
+    const origamiMatch = dirName.match(/^(?:(py|rs)_)?(?:(jpegli|mozjpeg|jpegxl|webp)_)?(?:debug_)?j(\d+)(?:_s(420opt|420|444))?(?:_(optl2))?(?:_pac)?$/);
     if (origamiMatch) {
-      const encoder = origamiMatch[1] || 'libjpeg-turbo';
-      const quality = parseInt(origamiMatch[2]);
+      const implPrefix = origamiMatch[1]; // 'py', 'rs', or undefined
+      const encoder = origamiMatch[2] || 'libjpeg-turbo';
+      const quality = parseInt(origamiMatch[3]);
+      const subsamp = origamiMatch[4]; // '420', '420opt', '444', or undefined
+      const optl2 = origamiMatch[5];   // 'optl2' or undefined
       const displayEncoder = encoderDisplayName[encoder] || encoder;
 
       const hasImages = fs.existsSync(path.join(dirPath, 'images'));
       const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
       const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
 
-      if (hasImages || hasCompress || hasDecompress) {
-        captures[`ORIGAMI ${displayEncoder} ${quality}`] = {
+      if (hasImages || hasCompress || hasDecompress || hasManifest) {
+        const prefix = implPrefix ? implPrefix.toUpperCase() + ' ' : '';
+        const subsampDisplay = subsamp || '444';
+        const optl2Suffix = optl2 ? ' optL2' : '';
+        captures[`${prefix}ORIGAMI ${displayEncoder} ${quality} ${subsampDisplay}${optl2Suffix}`] = {
           type: 'origami',
           encoder,
           q: quality,
           j: quality,
           name: dirName,
           has_images: hasImages,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- New naming: rs_{subsamp}[_optl2]_j{N} (uniform quality) ---
+    const newUniformMatch = dirName.match(/^rs_(444|420opt|420)(?:_(optl2))?_j(\d+)$/);
+    if (newUniformMatch) {
+      const subsamp = newUniformMatch[1];
+      const optl2 = newUniformMatch[2];
+      const quality = parseInt(newUniformMatch[3]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        const optl2Suffix = optl2 ? ' optL2' : '';
+        captures[`RS ORIGAMI turbo ${quality} ${subsamp}${optl2Suffix}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: quality,
+          j: quality,
+          subsamp,
+          optl2: !!optl2,
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- New naming: rs_{subsamp}[_optl2]_l1q{N}_l0q{N} (split quality) ---
+    const newSplitMatch = dirName.match(/^rs_(444|420opt|420)(?:_(optl2))?_l1q(\d+)_l0q(\d+)$/);
+    if (newSplitMatch) {
+      const subsamp = newSplitMatch[1];
+      const optl2 = newSplitMatch[2];
+      const l1q = parseInt(newSplitMatch[3]);
+      const l0q = parseInt(newSplitMatch[4]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        const optl2Suffix = optl2 ? ' optL2' : '';
+        captures[`RS ORIGAMI turbo L1=${l1q} L0=${l0q} ${subsamp}${optl2Suffix}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: l0q,
+          j: l0q,
+          l1q,
+          l0q,
+          subsamp,
+          optl2: !!optl2,
+          name: dirName,
           has_compress: hasCompress,
           has_decompress: hasDecompress
         };

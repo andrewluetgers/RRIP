@@ -26,6 +26,26 @@ pub fn load_luma_turbo(path: &Path) -> Result<(Vec<u8>, u32, u32)> {
     decode_luma_turbo(&jpeg_data)
 }
 
+/// Decode RGB JPEG from bytes using TurboJPEG
+pub fn decode_rgb_turbo(jpeg_data: &[u8]) -> Result<(Vec<u8>, u32, u32)> {
+    DECOMPRESSOR.with(|dec| {
+        let mut decompressor = dec.borrow_mut();
+        let header = decompressor.read_header(jpeg_data)?;
+        let width = header.width;
+        let height = header.height;
+        let mut pixels = vec![0u8; (width * height * 3) as usize];
+        let image = Image {
+            pixels: &mut pixels[..],
+            width,
+            height,
+            pitch: (width * 3) as usize,
+            format: PixelFormat::RGB,
+        };
+        decompressor.decompress(jpeg_data, image)?;
+        Ok((pixels, width as u32, height as u32))
+    })
+}
+
 /// Decode grayscale JPEG from bytes using TurboJPEG
 pub fn decode_luma_turbo(jpeg_data: &[u8]) -> Result<(Vec<u8>, u32, u32)> {
     DECOMPRESSOR.with(|dec| {
@@ -102,6 +122,145 @@ pub fn encode_jpeg_turbo(pixels: &[u8], width: u32, height: u32, quality: u8) ->
         compressor.compress_to_vec(image)
             .context("TurboJPEG compression failed")
     })
+}
+
+/// Fast JPEG encoding with 4:2:0 subsampling (naive).
+/// Used by the turbojpeg API path; 420 encoding via libjpeg FFI is preferred
+/// for file storage (has Huffman optimization).
+#[allow(dead_code)]
+pub fn encode_jpeg_turbo_420(pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
+    COMPRESSOR.with(|comp| {
+        let mut compressor = comp.borrow_mut();
+        compressor.set_quality(quality as i32);
+        compressor.set_subsamp(Subsamp::Sub2x2);
+
+        let image = Image {
+            pixels,
+            width: width as usize,
+            height: height as usize,
+            pitch: (width * 3) as usize,
+            format: PixelFormat::RGB,
+        };
+
+        compressor.compress_to_vec(image)
+            .context("TurboJPEG 4:2:0 compression failed")
+    })
+}
+
+/// JPEG encoding with 4:2:0 and gradient-descent-optimized chroma planes.
+/// Uses tjCompressFromYUVPlanes for precise control over chroma content.
+pub fn encode_jpeg_turbo_420opt(pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
+    use crate::core::color::ycbcr_planes_from_rgb;
+    use crate::core::optimize_chroma::optimize_chroma_for_upsample;
+
+    let w = width as usize;
+    let h = height as usize;
+    let half_w = (w + 1) / 2;
+    let half_h = (h + 1) / 2;
+
+    // 1. RGB → Y/Cb/Cr planes
+    let (y_plane, cb_full, cr_full) = ycbcr_planes_from_rgb(pixels, width, height);
+
+    // 2. Downsample Cb/Cr from WxH → W/2×H/2 (box average)
+    let mut cb_half = downsample_2x_channel(&cb_full, w, h);
+    let mut cr_half = downsample_2x_channel(&cr_full, w, h);
+
+    // 3. Optimize each half-res chroma plane via gradient descent
+    cb_half = optimize_chroma_for_upsample(&cb_half, &cb_full, half_w, half_h, 8.0, 50, 0.25);
+    cr_half = optimize_chroma_for_upsample(&cr_half, &cr_full, half_w, half_h, 8.0, 50, 0.25);
+
+    // 4. Encode via tjCompressFromYUVPlanes
+    encode_yuv_planes_420(&y_plane, &cb_half, &cr_half, width, height, quality)
+}
+
+/// Downsample a single channel by 2x using box average (area-average of 2x2 blocks).
+pub fn downsample_2x_channel(src: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let half_w = (w + 1) / 2;
+    let half_h = (h + 1) / 2;
+    let mut dst = vec![0u8; half_w * half_h];
+
+    for dy in 0..half_h {
+        for dx in 0..half_w {
+            let sx = dx * 2;
+            let sy = dy * 2;
+            let p00 = src[sy * w + sx] as u32;
+            let p10 = if sx + 1 < w { src[sy * w + sx + 1] as u32 } else { p00 };
+            let p01 = if sy + 1 < h { src[(sy + 1) * w + sx] as u32 } else { p00 };
+            let p11 = if sx + 1 < w && sy + 1 < h {
+                src[(sy + 1) * w + sx + 1] as u32
+            } else if sy + 1 < h {
+                p01
+            } else {
+                p10
+            };
+            dst[dy * half_w + dx] = ((p00 + p10 + p01 + p11 + 2) / 4) as u8;
+        }
+    }
+    dst
+}
+
+/// Encode pre-separated YUV planes in 4:2:0 layout via turbojpeg raw FFI.
+/// Y plane: width x height, Cb/Cr planes: (width+1)/2 x (height+1)/2
+fn encode_yuv_planes_420(
+    y: &[u8], cb: &[u8], cr: &[u8],
+    width: u32, height: u32, quality: u8,
+) -> Result<Vec<u8>> {
+    let w = width as i32;
+    let h = height as i32;
+    let half_w = ((width + 1) / 2) as usize;
+    let half_h = ((height + 1) / 2) as usize;
+
+    // Build contiguous YUV planar buffer for tjCompressFromYUV
+    // Layout: Y (w*h) + Cb (half_w*half_h) + Cr (half_w*half_h)
+    // pad=1 means no row padding
+    let y_size = width as usize * height as usize;
+    let c_size = half_w * half_h;
+    let yuv_size = y_size + c_size * 2;
+    let mut yuv_buf = vec![0u8; yuv_size];
+
+    yuv_buf[..y_size].copy_from_slice(&y[..y_size]);
+    yuv_buf[y_size..y_size + c_size].copy_from_slice(&cb[..c_size]);
+    yuv_buf[y_size + c_size..y_size + c_size * 2].copy_from_slice(&cr[..c_size]);
+
+    // Call tjCompressFromYUV directly
+    unsafe {
+        let handle = turbojpeg::raw::tjInitCompress();
+        if handle.is_null() {
+            anyhow::bail!("tjInitCompress failed");
+        }
+
+        // Allocate output buffer
+        let _buf_size = turbojpeg::raw::tjBufSize(w, h, turbojpeg::raw::TJSAMP_TJSAMP_420 as i32);
+        let mut jpeg_buf: *mut u8 = std::ptr::null_mut();
+        let mut jpeg_size: libc::c_ulong = 0;
+
+        let ret = turbojpeg::raw::tjCompressFromYUV(
+            handle,
+            yuv_buf.as_ptr(),
+            w,
+            1, // pad = 1 (no row padding)
+            h,
+            turbojpeg::raw::TJSAMP_TJSAMP_420 as i32,
+            &mut jpeg_buf,
+            &mut jpeg_size,
+            quality as i32,
+            0, // flags
+        );
+
+        if ret != 0 {
+            let err_msg = std::ffi::CStr::from_ptr(turbojpeg::raw::tjGetErrorStr2(handle))
+                .to_string_lossy()
+                .to_string();
+            turbojpeg::raw::tjDestroy(handle);
+            anyhow::bail!("tjCompressFromYUV failed: {}", err_msg);
+        }
+
+        let result = std::slice::from_raw_parts(jpeg_buf, jpeg_size as usize).to_vec();
+        turbojpeg::raw::tjFree(jpeg_buf);
+        turbojpeg::raw::tjDestroy(handle);
+
+        Ok(result)
+    }
 }
 
 /// Fast grayscale JPEG encoding

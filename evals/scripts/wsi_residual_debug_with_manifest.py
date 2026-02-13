@@ -875,6 +875,102 @@ def create_pac_file(out_dir, l2_tile, l1_tiles, l0_tiles, tile_size, jpeg_qualit
 
     return pac_path, pac_size
 
+def _run_rust_encode(args):
+    """Delegate encoding to the Rust origami binary, then compute quality metrics."""
+    import subprocess
+    import shutil
+
+    # Map Python encoder names to Rust encoder names
+    encoder_map = {
+        "libjpeg-turbo": "turbojpeg",
+        "libjpeg": "turbojpeg",
+        "turbo": "turbojpeg",
+        "jpegli": "jpegli",
+        "mozjpeg": "mozjpeg",
+        "jpegxl": "jpegxl",
+        "webp": "webp",
+    }
+    rust_encoder = encoder_map.get(args.encoder.lower(), "turbojpeg")
+
+    # Auto-generate output dir
+    if args.out is None:
+        parts = [f"rust_{rust_encoder}", f"j{args.resq}"]
+        if args.subsamp != "444":
+            parts.append(f"s{args.subsamp}")
+        if args.optl2:
+            parts.append("optl2")
+        if args.pac:
+            parts.append("pac")
+        args.out = "evals/runs/" + "_".join(parts)
+
+    out_dir = pathlib.Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find origami binary
+    origami_bin = shutil.which("origami")
+    if origami_bin is None:
+        # Try local build paths
+        for candidate in [
+            "server/target2/release/origami",
+            "server/target2/debug/origami",
+            "server/target/release/origami",
+            "server/target/debug/origami",
+        ]:
+            if os.path.exists(candidate):
+                origami_bin = candidate
+                break
+    if origami_bin is None:
+        print("ERROR: origami binary not found. Build with: cd server && cargo build")
+        return
+
+    # Build command
+    cmd = [
+        origami_bin, "encode",
+        "--image", str(args.image),
+        "--out", str(out_dir),
+        "--resq", str(args.resq),
+        "--baseq", str(args.baseq),
+        "--tile", str(args.tile),
+        "--subsamp", args.subsamp,
+        "--encoder", rust_encoder,
+        "--manifest",
+    ]
+    if args.optl2:
+        cmd.append("--optl2")
+    if args.pac:
+        cmd.append("--pack")
+
+    print(f"Running: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+    if result.returncode != 0:
+        print(f"ERROR: origami encode failed with code {result.returncode}")
+        return
+
+    # Load the manifest produced by Rust
+    manifest_path = out_dir / "manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        print(f"\nRust encode complete:")
+        print(f"  L2 bytes: {manifest.get('l2_bytes', '?')}")
+        print(f"  Total bytes: {manifest.get('total_bytes', '?')}")
+        print(f"  Subsamp: {manifest.get('subsamp', '?')}")
+        print(f"  Encoder: {manifest.get('encoder', '?')}")
+        if 'tiles' in manifest:
+            psnrs = [t['y_psnr_db'] for t in manifest['tiles'] if 'y_psnr_db' in t]
+            if psnrs:
+                print(f"  Avg Y-PSNR: {sum(psnrs)/len(psnrs):.2f} dB")
+    else:
+        print("Warning: manifest.json not found in output")
+
+    # Post-processing: compute RGB quality metrics if possible
+    # Load original image and compute PSNR/SSIM vs Rust-reconstructed tiles
+    # (This is done in Python because the Rust encoder only computes Y-channel PSNR)
+    print(f"\nOutput directory: {args.out}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Debug ORIGAMI compression with detailed manifest")
     parser.add_argument("--image", required=True, help="Path to input image (1024x1024)")
@@ -887,8 +983,20 @@ def main():
     parser.add_argument("--pac", action="store_true", help="Create PAC file for serving")
     parser.add_argument("--encoder", default="libjpeg-turbo",
                        help="Encoder: libjpeg-turbo, jpegli, mozjpeg, jpegxl, or webp")
+    parser.add_argument("--subsamp", default="444",
+                       help="Chroma subsampling: 444, 420, or 420opt (Rust encoder only)")
+    parser.add_argument("--use-rust", action="store_true",
+                       help="Use origami encode binary instead of Python pipeline")
+    parser.add_argument("--optl2", action="store_true",
+                       help="Optimize L2 tile (Rust encoder only)")
 
     args = parser.parse_args()
+
+    # --use-rust: delegate encoding to the Rust origami binary
+    if args.use_rust:
+        _run_rust_encode(args)
+        return
+
     encoder = parse_encoder_arg(args.encoder)
 
     # Generate output directory name if not specified

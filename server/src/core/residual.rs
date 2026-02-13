@@ -111,6 +111,19 @@ pub fn center_residual(residual: &[i16]) -> Vec<u8> {
         .collect()
 }
 
+/// Compute centered residual from u8 ground truth and f32 prediction in one step.
+/// This avoids quantizing the prediction to u8 before subtraction, giving ~0.5 LSB
+/// better precision (matching Python's float pipeline).
+/// Returns: clamp(round(gt - pred_f32 + 128), 0, 255) as u8
+pub fn compute_residual_f32(y_gt: &[u8], y_pred_f32: &[f32]) -> Vec<u8> {
+    y_gt.iter()
+        .zip(y_pred_f32.iter())
+        .map(|(&gt_val, &pred_val)| {
+            (gt_val as f32 - pred_val + 128.0).round().clamp(0.0, 255.0) as u8
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

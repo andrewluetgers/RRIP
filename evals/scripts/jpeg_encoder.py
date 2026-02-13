@@ -67,9 +67,10 @@ def is_webp_encoder(encoder: JpegEncoder) -> bool:
 # libjpeg-turbo (Pillow)
 # ---------------------------------------------------------------------------
 
-def _encode_libjpeg(image: Image.Image, output_path: str, quality: int) -> int:
-    """Encode JPEG using Pillow (libjpeg-turbo). Returns file size in bytes."""
-    image.save(output_path, format="JPEG", quality=quality, optimize=True)
+def _encode_libjpeg(image: Image.Image, output_path: str, quality: int, subsampling: int = 0) -> int:
+    """Encode JPEG using Pillow (libjpeg-turbo). Returns file size in bytes.
+    subsampling=0 means 4:4:4, subsampling=2 means 4:2:0."""
+    image.save(output_path, format="JPEG", quality=quality, optimize=True, subsampling=subsampling)
     return Path(output_path).stat().st_size
 
 
@@ -347,7 +348,7 @@ def encode_jpeg_to_bytes(
         return _encode_webp_to_bytes(image, quality)
     else:
         buf = io.BytesIO()
-        image.save(buf, format="JPEG", quality=quality, optimize=True)
+        image.save(buf, format="JPEG", quality=quality, optimize=True, subsampling=0)
         return buf.getvalue()
 
 

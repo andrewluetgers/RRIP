@@ -9,12 +9,6 @@ fn main() {
         "Features `mozjpeg` and `jpegli` are mutually exclusive — both provide libjpeg62 symbols."
     );
 
-    let need_libjpeg_ffi = cfg!(feature = "mozjpeg") || cfg!(feature = "jpegli");
-
-    if !need_libjpeg_ffi {
-        return;
-    }
-
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
@@ -33,9 +27,7 @@ fn main() {
         // Static mozjpeg library:
         let jpeg_lib = format!("{}/libjpeg.a", lib_dir);
         println!("cargo:rustc-link-arg={}", jpeg_lib);
-    }
-
-    if cfg!(feature = "jpegli") {
+    } else if cfg!(feature = "jpegli") {
         let lib_dir = env::var("JPEGLI_LIB_DIR")
             .unwrap_or_else(|_| format!("{}/../vendor/jpegli/lib", manifest_dir));
         let include_dir = env::var("JPEGLI_INCLUDE_DIR")
@@ -52,6 +44,20 @@ fn main() {
         } else {
             println!("cargo:rustc-link-arg=-lstdc++");
         }
+    } else {
+        // Default: compile C wrapper against libjpeg-turbo's libjpeg API.
+        // turbojpeg-sys exports DEP_TURBOJPEG_ROOT pointing to its build output.
+        let turbo_root = env::var("DEP_TURBOJPEG_ROOT")
+            .expect("DEP_TURBOJPEG_ROOT not set — turbojpeg-sys should provide this");
+        let include_dir = format!("{}/include", turbo_root);
+
+        compile_c_wrapper(&include_dir, &out_dir);
+
+        let wrapper_lib = out_dir.join("liblibjpeg_compress.a");
+        println!("cargo:rustc-link-arg={}", wrapper_lib.display());
+        // Link libjpeg.a from turbojpeg-sys (the standard libjpeg62 API)
+        let jpeg_lib = format!("{}/lib/libjpeg.a", turbo_root);
+        println!("cargo:rustc-link-arg={}", jpeg_lib);
     }
 
     println!("cargo:rerun-if-env-changed=MOZJPEG_LIB_DIR");

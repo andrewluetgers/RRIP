@@ -4,61 +4,51 @@
 use rayon::prelude::*;
 
 /// Fast 2x upsampling for a single channel (Y, Cb, or Cr)
-/// Uses bilinear interpolation optimized for 2x scaling
-/// Automatically uses NEON on ARM processors when available
+/// Uses center-aligned bilinear interpolation: src_pos = (dst + 0.5) * 0.5 - 0.5
+/// This matches the standard image resize convention (PIL, OpenCV, image crate).
 pub fn upsample_2x_channel(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
-    // TEMPORARY: Disable NEON version as it's doing nearest-neighbor horizontally
-    // instead of proper bilinear interpolation, causing jaggies
-    // TODO: Fix NEON implementation to do proper bilinear
-    // #[cfg(target_arch = "aarch64")]
-    // {
-    //     unsafe { return upsample_2x_channel_neon(src, src_width, src_height); }
-    // }
+    let dst_width = src_width * 2;
+    let dst_height = src_height * 2;
+    let mut dst = vec![0u8; dst_width * dst_height];
+    let src_w_max = (src_width - 1) as i32;
+    let src_h_max = (src_height - 1) as i32;
 
-    // Use correct bilinear implementation for all architectures
-    {
-        let dst_width = src_width * 2;
-        let dst_height = src_height * 2;
-        let mut dst = vec![0u8; dst_width * dst_height];
+    // Process in parallel by destination rows
+    dst.par_chunks_mut(dst_width)
+        .enumerate()
+        .for_each(|(dst_y, dst_row)| {
+            // Center-aligned: src_y_fp = dst_y * 128 - 64 (fixed-point * 256)
+            let src_y_fp = dst_y as i32 * 128 - 64;
+            let src_y_fp = src_y_fp.max(0).min(src_h_max * 256);
+            let src_y = (src_y_fp >> 8) as usize;
+            let y_frac = (src_y_fp & 0xFF) as u32;
+            let src_y_next = (src_y + 1).min(src_height - 1);
 
-        // Process in parallel by destination rows
-        dst.par_chunks_mut(dst_width)
-            .enumerate()
-            .for_each(|(dst_y, dst_row)| {
-                let src_y = dst_y >> 1;
-                // For 2x scaling, fraction is either 0 or 128 (0.5 in 8-bit fixed point)
-                let y_frac = ((dst_y & 1) * 128) as u32;
-                let src_y_next = (src_y + 1).min(src_height - 1);
+            for dst_x in 0..dst_width {
+                let src_x_fp = dst_x as i32 * 128 - 64;
+                let src_x_fp = src_x_fp.max(0).min(src_w_max * 256);
+                let src_x = (src_x_fp >> 8) as usize;
+                let x_frac = (src_x_fp & 0xFF) as u32;
+                let src_x_next = (src_x + 1).min(src_width - 1);
 
-                for dst_x in 0..dst_width {
-                    let src_x = dst_x >> 1;
-                    // For 2x scaling, fraction is either 0 or 128 (0.5 in 8-bit fixed point)
-                    let x_frac = ((dst_x & 1) * 128) as u32;
-                    let src_x_next = (src_x + 1).min(src_width - 1);
+                // Get 4 source pixels
+                let p00 = src[src_y * src_width + src_x] as u32;
+                let p10 = src[src_y * src_width + src_x_next] as u32;
+                let p01 = src[src_y_next * src_width + src_x] as u32;
+                let p11 = src[src_y_next * src_width + src_x_next] as u32;
 
-                    // Get 4 source pixels
-                    let p00 = src[src_y * src_width + src_x] as u32;
-                    let p10 = src[src_y * src_width + src_x_next] as u32;
-                    let p01 = src[src_y_next * src_width + src_x] as u32;
-                    let p11 = src[src_y_next * src_width + src_x_next] as u32;
+                let w_x0 = 256 - x_frac;
+                let w_x1 = x_frac;
+                let w_y0 = 256 - y_frac;
+                let w_y1 = y_frac;
 
-                    // Proper bilinear interpolation with 8-bit fixed point
-                    // frac = 0: weight = 256/0
-                    // frac = 128: weight = 128/128 (equal blend)
-                    let w_x0 = 256 - x_frac;
-                    let w_x1 = x_frac;
-                    let w_y0 = 256 - y_frac;
-                    let w_y1 = y_frac;
+                let value = (p00 * w_x0 * w_y0 + p10 * w_x1 * w_y0 +
+                            p01 * w_x0 * w_y1 + p11 * w_x1 * w_y1) >> 16;
+                dst_row[dst_x] = value.min(255) as u8;
+            }
+        });
 
-                    // Compute weighted average
-                    let value = (p00 * w_x0 * w_y0 + p10 * w_x1 * w_y0 +
-                                p01 * w_x0 * w_y1 + p11 * w_x1 * w_y1) >> 16;
-                    dst_row[dst_x] = value.min(255) as u8;
-                }
-            });
-
-        dst
-    }
+    dst
 }
 
 /// Ultra-fast nearest neighbor 2x upsampling for chroma channels
@@ -94,21 +84,32 @@ pub fn upsample_2x_nearest(src: &[u8], src_width: usize, src_height: usize) -> V
 
 /// Fast 4x upsampling for luma channel
 #[allow(dead_code)]
+/// Fast 4x upsampling for a single channel
+/// Uses center-aligned bilinear interpolation: src_pos = (dst + 0.5) * 0.25 - 0.5
 pub fn upsample_4x_channel(src: &[u8], src_width: usize, src_height: usize) -> Vec<u8> {
     let dst_width = src_width * 4;
     let dst_height = src_height * 4;
     let mut dst = vec![0u8; dst_width * dst_height];
+    let src_w_max = (src_width - 1) as i32;
+    let src_h_max = (src_height - 1) as i32;
 
     dst.par_chunks_mut(dst_width)
         .enumerate()
         .for_each(|(dst_y, dst_row)| {
-            let src_y = dst_y >> 2;
-            let y_frac = dst_y & 3;
+            // Center-aligned: src_y_fp = dst_y * 64 - 96 (fixed-point * 256)
+            // Derivation: src = (dst + 0.5) / 4 - 0.5 = dst/4 + 1/8 - 1/2 = dst/4 - 3/8
+            // In fp*256: dst * 64 - 96
+            let src_y_fp = dst_y as i32 * 64 - 96;
+            let src_y_fp = src_y_fp.max(0).min(src_h_max * 256);
+            let src_y = (src_y_fp >> 8) as usize;
+            let y_frac = (src_y_fp & 0xFF) as u32;
             let src_y_next = (src_y + 1).min(src_height - 1);
 
             for dst_x in 0..dst_width {
-                let src_x = dst_x >> 2;
-                let x_frac = dst_x & 3;
+                let src_x_fp = dst_x as i32 * 64 - 96;
+                let src_x_fp = src_x_fp.max(0).min(src_w_max * 256);
+                let src_x = (src_x_fp >> 8) as usize;
+                let x_frac = (src_x_fp & 0xFF) as u32;
                 let src_x_next = (src_x + 1).min(src_width - 1);
 
                 let p00 = src[src_y * src_width + src_x] as u32;
@@ -116,13 +117,14 @@ pub fn upsample_4x_channel(src: &[u8], src_width: usize, src_height: usize) -> V
                 let p01 = src[src_y_next * src_width + src_x] as u32;
                 let p11 = src[src_y_next * src_width + src_x_next] as u32;
 
-                // Weight by distance (0-3 becomes 4-1)
-                let w00 = ((4 - x_frac) * (4 - y_frac)) as u32;
-                let w10 = (x_frac * (4 - y_frac)) as u32;
-                let w01 = ((4 - x_frac) * y_frac) as u32;
-                let w11 = (x_frac * y_frac) as u32;
+                let w_x0 = 256 - x_frac;
+                let w_x1 = x_frac;
+                let w_y0 = 256 - y_frac;
+                let w_y1 = y_frac;
 
-                dst_row[dst_x] = ((p00 * w00 + p10 * w10 + p01 * w01 + p11 * w11) >> 4) as u8;
+                let value = (p00 * w_x0 * w_y0 + p10 * w_x1 * w_y0 +
+                            p01 * w_x0 * w_y1 + p11 * w_x1 * w_y1) >> 16;
+                dst_row[dst_x] = value.min(255) as u8;
             }
         });
 

@@ -1,10 +1,9 @@
 //! Minimal FFI bindings to the standard libjpeg62 compress API.
 //!
-//! This module is compiled when either the `mozjpeg` or `jpegli` feature is
-//! enabled. The actual compress logic lives in `libjpeg_compress.c` (compiled
-//! by build.rs via the `cc` crate), which avoids fragile struct-layout
-//! assumptions. At link time, `build.rs` points the linker at the correct
-//! library (mozjpeg or jpegli).
+//! This module wraps `libjpeg_compress.c` (compiled by build.rs via the `cc`
+//! crate). The C wrapper is always compiled against libjpeg-turbo's libjpeg
+//! API (provided by turbojpeg-sys). When mozjpeg or jpegli features are
+//! enabled, the wrapper is instead linked against those libraries.
 
 use anyhow::{bail, Result};
 use libc::{c_int, c_uchar, c_ulong};
@@ -20,24 +19,29 @@ extern "C" {
         height: c_int,
         components: c_int,
         quality: c_int,
+        subsamp: c_int,
+        optimize: c_int,
         out_buf: *mut *mut c_uchar,
         out_size: *mut c_ulong,
     ) -> c_int;
 }
 
-/// Encode raw pixels to JPEG using the linked libjpeg62-compatible library
-/// (mozjpeg or jpegli, depending on which feature is enabled).
+/// Encode raw pixels to JPEG using the linked libjpeg62-compatible library.
 ///
 /// - `pixels`: row-major pixel data (RGB or grayscale)
 /// - `width`, `height`: image dimensions
 /// - `quality`: JPEG quality 1-100
 /// - `grayscale`: if true, input is 1-byte-per-pixel grayscale
+/// - `subsamp_420`: if true, use 4:2:0 chroma subsampling; if false, 4:4:4
+/// - `optimize`: if true, optimize Huffman tables for smaller files
 pub fn encode_libjpeg(
     pixels: &[u8],
     width: u32,
     height: u32,
     quality: u8,
     grayscale: bool,
+    subsamp_420: bool,
+    optimize: bool,
 ) -> Result<Vec<u8>> {
     let components: u32 = if grayscale { 1 } else { 3 };
     let expected = (width * height * components) as usize;
@@ -62,6 +66,8 @@ pub fn encode_libjpeg(
             height as c_int,
             components as c_int,
             quality as c_int,
+            if subsamp_420 { 1 } else { 0 },
+            if optimize { 1 } else { 0 },
             &mut out_buf,
             &mut out_size,
         );

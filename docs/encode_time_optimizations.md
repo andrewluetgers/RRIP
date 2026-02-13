@@ -387,3 +387,93 @@ Two encode-time optimizations provide measurable gains within ORIGAMI's algorith
 | **Combined** | Both together | +0.34 to +0.54 dB | -1.0% to -3.9% | None |
 
 Both are decoder-transparent, compatible with all encoder backends, and stack cleanly. The combined configuration is recommended as the default encoding mode.
+
+---
+
+## Prior Work and Related Research
+
+The OptL2 optimization — using gradient descent with the adjoint of bilinear upsampling to optimize low-resolution pixels for better high-resolution prediction — sits at the intersection of several research threads in image processing, compression, and signal processing.
+
+### Processing-Aware Filtering (Wronski, 2021)
+
+The closest published work to ORIGAMI's OptL2. Wronski frames the same core problem: given a fixed bilinear upsampler you cannot change, optimize the downsampling step to minimize reconstruction error. He explores two approaches:
+
+- **Per-image optimization (oracle):** Directly solve for low-resolution pixels that minimize `||target - upsample(source)||^2`. This is the same objective as OptL2. Wronski notes this is "just a linear least squares problem" since bilinear upsampling is a linear operator.
+- **Generic filter design:** Optimize a single convolution kernel (content-independent). The result is a simple unsharp mask `[-0.175, 1.35, -0.175]`, which pre-sharpens to compensate for bilinear's blurring tent response.
+
+Wronski uses JAX autodiff for the optimization, which implicitly computes the adjoint (transpose of the upsample operator) — the same gradient ORIGAMI derives explicitly as bilinear downsampling.
+
+OptL2 differs in applying the per-pixel oracle optimization within a residual compression pipeline, where the downstream residuals pass through a lossy JPEG codec. The interaction between pixel optimization, chroma subsampling modes, and split-quality encoding is specific to ORIGAMI.
+
+> Wronski, B. (2021). "Processing aware image filtering: compensating for the upsampling." Blog post. https://bartwronski.com/2021/07/20/processing-aware-image-filtering-compensating-for-the-upsampling/
+
+### A Fresh Look at Generalized Sampling (Nehab & Hoppe, 2014)
+
+A theoretical framework for decomposing discretization and reconstruction into a compactly supported continuous-domain function and a digital filter. They demonstrate that when the reconstruction filter is fixed (e.g., bilinear), the prefilter can be optimized to minimize reconstruction error. This provides the signal-processing-theoretic foundation for OptL2's per-pixel approach: the optimal prefilter for a known reconstruction kernel can be derived from the inverse (or pseudoinverse) of that kernel's frequency response.
+
+> Nehab, D. and Hoppe, H. (2014). "A Fresh Look at Generalized Sampling." Foundations and Trends in Computer Graphics and Vision, Vol. 8, No. 1, pp. 1–84. https://hhoppe.com/proj/filtering/
+
+### Gradient Descent-Based Chroma Subsampling (Chung & Lee, 2019; Chung, Lee & Chien, 2020)
+
+Directly applies gradient descent to optimize chroma pixel values during 4:2:0 subsampling in HEVC — the same mathematical idea as OptL2 applied to chroma channels rather than luma prediction. Key contributions:
+
+- They prove the bilinear-interpolation-based 2x2 block distortion function is **convex**, guaranteeing a global optimum.
+- They derive a closed-form initial solution then refine via iterative gradient descent.
+- Achieves substantial quality and rate-distortion gains over standard box-filter chroma downsampling.
+
+This directly validates ORIGAMI's observation (in the "General Applicability" section) that the same optimization math applies to 4:2:0 chroma subsampling: optimize the subsampled Cb/Cr planes so bilinear upsample best reconstructs the original chroma.
+
+> Chung, K.-L. and Lee, Y.-L. (2019). "Effective Gradient Descent-Based Chroma Subsampling Method for Bayer CFA Images in HEVC." IEEE Transactions on Circuits and Systems for Video Technology, Vol. 29, No. 10. https://ieeexplore.ieee.org/document/8519784/
+
+> Chung, K.-L., Lee, Y.-L. and Chien, W.-C. (2020). "Improved Gradient Descent-Based Chroma Subsampling Method for Color Images in VVC." arXiv:2009.10934. https://arxiv.org/abs/2009.10934
+
+### Perceptually Based Downscaling of Images (Öztireli & Gross, SIGGRAPH 2015)
+
+Formulates image downscaling as an optimization problem where the difference between input and output images is measured using a perceptual quality metric. The key distinction from OptL2: this optimizes the downscaled image to *look good at low resolution* (perceptual fidelity), whereas OptL2 optimizes the downscaled image to *reconstruct well when upsampled* (prediction fidelity). These are fundamentally different objectives. The solution is derived in closed-form, leading to a simple parallelizable implementation.
+
+> Öztireli, A. C. and Gross, M. (2015). "Perceptually Based Downscaling of Images." ACM Transactions on Graphics (Proc. SIGGRAPH), Vol. 34, No. 4, pp. 77:1–77:10. https://dl.acm.org/doi/10.1145/2766891
+
+### Learned Image Downscaling for Upscaling using Content Adaptive Resampler (Sun & Chen, IEEE TIP 2020)
+
+The neural network approach to the same problem: train a Content Adaptive Resampler (CAR) network that generates per-pixel downsampling kernels, optimized end-to-end by backpropagating reconstruction error through a super-resolution upsampling network. Achieves state-of-the-art results by making the downsampling content-aware.
+
+Key differences from OptL2: CAR learns a general model across images (amortized), uses a neural upsampler (not bilinear), and requires training data. OptL2 optimizes per-image with an exact gradient, exploits the linearity of bilinear upsampling directly, requires no training, and runs in ~0.5s per tile family.
+
+> Sun, W. and Chen, Z. (2020). "Learned Image Downscaling for Upscaling using Content Adaptive Resampler." IEEE Transactions on Image Processing, Vol. 29, pp. 4027–4040. https://arxiv.org/abs/1907.12904
+
+### Dual-Layer Image Compression via Adaptive Downsampling (2023)
+
+The ADDL system jointly optimizes content-adaptive downsampling kernels (constrained to Gabor filter forms) with a deep neural upsampler for image compression. The downsampled image is compressed as a base layer, then the decoder uses a neural network aided by the downsampling kernel parameters to upconvert. Unlike OptL2, both downsampler and upsampler are learned, and a neural network is required at decode time — breaking the decoder-transparency that ORIGAMI maintains.
+
+> "Dual-layer Image Compression via Adaptive Downsampling and Spatially Varying Upconversion." (2023). arXiv:2302.06096. https://arxiv.org/abs/2302.06096
+
+### Encoder-Side Downsampling for Low Bitrate Compression (Brandi et al., 2006; Lin et al., 2009)
+
+A long line of work on downsampling images or video frames before encoding and upsampling after decoding to improve rate-distortion performance at low bitrates. The core insight is shared with OptL2: the downsampled representation should be optimized for reconstruction quality, not visual fidelity at low resolution. These methods typically use adaptive downsampling ratios and directions rather than per-pixel optimization.
+
+> Brandi, F. et al. (2006). "Adaptive Downsampling to Improve Image Compression at Low Bit Rates." IEEE Transactions on Image Processing, Vol. 15, No. 9. https://ieeexplore.ieee.org/document/1673434/
+
+> Lin, Y.-H. and Wu, J.-L. (2009). "Low Bit-Rate Image Compression via Adaptive Down-Sampling and Constrained Least Squares Upconversion." IEEE Transactions on Image Processing. https://pubmed.ncbi.nlm.nih.gov/19211331/
+
+### Differentiable JPEG and Soft Quantization
+
+For optimizing pixel values that will pass through a quantization step (as OptL2's results do when residuals are JPEG-encoded), the key techniques in the literature are:
+
+- **Straight-Through Estimator (STE):** Treat the non-differentiable quantizer as identity in the backward pass, allowing gradient flow through rounding operations.
+- **Task-Aware Quantization:** Learn JPEG quantization tables via gradient descent for specific downstream objectives.
+
+OptL2 sidesteps this problem entirely: it optimizes L2 pixels to minimize *pre-quantization* residual energy, which is a smooth differentiable objective. The JPEG quantization of residuals is downstream and not differentiated through. This is valid because smaller residuals compress better at any fixed quality — the relationship between residual energy and compressed size is monotonic.
+
+> "Task-Aware Quantization Network for JPEG Image Compression." (2020). ECCV 2020. https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123650307.pdf
+
+### Where ORIGAMI's OptL2 Fits
+
+The per-pixel optimization of a downsampled image for reconstruction quality through a fixed linear upsampler is well-established in signal processing (Nehab & Hoppe, 2014) and has been independently described for practical use (Wronski, 2021) and for chroma subsampling specifically (Chung & Lee, 2019). Neural approaches generalize this to learned upsamplers (Sun & Chen, 2020).
+
+ORIGAMI's contribution is the application of this optimization within a **residual pyramid compression pipeline**, where:
+
+1. The optimized L2 feeds into a multi-level prediction chain (L2→L1→L0) with cascading benefits
+2. The interaction with chroma subsampling modes (4:2:0 vs 4:4:4) is analyzed, revealing that 4:2:0 destroys optimized chroma and that switching to 4:4:4 is the single largest quality improvement available (+1.1 to +1.8 dB)
+3. The optimization stacks cleanly with split-quality encoding, attacking different aspects of the compression (prediction quality vs bit allocation)
+4. All three RGB channels are optimized jointly, providing consistent chroma improvement even at high residual quality where luma-only gains vanish
+5. The decoder remains completely unchanged — no neural networks, no side information, no added complexity

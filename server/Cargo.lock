@@ -1241,6 +1241,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "turbojpeg",
+ "turbojpeg-sys",
  "webp",
 ]
 

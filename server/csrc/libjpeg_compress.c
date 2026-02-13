@@ -1,7 +1,7 @@
 /*
  * Thin C wrapper around the standard libjpeg62 compress API.
  * Compiled by build.rs (via the `cc` crate) and linked against
- * either mozjpeg or jpegli depending on the Cargo feature flag.
+ * either mozjpeg, jpegli, or libjpeg-turbo depending on configuration.
  *
  * We use a C file rather than raw Rust FFI to avoid reproducing
  * the internal layout of jpeg_compress_struct, which varies between
@@ -15,6 +15,9 @@
 /*
  * Compress raw pixels (RGB or grayscale) to JPEG.
  *
+ * subsamp: 0 = 4:4:4 (no subsampling), 1 = 4:2:0
+ * optimize: 1 = optimize Huffman tables (smaller files, slightly slower)
+ *
  * Returns 0 on success, non-zero on failure.
  * On success, *out_buf is malloc'd and must be freed by the caller.
  */
@@ -24,6 +27,8 @@ int libjpeg_compress(
     int height,
     int components,  /* 1 = grayscale, 3 = RGB */
     int quality,
+    int subsamp,     /* 0 = 4:4:4, 1 = 4:2:0 */
+    int optimize,    /* 1 = optimize Huffman tables */
     unsigned char **out_buf,
     unsigned long *out_size
 ) {
@@ -45,6 +50,23 @@ int libjpeg_compress(
 
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, quality, TRUE);
+
+    /* Huffman table optimization */
+    if (optimize) {
+        cinfo.optimize_coding = TRUE;
+    }
+
+    /* Chroma subsampling — only relevant for RGB (3-component) */
+    if (components == 3 && subsamp == 0) {
+        /* 4:4:4 — all components at full resolution */
+        cinfo.comp_info[0].h_samp_factor = 1;
+        cinfo.comp_info[0].v_samp_factor = 1;
+        cinfo.comp_info[1].h_samp_factor = 1;
+        cinfo.comp_info[1].v_samp_factor = 1;
+        cinfo.comp_info[2].h_samp_factor = 1;
+        cinfo.comp_info[2].v_samp_factor = 1;
+    }
+    /* subsamp == 1: leave defaults (4:2:0 for libjpeg-turbo, may vary for others) */
 
     jpeg_start_compress(&cinfo, TRUE);
 

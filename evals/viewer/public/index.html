@@ -335,6 +335,13 @@
             padding-right: 20px;
         }
 
+        .subsamp-label {
+            font-size: 11px;
+            color: #6c757d;
+            font-weight: normal;
+            margin-top: 2px;
+        }
+
         .remove-column {
             position: absolute;
             right: 5px;
@@ -560,71 +567,104 @@
 
         <!-- Process Diagram (collapsed by default) -->
         <details class="process-diagram">
-            <summary style="cursor: pointer; font-weight: bold; font-size: 16px; color: #333;">Pipeline Diagram</summary>
+            <summary style="cursor: pointer; font-weight: bold; font-size: 16px; color: #333;">Pipeline Diagram &amp; Design Decisions</summary>
 
-            <div class="process-title">Compression Process</div>
+            <div class="process-title">Encode Pipeline: L2 Foundation</div>
             <div class="pipeline">
                 <div class="stage highlight">
-                    <div class="stage-label">A</div>
-                    <div class="stage-desc">Original RGB Tile</div>
-                </div>
-                <span class="arrow">&rarr;</span>
-                <div class="stage highlight">
-                    <div class="stage-label">B</div>
-                    <div class="stage-desc">RGB&rarr;YCbCr<br>Conversion</div>
+                    <div class="stage-label">Source</div>
+                    <div class="stage-desc">1024x1024<br>RGB Image</div>
                 </div>
                 <span class="arrow">&rarr;</span>
                 <div class="stage">
-                    <div class="stage-label">C</div>
-                    <div class="stage-desc">L2 Parent<br>Upsampling</div>
-                </div>
-                <span class="arrow">&rarr;</span>
-                <div class="stage highlight">
-                    <div class="stage-label">D</div>
-                    <div class="stage-desc">Residual<br>Y_orig - Y_pred</div>
-                </div>
-                <span class="arrow">&rarr;</span>
-                <div class="stage highlight">
-                    <div class="stage-label">E</div>
-                    <div class="stage-desc">JPEG Encode<br>Quality J</div>
+                    <div class="stage-label">&darr;2x</div>
+                    <div class="stage-desc">Downsample<br>to L1 (512)</div>
                 </div>
                 <span class="arrow">&rarr;</span>
                 <div class="stage">
-                    <div class="stage-label">G</div>
-                    <div class="stage-desc">Stored<br>Residual</div>
+                    <div class="stage-label">&darr;2x</div>
+                    <div class="stage-desc">Downsample<br>to L2 (256)</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #28a745; background: #e8f5e9;">
+                    <div class="stage-label">OptL2</div>
+                    <div class="stage-desc">Gradient descent<br>optimize pixels</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #fd7e14; background: #fff3e0;">
+                    <div class="stage-label">JPEG</div>
+                    <div class="stage-desc">Encode L2<br>baseq=95<br><b>4:4:4</b></div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Decode</div>
+                    <div class="stage-desc">JPEG decode<br>(lossy L2)</div>
                 </div>
             </div>
 
-            <div class="process-title">Decompression Process</div>
+            <div class="process-title">Encode Pipeline: L1 &amp; L0 Residuals (per tile)</div>
             <div class="pipeline">
                 <div class="stage">
-                    <div class="stage-label">G</div>
-                    <div class="stage-desc">Stored<br>Residual</div>
-                </div>
-                <span class="arrow">&rarr;</span>
-                <div class="stage">
-                    <div class="stage-label">H</div>
-                    <div class="stage-desc">JPEG Decode</div>
-                </div>
-                <span class="arrow">&rarr;</span>
-                <div class="stage">
-                    <div class="stage-label">I</div>
-                    <div class="stage-desc">De-center<br>R - 128</div>
+                    <div class="stage-label">L2 dec</div>
+                    <div class="stage-desc">Decoded L2<br>RGB</div>
                 </div>
                 <span class="arrow">&rarr;</span>
                 <div class="stage highlight">
-                    <div class="stage-label">J</div>
-                    <div class="stage-desc">Reconstruct<br>Y + R_q</div>
+                    <div class="stage-label">&uarr;2x</div>
+                    <div class="stage-desc">RGB bilinear<br>upsample</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Predict</div>
+                    <div class="stage-desc">f32 YCbCr<br>prediction</div>
                 </div>
                 <span class="arrow">&rarr;</span>
                 <div class="stage highlight">
-                    <div class="stage-label">K</div>
-                    <div class="stage-desc">YCbCr&rarr;RGB<br>Conversion</div>
+                    <div class="stage-label">Residual</div>
+                    <div class="stage-desc">Y<sub>gt</sub> - Y<sub>pred</sub> + 128<br>(f32 precision)</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #fd7e14; background: #fff3e0;">
+                    <div class="stage-label">JPEG</div>
+                    <div class="stage-desc">Encode residual<br>quality=l1q/l0q<br><b>grayscale</b></div>
                 </div>
             </div>
 
-            <div style="margin-top: 10px; font-size: 11px; color: #6c757d; text-align: center;">
-                <strong>Key:</strong> J = JPEG quality &bull; L2 = lowest resolution &bull; L1 = medium &bull; L0 = highest
+            <div class="process-title">Decode Pipeline (per tile)</div>
+            <div class="pipeline">
+                <div class="stage">
+                    <div class="stage-label">Stored</div>
+                    <div class="stage-desc">L2 JPEG +<br>Residual JPEGs</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Decode</div>
+                    <div class="stage-desc">JPEG decode<br>all tiles</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">Recon</div>
+                    <div class="stage-desc">Y<sub>pred</sub> + (R-128)<br>+ Cb/Cr pred</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">RGB</div>
+                    <div class="stage-desc">YCbCr&rarr;RGB<br>conversion</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 11px; line-height: 1.6;">
+                <strong>Design Decisions:</strong><br>
+                <span style="color: #28a745;">&#9632;</span> <b>OptL2:</b> Gradient descent optimizes L2 pixels before JPEG encoding so predictions are better after decode. Reduces L1 residuals by ~57%.<br>
+                <span style="color: #fd7e14;">&#9632;</span> <b>4:4:4 on L2:</b> No chroma subsampling on L2. Chroma is upsampled 2x (L1) and 4x (L0), amplifying any chroma loss. 4:4:4 costs ~15KB more but gains 1.0 Delta E vs 4:2:0.<br>
+                <b>Grayscale residuals:</b> Only Y-channel residuals stored. Cb/Cr are predicted from parent upsample and reused directly.<br>
+                <b>Float32 pipeline:</b> YCbCr kept as f32 throughout. Residual = round(gt_u8 - pred_f32 + 128). Reduces Delta E by ~25%.<br>
+                <b>RGB-space upsample:</b> Bilinear upsample in RGB, not YCbCr. Matches standard image processing behavior.<br>
+                <b>Chroma optimization (420opt):</b> Tested &mdash; gradient descent on half-res chroma planes. Gains ~0.26 Delta E for ~3KB. Not worth it when using 4:4:4.
+            </div>
+
+            <div style="margin-top: 8px; font-size: 11px; color: #6c757d; text-align: center;">
+                <strong>Key:</strong> L2 = lowest resolution (256x256) &bull; L1 = medium (512x512) &bull; L0 = highest (1024x1024) &bull; baseq/l1q/l0q = JPEG quality settings
             </div>
         </details>
 
@@ -947,13 +987,15 @@
         let cellSize = 150;
 
         function sortColumns(columns) {
-            // Sort order: JPEG/JP2 baselines -> YCbCr subsample -> SINGLE ORIGAMI -> tiled ORIGAMI
+            // Sort order: JPEG/JP2 baselines -> YCbCr subsample -> SINGLE ORIGAMI -> tiled ORIGAMI -> PY/RS variants
             function typeOrder(name) {
                 if (name.startsWith('JPEG ') || name.startsWith('JP2 ')) return 0;
                 if (name.startsWith('YCbCr ')) return 1;
                 if (name.startsWith('SINGLE ')) return 2;
                 if (name.startsWith('ORIGAMI ')) return 3;
-                return 4;
+                if (name.startsWith('PY ')) return 4;
+                if (name.startsWith('RS ')) return 5;
+                return 6;
             }
             return columns.slice().sort((a, b) => {
                 const aOrder = typeOrder(a);
@@ -1032,24 +1074,31 @@
             let type = 'Other';
             let codec = 'unknown';
 
-            if (key.startsWith('JPEG ') || key.startsWith('JP2 ')) {
+            // Strip PY/RS prefix for classification
+            let classKey = key;
+            let implPrefix = '';
+            if (key.startsWith('PY ') || key.startsWith('RS ')) {
+                implPrefix = key.substring(0, 2);
+                classKey = key.substring(3);
+            }
+
+            if (classKey.startsWith('JPEG ') || classKey.startsWith('JP2 ') || key.startsWith('JP2 ')) {
                 type = 'Baseline';
-            } else if (key.startsWith('OPTL2 ')) {
-                if (key.includes('L1=')) {
+            } else if (classKey.startsWith('OPTL2 ')) {
+                if (classKey.includes('L1=')) {
                     type = 'OPTL2 Split';
                 } else {
                     type = 'OPTL2';
                 }
-            } else if (key.startsWith('ORIGAMI ')) {
-                // Check for split-quality
-                if (key.includes('L1=')) {
-                    type = 'ORIGAMI Split';
+            } else if (classKey.startsWith('ORIGAMI ')) {
+                if (classKey.includes('L1=')) {
+                    type = implPrefix ? `${implPrefix} ORIGAMI Split` : 'ORIGAMI Split';
                 } else {
-                    type = 'ORIGAMI';
+                    type = implPrefix ? `${implPrefix} ORIGAMI` : 'ORIGAMI';
                 }
-            } else if (key.startsWith('SINGLE ')) {
+            } else if (classKey.startsWith('SINGLE ')) {
                 type = 'Single';
-            } else if (key.startsWith('YCbCr ')) {
+            } else if (classKey.startsWith('YCbCr ')) {
                 type = 'YCbCr';
             }
 
@@ -1161,6 +1210,7 @@
                 const escapedCol = col.replace(/'/g, "\\'");
                 html += `<th class="column-header">
                     ${col}
+                    <div class="subsamp-label" id="subsamp_${colId(col)}"></div>
                     <button class="remove-column" onclick="removeColumn('${escapedCol}')">&times;</button>
                 </th>`;
             });
@@ -1296,6 +1346,8 @@
                             loadStageImage(col, stage, tile, col, false);
                         }
                     });
+                    // Fetch manifest to populate subsamp label in column header
+                    fetchManifestMeta(col);
                 }
             });
 
@@ -1360,6 +1412,33 @@
             });
         }
 
+        // Cache of manifest metadata per capture key
+        const manifestMetaCache = {};
+
+        async function fetchManifestMeta(captureKey) {
+            const labelEl = document.getElementById(`subsamp_${colId(captureKey)}`);
+            if (!labelEl) return;
+
+            try {
+                if (!manifestMetaCache[captureKey]) {
+                    const response = await fetch(`/manifest?capture=${captureKey}`);
+                    if (response.ok) {
+                        manifestMetaCache[captureKey] = await response.json();
+                    }
+                }
+                const manifest = manifestMetaCache[captureKey];
+                if (!manifest) return;
+
+                const parts = [];
+                if (manifest.subsamp) parts.push(manifest.subsamp);
+                if (manifest.optl2) parts.push('optL2');
+                if (manifest.l2_optimization && manifest.l2_optimization.enabled) parts.push('optL2');
+                if (parts.length > 0) {
+                    labelEl.textContent = parts.join(' | ');
+                }
+            } catch (e) { /* ignore */ }
+        }
+
         async function loadMetric(columnId, stage, tile, captureKey) {
             const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
             if (!container) return;
@@ -1418,6 +1497,13 @@
                                 value = metrics.lpips ?? null;
                                 if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
                                 break;
+                            case 'l2_size':
+                                value = sizes.prior_size || manifest.l2_bytes || null;
+                                if (value) {
+                                    const kb = (value / 1024).toFixed(1);
+                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                                }
+                                break;
                         }
 
                         if (html) {
@@ -1462,11 +1548,19 @@
                                 if (sum > 0) return sum;
                             }
                         } else {
-                            // ORIGAMI: L0 + L1 residuals only (no L2 baseline)
+                            // Python manifest: size_comparison
                             if (manifest.size_comparison) {
                                 const l0 = manifest.size_comparison.origami_L0_residuals || 0;
                                 const l1 = manifest.size_comparison.origami_L1_residuals || 0;
                                 if (l0 + l1 > 0) return l0 + l1;
+                            }
+                            // Rust manifest: tiles[] array with residual_bytes + l2_bytes
+                            if (Array.isArray(manifest.tiles)) {
+                                let sum = manifest.l2_bytes || 0;
+                                for (const t of manifest.tiles) {
+                                    sum += t.residual_bytes || 0;
+                                }
+                                if (sum > 0) return sum;
                             }
                         }
                         return null;
@@ -1480,7 +1574,7 @@
                                 return manifest.tiles[tile.id].size_bytes;
                             }
                         } else {
-                            // ORIGAMI: find actual residual file_size from compression_phase
+                            // Python manifest: compression_phase
                             const coords = tile.id.split('_').slice(1).join('_');
                             const tileKey = `tile_${coords}`;
                             const phase = manifest.compression_phase && manifest.compression_phase[tile.level];
@@ -1491,11 +1585,29 @@
                                     }
                                 }
                             }
+                            // Rust manifest: tiles[] array — find matching tile
+                            if (Array.isArray(manifest.tiles)) {
+                                const parts = tile.id.split('_'); // e.g. "L0_2_1"
+                                const tx = parseInt(parts[1]);
+                                const ty = parseInt(parts[2]);
+                                const level = tile.level;
+                                for (const t of manifest.tiles) {
+                                    if (t.level === level && t.tx === tx && t.ty === ty) {
+                                        return t.residual_bytes;
+                                    }
+                                }
+                            }
                         }
                         return null;
                     }
 
                     // Average a visual metric across all L0+L1 family tiles
+                    // Map from viewer metric keys to Rust manifest tile field names
+                    const rustMetricKey = {
+                        'final_psnr': 'y_psnr_db',
+                        'final_mse': 'y_mse',
+                    };
+
                     function avgFamilyMetric(manifest, isBaseline, baselineKey, origamiKey) {
                         const vals = [];
                         if (isBaseline) {
@@ -1507,12 +1619,24 @@
                                 }
                             }
                         } else {
+                            // Python manifest format: decompression_phase.L0/L1.tile_x_y.final_psnr
                             for (const level of ['L0', 'L1']) {
                                 const phase = manifest.decompression_phase && manifest.decompression_phase[level];
                                 if (phase) {
                                     for (const tk in phase) {
                                         if (phase[tk][origamiKey] != null) {
                                             vals.push(phase[tk][origamiKey]);
+                                        }
+                                    }
+                                }
+                            }
+                            // Rust manifest format: tiles[] array with y_psnr_db, y_mse
+                            if (vals.length === 0 && Array.isArray(manifest.tiles)) {
+                                const rk = rustMetricKey[origamiKey];
+                                if (rk) {
+                                    for (const t of manifest.tiles) {
+                                        if (t[rk] != null) {
+                                            vals.push(t[rk]);
                                         }
                                     }
                                 }
@@ -1565,8 +1689,11 @@
                                     l2Bytes = manifest.tiles['L2_0_0'].size_bytes;
                                 }
                             } else {
-                                // ORIGAMI runs: L2 baseline size from size_comparison
-                                if (manifest.size_comparison && manifest.size_comparison.origami_L2_baseline) {
+                                // ORIGAMI runs: L2 baseline size
+                                // Rust encoder manifest: top-level l2_bytes
+                                if (manifest.l2_bytes) {
+                                    l2Bytes = manifest.l2_bytes;
+                                } else if (manifest.size_comparison && manifest.size_comparison.origami_L2_baseline) {
                                     l2Bytes = manifest.size_comparison.origami_L2_baseline;
                                 } else if (manifest.size_comparison && manifest.size_comparison.baseline_L2) {
                                     l2Bytes = manifest.size_comparison.baseline_L2;

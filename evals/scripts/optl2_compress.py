@@ -83,8 +83,20 @@ def main():
     parser.add_argument("--encoder", default="libjpeg-turbo", help="Encoder")
     parser.add_argument("--max-delta", type=int, default=15, help="Max L2 pixel perturbation")
     parser.add_argument("--iterations", type=int, default=500, help="Optimization iterations")
+    parser.add_argument("--subsamp", default="444",
+                       help="Chroma subsampling: 444, 420, or 420opt (Rust encoder only)")
+    parser.add_argument("--use-rust", action="store_true",
+                       help="Use origami encode --optl2 instead of Python pipeline")
 
     args = parser.parse_args()
+
+    # --use-rust: delegate to origami encode --image --optl2
+    if args.use_rust:
+        from wsi_residual_debug_with_manifest import _run_rust_encode
+        args.optl2 = True
+        _run_rust_encode(args)
+        return
+
     encoder = parse_encoder_arg(args.encoder)
 
     # Generate output directory name

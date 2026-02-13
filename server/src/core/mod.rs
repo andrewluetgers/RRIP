@@ -5,6 +5,7 @@ pub mod upsample;
 pub mod jpeg;
 pub mod pyramid;
 pub mod reconstruct;
+pub mod optimize_chroma;
+pub mod optimize_l2;
 
-#[cfg(any(feature = "mozjpeg", feature = "jpegli"))]
 pub mod libjpeg_ffi;
