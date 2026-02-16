@@ -84,7 +84,7 @@ cd server
 cargo build --release
 ```
 
-### Building with mozjpeg Encoder
+### Building with mozjpeg Encoder`
 
 ```bash
 # 1. Build mozjpeg static library (one-time)
@@ -329,6 +329,11 @@ cargo build --release
 - **GPU**: NVIDIA B200 (183 GB VRAM)
 - **CUDA driver**: 580.126.09
 - **Workspace**: `/workspace/RRIP`
+
+## Safety Rules
+
+- **Never use `rm -rf` without discussing it with the user first.** Always explain what will be deleted and get explicit confirmation before running any recursive delete.
+- Prefer `git clone` over `rsync` for syncing code to remote machines — rsync copies every file including massive build artifacts.
 
 ## Debugging Tips
 
