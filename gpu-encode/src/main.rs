@@ -96,6 +96,10 @@ enum Command {
         /// Batch size (number of families per GPU batch, DICOM mode only)
         #[arg(long, default_value_t = 64)]
         batch_size: usize,
+
+        /// Enable detailed per-stage timing (adds GPU sync points for profiling)
+        #[arg(long)]
+        profile: bool,
     },
 
     /// Run GPU kernel smoke tests
@@ -122,7 +126,7 @@ fn main() -> Result<()> {
         Command::Encode {
             slide, image, out, tile, resq, l1q, l0q, baseq, subsamp, encoder: _,
             max_parents, pack, manifest, optl2, debug_images, l2resq, max_delta,
-            batch_size,
+            batch_size, profile,
         } => {
             let l1q_resolved = l1q.unwrap_or(resq);
             let l0q_resolved = l0q.unwrap_or(resq);
@@ -142,6 +146,7 @@ fn main() -> Result<()> {
                 max_parents,
                 batch_size,
                 device: cli.device,
+                profile,
             };
 
             if let Some(image_path) = image {

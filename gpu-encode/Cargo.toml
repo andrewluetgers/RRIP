@@ -42,5 +42,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 # WebP encoding for L2 RGB residuals (only CPU operation)
 webp = "0.3"
 
+# GPU monitoring via NVML (for --profile resource utilization)
+nvml-wrapper = "0.12"
+
 [build-dependencies]
 cc = "1.0"
