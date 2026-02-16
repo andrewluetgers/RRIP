@@ -37,6 +37,7 @@ pub struct EncodeConfig {
     pub batch_size: usize,
     pub device: usize,
     pub profile: bool,
+    pub sharpen: Option<f32>,
 }
 
 /// Summary of a single-image encode run.
@@ -446,6 +447,11 @@ pub fn encode_single_image(
         info!("OptL2 complete");
     }
 
+    // Sharpen L2 if requested
+    if let Some(strength) = config.sharpen {
+        l2_u8_dev = gpu.sharpen_l2(&l2_u8_dev, l2_w, l2_h, strength)?;
+    }
+
     // Create output directory
     fs::create_dir_all(output_dir)?;
 
@@ -838,7 +844,7 @@ pub fn encode_single_image(
         "encoder": "nvjpeg",
         "subsamp": config.subsamp,
         "baseq": baseq, "l1q": l1q, "l0q": l0q,
-        "l2resq": config.l2resq, "optl2": config.optl2,
+        "l2resq": config.l2resq, "optl2": config.optl2, "sharpen": config.sharpen,
         "tile_size": tile_size,
         "l2_bytes": l2_bytes, "l2_res_bytes": l2_res_bytes,
         "l2_w": l2_w, "l2_h": l2_h,
@@ -856,7 +862,7 @@ pub fn encode_single_image(
             "encoder": "nvjpeg",
             "subsamp": config.subsamp,
             "baseq": baseq, "l1q": l1q, "l0q": l0q,
-            "l2resq": config.l2resq, "optl2": config.optl2,
+            "l2resq": config.l2resq, "optl2": config.optl2, "sharpen": config.sharpen,
             "tile_size": tile_size,
             "l2_bytes": l2_bytes, "l2_res_bytes": l2_res_bytes,
             "l2_w": l2_w, "l2_h": l2_h,
@@ -1074,6 +1080,11 @@ pub fn encode_wsi(
                 if let Some(m) = &mut monitor { m.sample("optl2"); }
             }
 
+            // --- sharpen ---
+            if let Some(strength) = config.sharpen {
+                l2_u8 = gpu.sharpen_l2(&l2_u8, l2_w, l2_h, strength)?;
+            }
+
             // --- l2_encode ---
             if profile { gpu.sync()?; }
             let t0 = Instant::now();
@@ -1288,7 +1299,7 @@ pub fn encode_wsi(
         "dicom": dicom_path.to_string_lossy(),
         "tile_size": config.tile_size,
         "baseq": config.baseq, "l1q": config.l1q, "l0q": config.l0q,
-        "optl2": config.optl2,
+        "optl2": config.optl2, "sharpen": config.sharpen,
         "families": families_encoded,
         "families_empty": timers.families_empty,
         "grid_cols": grid_cols, "grid_rows": grid_rows,

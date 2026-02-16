@@ -21,6 +21,7 @@ pub struct GpuContext {
     mod_residual: Arc<CudaModule>,
     mod_composite: Arc<CudaModule>,
     mod_optl2: Arc<CudaModule>,
+    mod_sharpen: Arc<CudaModule>,
 }
 
 impl GpuContext {
@@ -46,6 +47,9 @@ impl GpuContext {
         let mod_optl2 = ctx
             .load_module(Ptx::from_file(format!("{}/optl2.ptx", ptx_dir)))
             .map_err(|e| anyhow!("Failed to load optl2.ptx: {}", e))?;
+        let mod_sharpen = ctx
+            .load_module(Ptx::from_file(format!("{}/sharpen.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load sharpen.ptx: {}", e))?;
 
         info!("All CUDA kernels loaded");
 
@@ -56,6 +60,7 @@ impl GpuContext {
             mod_residual,
             mod_composite,
             mod_optl2,
+            mod_sharpen,
         })
     }
 
@@ -419,6 +424,58 @@ impl GpuContext {
         launch_v.arg(&scale_y);
         unsafe { launch_v.launch(cfg_v) }
             .map_err(|e| anyhow!("lanczos3_v launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
+    /// Apply unsharp mask sharpening to an interleaved RGB u8 buffer.
+    /// Two-pass separable 3×3 Gaussian blur, then sharpen: out = src + strength × (src - blurred).
+    pub fn sharpen_l2(
+        &self,
+        src: &CudaSlice<u8>,
+        width: u32,
+        height: u32,
+        strength: f32,
+    ) -> Result<CudaSlice<u8>> {
+        let total = (width * height * 3) as u32;
+        let cfg = LaunchConfig::for_num_elems(total);
+
+        // Allocate temp buffer for horizontal blur pass
+        let temp: CudaSlice<u8> = self.stream.alloc(total as usize)
+            .map_err(|e| anyhow!("sharpen temp alloc failed: {}", e))?;
+
+        // Allocate output buffer
+        let dst: CudaSlice<u8> = self.stream.alloc(total as usize)
+            .map_err(|e| anyhow!("sharpen dst alloc failed: {}", e))?;
+
+        let w = width as i32;
+        let h = height as i32;
+
+        // Pass 1: horizontal blur
+        let f_hblur = self.mod_sharpen
+            .load_function("unsharp_hblur_kernel")
+            .map_err(|e| anyhow!("load unsharp_hblur_kernel failed: {}", e))?;
+        let mut launch_h = self.stream.launch_builder(&f_hblur);
+        launch_h.arg(src);
+        launch_h.arg(&temp);
+        launch_h.arg(&w);
+        launch_h.arg(&h);
+        unsafe { launch_h.launch(cfg) }
+            .map_err(|e| anyhow!("unsharp_hblur launch failed: {}", e))?;
+
+        // Pass 2: vertical blur + sharpen
+        let f_vblur = self.mod_sharpen
+            .load_function("unsharp_vblur_sharpen_kernel")
+            .map_err(|e| anyhow!("load unsharp_vblur_sharpen_kernel failed: {}", e))?;
+        let mut launch_v = self.stream.launch_builder(&f_vblur);
+        launch_v.arg(src);
+        launch_v.arg(&temp);
+        launch_v.arg(&dst);
+        launch_v.arg(&w);
+        launch_v.arg(&h);
+        launch_v.arg(&strength);
+        unsafe { launch_v.launch(cfg) }
+            .map_err(|e| anyhow!("unsharp_vblur_sharpen launch failed: {}", e))?;
 
         Ok(dst)
     }
