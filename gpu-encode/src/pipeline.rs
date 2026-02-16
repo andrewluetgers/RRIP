@@ -677,33 +677,38 @@ pub fn encode_wsi(
             // Decode tiles via nvJPEG → GPU device memory
             let decoded_tiles = jpeg.batch_decode_to_device(&gpu, &tile_jpeg_bytes)?;
 
-            // Composite on CPU (download, composite, re-upload)
-            // TODO: Use GPU composite_tiles kernel for batch mode
+            // Composite on CPU: single sync, batch download, row-segment memcpy
             let cw = canvas_w as usize;
             let ch = canvas_h as usize;
             let tw = tile_w as usize;
             let th = tile_h as usize;
             let mut canvas_host = vec![0u8; cw * ch * 3];
 
+            // Single sync then batch-download all non-empty tiles
             gpu.sync()?;
-            for (tile_idx, (tile_dev, t_w, t_h)) in decoded_tiles.iter().enumerate() {
-                if *t_w == 0 || *t_h == 0 { continue; }
-                let tile_host = download_u8(&gpu, tile_dev)?;
-                let ow = *t_w as usize;
-                let oh = *t_h as usize;
+            let tile_hosts: Vec<Option<(Vec<u8>, usize, usize)>> = decoded_tiles.iter()
+                .map(|(tile_dev, t_w, t_h)| {
+                    if *t_w == 0 || *t_h == 0 { return Ok(None); }
+                    let host = download_u8(&gpu, tile_dev)?;
+                    Ok(Some((host, *t_w as usize, *t_h as usize)))
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            for (tile_idx, tile_opt) in tile_hosts.iter().enumerate() {
+                let Some((tile_host, ow, oh)) = tile_opt else { continue };
+                let ow = *ow;
+                let oh = *oh;
                 let dy = tile_idx / 4;
                 let dx = tile_idx % 4;
+                let copy_w = ow.min(tw);
                 for y in 0..oh.min(th) {
-                    for x in 0..ow.min(tw) {
-                        let cx = dx * tw + x;
-                        let cy = dy * th + y;
-                        if cx < cw && cy < ch {
-                            let si = (y * ow + x) * 3;
-                            let di = (cy * cw + cx) * 3;
-                            canvas_host[di] = tile_host[si];
-                            canvas_host[di + 1] = tile_host[si + 1];
-                            canvas_host[di + 2] = tile_host[si + 2];
-                        }
+                    let cx = dx * tw;
+                    let cy = dy * th + y;
+                    if cy < ch && cx + copy_w <= cw {
+                        let si = y * ow * 3;
+                        let di = (cy * cw + cx) * 3;
+                        canvas_host[di..di + copy_w * 3]
+                            .copy_from_slice(&tile_host[si..si + copy_w * 3]);
                     }
                 }
             }
@@ -758,16 +763,18 @@ pub fn encode_wsi(
             let l1_pred_pixels = (l1_w * l1_h) as i32;
             let (l1_pred_y, l1_pred_cb, l1_pred_cr) = gpu.rgb_to_ycbcr_f32(&l1_pred_u8, l1_pred_pixels)?;
 
+            // Download only what's needed on host: Y prediction for tile extraction,
+            // L1 ground truth RGB for Y extraction. Cb/Cr stay on GPU for ycbcr_to_rgb.
             gpu.sync()?;
             let l1_pred_y_host = download_f32(&gpu, &l1_pred_y)?;
-            let l1_pred_cb_host = download_f32(&gpu, &l1_pred_cb)?;
-            let l1_pred_cr_host = download_f32(&gpu, &l1_pred_cr)?;
             let l1_rgb_host = download_u8(&gpu, &l1_u8)?;
 
             // Process L1 residuals (2x2 tiles per family)
+            // Accumulate reconstructed Y into a mosaic, then GPU YCbCr→RGB
             let l1_tile_w = tile_w * 2;
             let l1_tile_h = tile_h * 2;
-            let mut l1_recon_rgb_host = vec![0u8; (l1_w * l1_h * 3) as usize];
+            let l1_pixels = (l1_w * l1_h) as usize;
+            let mut l1_recon_y_host = vec![0.0f32; l1_pixels];
             let mut pack_entries: Vec<origami::core::pack::PackWriteEntry> = Vec::new();
 
             for dy in 0..2u32 {
@@ -789,32 +796,20 @@ pub fn encode_wsi(
                     let jpeg_data = jpeg.encode_gray(&gpu, &res_dev, tw, th, config.l1q)?;
                     total_residual_bytes += jpeg_data.len();
 
-                    // Decode and reconstruct
+                    // Decode and reconstruct Y on GPU
                     let (decoded_res, _, _) = jpeg.decode_gray_to_device(&gpu, &jpeg_data)?;
                     let recon_y_dev = gpu.reconstruct_y(&pred_y_dev, &decoded_res, tile_n as i32)?;
                     gpu.sync()?;
                     let recon_y_tile = download_f32(&gpu, &recon_y_dev)?;
 
-                    let pred_cb_tile = extract_f32_tile(&l1_pred_cb_host, l1_w, l1_h, ox, oy, tw, th);
-                    let pred_cr_tile = extract_f32_tile(&l1_pred_cr_host, l1_w, l1_h, ox, oy, tw, th);
-
+                    // Write reconstructed Y into the L1 mosaic
                     for y in 0..th {
                         for x in 0..tw {
-                            let ti = (y * tw + x) as usize;
                             let mx = ox + x;
                             let my = oy + y;
                             if mx < l1_w && my < l1_h {
-                                let mi = (my * l1_w + mx) as usize;
-                                let recon = recon_y_tile[ti];
-                                let cbf = pred_cb_tile[ti] - 128.0;
-                                let crf = pred_cr_tile[ti] - 128.0;
-                                let r = (recon + 1.402 * crf).round().clamp(0.0, 255.0) as u8;
-                                let g = (recon - 0.344136 * cbf - 0.714136 * crf).round().clamp(0.0, 255.0) as u8;
-                                let b = (recon + 1.772 * cbf).round().clamp(0.0, 255.0) as u8;
-                                let ri = mi * 3;
-                                l1_recon_rgb_host[ri] = r;
-                                l1_recon_rgb_host[ri + 1] = g;
-                                l1_recon_rgb_host[ri + 2] = b;
+                                l1_recon_y_host[(my * l1_w + mx) as usize] =
+                                    recon_y_tile[(y * tw + x) as usize];
                             }
                         }
                     }
@@ -829,9 +824,14 @@ pub fn encode_wsi(
                 }
             }
 
-            // Upsample L1 recon → L0 prediction
-            let l1_recon_dev = upload_u8(&gpu, &l1_recon_rgb_host)?;
-            let l1_recon_f32 = gpu.u8_to_f32(&l1_recon_dev, (l1_w * l1_h * 3) as i32)?;
+            // GPU: YCbCr→RGB for L1 reconstruction (recon Y + predicted Cb/Cr)
+            let l1_recon_y_dev = upload_f32(&gpu, &l1_recon_y_host)?;
+            let l1_recon_rgb_dev = gpu.ycbcr_to_rgb(
+                &l1_recon_y_dev, &l1_pred_cb, &l1_pred_cr, l1_pixels as i32,
+            )?;
+
+            // GPU: upsample L1 recon → L0 prediction (stays on GPU, no host roundtrip)
+            let l1_recon_f32 = gpu.u8_to_f32(&l1_recon_rgb_dev, (l1_w * l1_h * 3) as i32)?;
             let l0_pred_f32 = gpu.upsample_bilinear_2x(&l1_recon_f32, 1, l1_h as i32, l1_w as i32, 3)?;
             let l0_pred_u8 = gpu.f32_to_u8(&l0_pred_f32, (canvas_w * canvas_h * 3) as i32)?;
             let l0_pred_pixels = (canvas_w * canvas_h) as i32;
