@@ -447,15 +447,11 @@ pub fn encode_single_image(
         info!("OptL2 complete");
     }
 
-    // Sharpen L2 if requested
-    if let Some(strength) = config.sharpen {
-        l2_u8_dev = gpu.sharpen_l2(&l2_u8_dev, l2_w, l2_h, strength)?;
-    }
-
     // Create output directory
     fs::create_dir_all(output_dir)?;
 
     // 4. Encode L2 baseline JPEG via nvJPEG (GPU encode → host bytes)
+    // Save the UN-sharpened L2 — sharpening is applied at decode time
     let l2_jpeg = jpeg.encode_rgb(&gpu, &l2_u8_dev, l2_w, l2_h, baseq, &config.subsamp)?;
     let l2_bytes = l2_jpeg.len();
     fs::write(output_dir.join("L2_0_0.jpg"), &l2_jpeg)?;
@@ -506,6 +502,13 @@ pub fn encode_single_image(
         let l2_for_pred_host = download_u8(&gpu, &l2_for_pred_dev)?;
         save_rgb_png(&decompress_dir.join("050_L2_reconstructed.png"), &l2_for_pred_host, l2_w, l2_h)?;
     }
+
+    // Sharpen L2 for prediction (applied at decode time, not saved)
+    let l2_for_pred_dev = if let Some(strength) = config.sharpen {
+        gpu.sharpen_l2(&l2_for_pred_dev, l2_w, l2_h, strength)?
+    } else {
+        l2_for_pred_dev
+    };
 
     // 7. GPU: upsample L2 → L1 prediction (bilinear 2x, stays on GPU as f32)
     let l2_pred_f32 = gpu.u8_to_f32(&l2_for_pred_dev, (l2_w * l2_h * 3) as i32)?;
@@ -1080,12 +1083,8 @@ pub fn encode_wsi(
                 if let Some(m) = &mut monitor { m.sample("optl2"); }
             }
 
-            // --- sharpen ---
-            if let Some(strength) = config.sharpen {
-                l2_u8 = gpu.sharpen_l2(&l2_u8, l2_w, l2_h, strength)?;
-            }
-
             // --- l2_encode ---
+            // Save the UN-sharpened L2 — sharpening is applied at decode time
             if profile { gpu.sync()?; }
             let t0 = Instant::now();
             let l2_jpeg = jpeg.encode_rgb(&gpu, &l2_u8, l2_w, l2_h, config.baseq, &config.subsamp)?;
@@ -1105,10 +1104,17 @@ pub fn encode_wsi(
             timers.l2_decode += t0.elapsed();
             if let Some(m) = &mut monitor { m.sample("l2_decode"); }
 
+            // --- sharpen (applied to decoded L2 for prediction, not saved) ---
+            let l2_for_pred = if let Some(strength) = config.sharpen {
+                gpu.sharpen_l2(&l2_decoded, l2_w, l2_h, strength)?
+            } else {
+                l2_decoded
+            };
+
             // --- l1_predict ---
             if profile { gpu.sync()?; }
             let t0 = Instant::now();
-            let l2_pred_f32 = gpu.u8_to_f32(&l2_decoded, (l2_w * l2_h * 3) as i32)?;
+            let l2_pred_f32 = gpu.u8_to_f32(&l2_for_pred, (l2_w * l2_h * 3) as i32)?;
             let l1_pred_f32 = gpu.upsample_bilinear_2x(&l2_pred_f32, 1, l2_h as i32, l2_w as i32, 3)?;
             let l1_pred_u8 = gpu.f32_to_u8(&l1_pred_f32, (l1_w * l1_h * 3) as i32)?;
             let l1_pred_pixels = (l1_w * l1_h) as i32;
