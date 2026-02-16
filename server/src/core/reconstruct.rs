@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use tracing::info;
 
 use crate::core::color::rgb_to_ycbcr;
-use crate::core::pack::open_pack;
+use crate::core::pack::{open_pack, BundleFile};
 use crate::core::pyramid::copy_tile_into_mosaic;
 use crate::core::residual::apply_residual_into;
 use crate::core::upsample::upsample_2x_channel;
@@ -148,8 +148,10 @@ pub struct ReconstructInput<'a> {
     pub files_dir: &'a Path,
     /// Loose residuals directory (L1/{x2}_{y2}/, L0/{x2}_{y2}/)
     pub residuals_dir: Option<&'a Path>,
-    /// Pack files directory
+    /// Pack files directory (individual .pack files per family)
     pub pack_dir: Option<&'a Path>,
+    /// Bundle file (single mmapped file for all families, preferred over pack_dir)
+    pub bundle: Option<&'a BundleFile>,
     /// Tile size (pixels)
     pub tile_size: u32,
     /// Level numbers
@@ -452,8 +454,10 @@ pub fn reconstruct_family(
         0
     };
 
-    // --- Load pack file if available ---
-    let pack = if let Some(pack_root) = input.pack_dir {
+    // --- Load pack file if available (bundle preferred, then individual .pack files) ---
+    let pack = if let Some(bundle) = input.bundle {
+        bundle.get_pack(x2, y2).ok()
+    } else if let Some(pack_root) = input.pack_dir {
         open_pack(pack_root, x2, y2).ok()
     } else {
         None
@@ -848,6 +852,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: Some(&data.join("residuals_q32")),
             pack_dir: None,
+            bundle: None,
             tile_size: 256,
             l0: 16,
             l1: 15,
@@ -916,6 +921,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: None,
             pack_dir: Some(&data.join("residual_packs")),
+            bundle: None,
             tile_size: 256,
             l0: 16,
             l1: 15,
@@ -968,6 +974,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: Some(&data.join("residuals_q32")),
             pack_dir: None,
+            bundle: None,
             tile_size: 256,
             l0: 16, l1: 15, l2: 14,
         };
@@ -978,6 +985,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: None,
             pack_dir: Some(&data.join("residual_packs")),
+            bundle: None,
             tile_size: 256,
             l0: 16, l1: 15, l2: 14,
         };
@@ -1027,6 +1035,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: Some(&data.join("residuals_q32")),
             pack_dir: None,
+            bundle: None,
             tile_size: 256,
             l0: 16, l1: 15, l2: 14,
         };
@@ -1100,6 +1109,7 @@ mod tests {
             files_dir: &data.join("baseline_pyramid_files"),
             residuals_dir: Some(&data.join("residuals_q32")),
             pack_dir: None,
+            bundle: None,
             tile_size: 256,
             l0: 16, l1: 15, l2: 14,
         };

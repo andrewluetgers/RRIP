@@ -1,0 +1,360 @@
+//! CUDA kernel bindings and GPU context management.
+//!
+//! This module provides:
+//! - `GpuContext`: CUDA device, stream, and loaded kernel modules
+//! - Kernel launch wrappers for each .cu file
+
+use std::sync::Arc;
+
+use anyhow::{anyhow, Result};
+use cudarc::driver::{
+    CudaContext, CudaModule, CudaSlice, CudaStream, LaunchConfig, PushKernelArg,
+};
+use cudarc::nvrtc::Ptx;
+use tracing::info;
+
+/// CUDA GPU context — owns device handle, stream, and loaded kernel modules.
+pub struct GpuContext {
+    pub ctx: Arc<CudaContext>,
+    pub stream: Arc<CudaStream>,
+    mod_upsample: Arc<CudaModule>,
+    mod_residual: Arc<CudaModule>,
+    mod_composite: Arc<CudaModule>,
+    mod_optl2: Arc<CudaModule>,
+}
+
+impl GpuContext {
+    /// Initialize CUDA and select a device. Loads all PTX modules.
+    pub fn new(device: usize) -> Result<Self> {
+        info!("Initializing CUDA device {}", device);
+        let ctx = CudaContext::new(device)
+            .map_err(|e| anyhow!("CUDA init failed: {}", e))?;
+        let stream = ctx.default_stream();
+
+        let ptx_dir = env!("CUDA_PTX_DIR");
+        info!("Loading PTX from {}", ptx_dir);
+
+        let mod_upsample = ctx
+            .load_module(Ptx::from_file(format!("{}/upsample.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load upsample.ptx: {}", e))?;
+        let mod_residual = ctx
+            .load_module(Ptx::from_file(format!("{}/residual.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load residual.ptx: {}", e))?;
+        let mod_composite = ctx
+            .load_module(Ptx::from_file(format!("{}/composite.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load composite.ptx: {}", e))?;
+        let mod_optl2 = ctx
+            .load_module(Ptx::from_file(format!("{}/optl2.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load optl2.ptx: {}", e))?;
+
+        info!("All CUDA kernels loaded");
+
+        Ok(GpuContext {
+            ctx,
+            stream,
+            mod_upsample,
+            mod_residual,
+            mod_composite,
+            mod_optl2,
+        })
+    }
+
+    pub fn device(&self) -> usize {
+        0
+    }
+
+    // -----------------------------------------------------------------------
+    // Kernel launch wrappers
+    // -----------------------------------------------------------------------
+
+    /// Bilinear 2x upsample on GPU.
+    ///
+    /// src: [N, H, W, C] f32 on device
+    /// Returns: [N, 2H, 2W, C] f32 on device
+    pub fn upsample_bilinear_2x(
+        &self,
+        src: &CudaSlice<f32>,
+        n: i32,
+        h: i32,
+        w: i32,
+        c: i32,
+    ) -> Result<CudaSlice<f32>> {
+        let h2 = h * 2;
+        let w2 = w * 2;
+        let total = (n * h2 * w2 * c) as usize;
+        let mut dst = unsafe { self.stream.alloc::<f32>(total) }
+            .map_err(|e| anyhow!("alloc failed: {}", e))?;
+
+        let f = self.mod_upsample
+            .load_function("upsample_bilinear_2x_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(src);
+        launch.arg(&mut dst);
+        launch.arg(&n);
+        launch.arg(&h);
+        launch.arg(&w);
+        launch.arg(&c);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("upsample kernel launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
+    /// RGB u8 → float32 YCbCr (BT.601) on GPU.
+    ///
+    /// rgb: [total_pixels * 3] u8 on device
+    /// Returns: (y, cb, cr) each [total_pixels] f32 on device
+    pub fn rgb_to_ycbcr_f32(
+        &self,
+        rgb: &CudaSlice<u8>,
+        total_pixels: i32,
+    ) -> Result<(CudaSlice<f32>, CudaSlice<f32>, CudaSlice<f32>)> {
+        let n = total_pixels as usize;
+        let mut y_out = unsafe { self.stream.alloc::<f32>(n) }
+            .map_err(|e| anyhow!("alloc y failed: {}", e))?;
+        let mut cb_out = unsafe { self.stream.alloc::<f32>(n) }
+            .map_err(|e| anyhow!("alloc cb failed: {}", e))?;
+        let mut cr_out = unsafe { self.stream.alloc::<f32>(n) }
+            .map_err(|e| anyhow!("alloc cr failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("rgb_to_ycbcr_f32_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total_pixels as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(rgb);
+        launch.arg(&mut y_out);
+        launch.arg(&mut cb_out);
+        launch.arg(&mut cr_out);
+        launch.arg(&total_pixels);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("rgb_to_ycbcr kernel launch failed: {}", e))?;
+
+        Ok((y_out, cb_out, cr_out))
+    }
+
+    /// Compute centered residual: residual = clamp(round(gt_y - pred_y + 128), 0, 255)
+    pub fn compute_residual(
+        &self,
+        gt_y: &CudaSlice<u8>,
+        pred_y: &CudaSlice<f32>,
+        total_pixels: i32,
+    ) -> Result<CudaSlice<u8>> {
+        let mut residual = unsafe { self.stream.alloc::<u8>(total_pixels as usize) }
+            .map_err(|e| anyhow!("alloc residual failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("compute_residual_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total_pixels as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(gt_y);
+        launch.arg(pred_y);
+        launch.arg(&mut residual);
+        launch.arg(&total_pixels);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("compute_residual kernel launch failed: {}", e))?;
+
+        Ok(residual)
+    }
+
+    /// Reconstruct Y: recon = clamp(pred_y + (residual - 128), 0, 255)
+    pub fn reconstruct_y(
+        &self,
+        pred_y: &CudaSlice<f32>,
+        residual: &CudaSlice<u8>,
+        total_pixels: i32,
+    ) -> Result<CudaSlice<f32>> {
+        let mut recon = unsafe { self.stream.alloc::<f32>(total_pixels as usize) }
+            .map_err(|e| anyhow!("alloc recon failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("reconstruct_y_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total_pixels as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(pred_y);
+        launch.arg(residual);
+        launch.arg(&mut recon);
+        launch.arg(&total_pixels);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("reconstruct_y kernel launch failed: {}", e))?;
+
+        Ok(recon)
+    }
+
+    /// YCbCr float32 → RGB u8 (BT.601 inverse)
+    pub fn ycbcr_to_rgb(
+        &self,
+        y_in: &CudaSlice<f32>,
+        cb_in: &CudaSlice<f32>,
+        cr_in: &CudaSlice<f32>,
+        total_pixels: i32,
+    ) -> Result<CudaSlice<u8>> {
+        let mut rgb = unsafe { self.stream.alloc::<u8>((total_pixels * 3) as usize) }
+            .map_err(|e| anyhow!("alloc rgb failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("ycbcr_to_rgb_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total_pixels as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(y_in);
+        launch.arg(cb_in);
+        launch.arg(cr_in);
+        launch.arg(&mut rgb);
+        launch.arg(&total_pixels);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("ycbcr_to_rgb kernel launch failed: {}", e))?;
+
+        Ok(rgb)
+    }
+
+    /// Composite 16 tiles into a 4x4 family canvas.
+    pub fn composite_tiles(
+        &self,
+        tiles: &CudaSlice<u8>,
+        tile_offsets_x: &CudaSlice<i32>,
+        tile_offsets_y: &CudaSlice<i32>,
+        n: i32,
+        tile_h: i32,
+        tile_w: i32,
+        canvas_h: i32,
+        canvas_w: i32,
+        tiles_per_family: i32,
+    ) -> Result<CudaSlice<u8>> {
+        let total_out = (n * canvas_h * canvas_w * 3) as usize;
+        let mut canvas = self.stream.alloc_zeros::<u8>(total_out)
+            .map_err(|e| anyhow!("alloc canvas failed: {}", e))?;
+
+        let f = self.mod_composite
+            .load_function("composite_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let total_threads = (n * canvas_h * canvas_w * 3) as u32;
+        let cfg = LaunchConfig::for_num_elems(total_threads);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(tiles);
+        launch.arg(&mut canvas);
+        launch.arg(tile_offsets_x);
+        launch.arg(tile_offsets_y);
+        launch.arg(&n);
+        launch.arg(&tile_h);
+        launch.arg(&tile_w);
+        launch.arg(&canvas_h);
+        launch.arg(&canvas_w);
+        launch.arg(&tiles_per_family);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("composite kernel launch failed: {}", e))?;
+
+        Ok(canvas)
+    }
+
+    /// OptL2 gradient descent step.
+    pub fn optl2_step(
+        &self,
+        l2_current: &mut CudaSlice<f32>,
+        l2_orig: &CudaSlice<f32>,
+        l1_target: &CudaSlice<f32>,
+        n: i32,
+        h: i32,
+        w: i32,
+        lr: f32,
+        max_delta: f32,
+    ) -> Result<()> {
+        let f = self.mod_optl2
+            .load_function("optl2_step_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let total = (n * h * w * 3) as u32;
+        let cfg = LaunchConfig::for_num_elems(total);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(l2_current);
+        launch.arg(l2_orig);
+        launch.arg(l1_target);
+        launch.arg(&n);
+        launch.arg(&h);
+        launch.arg(&w);
+        launch.arg(&lr);
+        launch.arg(&max_delta);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("optl2 kernel launch failed: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Lanczos3 downsample (2-pass separable).
+    pub fn downsample_lanczos3(
+        &self,
+        src: &CudaSlice<f32>,
+        n: i32,
+        h_src: i32,
+        w_src: i32,
+        h_dst: i32,
+        w_dst: i32,
+        c: i32,
+    ) -> Result<CudaSlice<f32>> {
+        // Horizontal pass: [N, H_src, W_src, C] → [N, H_src, W_dst, C]
+        let tmp_size = (n * h_src * w_dst * c) as usize;
+        let mut tmp = unsafe { self.stream.alloc::<f32>(tmp_size) }
+            .map_err(|e| anyhow!("alloc tmp failed: {}", e))?;
+
+        let scale_x = w_dst as f32 / w_src as f32;
+
+        let f_h = self.mod_upsample
+            .load_function("downsample_lanczos3_h_kernel")
+            .map_err(|e| anyhow!("load h kernel failed: {}", e))?;
+
+        let cfg_h = LaunchConfig::for_num_elems(tmp_size as u32);
+        let mut launch_h = self.stream.launch_builder(&f_h);
+        launch_h.arg(src);
+        launch_h.arg(&mut tmp);
+        launch_h.arg(&n);
+        launch_h.arg(&h_src);
+        launch_h.arg(&w_src);
+        launch_h.arg(&w_dst);
+        launch_h.arg(&c);
+        launch_h.arg(&scale_x);
+        unsafe { launch_h.launch(cfg_h) }
+            .map_err(|e| anyhow!("lanczos3_h launch failed: {}", e))?;
+
+        // Vertical pass: [N, H_src, W_dst, C] → [N, H_dst, W_dst, C]
+        let dst_size = (n * h_dst * w_dst * c) as usize;
+        let mut dst = unsafe { self.stream.alloc::<f32>(dst_size) }
+            .map_err(|e| anyhow!("alloc dst failed: {}", e))?;
+
+        let scale_y = h_dst as f32 / h_src as f32;
+
+        let f_v = self.mod_upsample
+            .load_function("downsample_lanczos3_v_kernel")
+            .map_err(|e| anyhow!("load v kernel failed: {}", e))?;
+
+        let cfg_v = LaunchConfig::for_num_elems(dst_size as u32);
+        let mut launch_v = self.stream.launch_builder(&f_v);
+        launch_v.arg(&tmp);
+        launch_v.arg(&mut dst);
+        launch_v.arg(&n);
+        launch_v.arg(&h_src);
+        launch_v.arg(&h_dst);
+        launch_v.arg(&w_dst);
+        launch_v.arg(&c);
+        launch_v.arg(&scale_y);
+        unsafe { launch_v.launch(cfg_v) }
+            .map_err(|e| anyhow!("lanczos3_v launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
+    /// Synchronize the default stream (wait for all GPU work to complete).
+    pub fn sync(&self) -> Result<()> {
+        self.stream.synchronize()
+            .map_err(|e| anyhow!("stream sync failed: {}", e))
+    }
+}

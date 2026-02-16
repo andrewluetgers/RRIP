@@ -171,6 +171,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
             files_dir: &pyramid.files_dir,
             residuals_dir: residuals_dir.as_deref(),
             pack_dir: pack_dir.as_deref(),
+            bundle: None,
             tile_size: pyramid.tile_size,
             l0: pyramid.l0,
             l1: pyramid.l1,
@@ -678,6 +679,8 @@ mod tests {
             manifest: false,
             optl2: false,
             debug_images: false,
+            l2resq: 0,
+            max_delta: 15,
         };
         crate::encode::run(encode_args).unwrap();
 
@@ -1085,6 +1088,8 @@ mod tests {
             manifest: false,
             optl2: false,
             debug_images: false,
+            l2resq: 0,
+            max_delta: 15,
         };
         crate::encode::run(encode_args).unwrap();
         let encode_ms = encode_start.elapsed().as_millis();

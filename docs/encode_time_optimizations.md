@@ -2,6 +2,101 @@
 
 This document describes the optimizations available within ORIGAMI's residual pyramid compression algorithm. All optimizations operate at encode time only — the decoder and file format are unchanged.
 
+## Pipeline Overview
+
+The diagram below shows the complete encode pipeline with all optimization decision points. Green nodes are optimizations (encode-time only, decoder-transparent). Orange nodes are quality/size parameters. Blue nodes are the core pipeline stages.
+
+```mermaid
+flowchart TD
+    %% ── Source & Downsampling ──────────────────────────────────
+    SRC["Source Image<br/>1024×1024 RGB"]
+    SRC -->|"Lanczos ↓2x"| L1GT["L1 Ground Truth<br/>512×512 RGB"]
+    SRC -->|"keep as"| L0GT["L0 Ground Truth<br/>1024×1024 RGB"]
+    L1GT -->|"Lanczos ↓2x"| L2RAW["L2 Raw<br/>256×256 RGB"]
+
+    %% ── L2 Foundation ─────────────────────────────────────────
+    L2RAW --> OPTL2_DEC{"OptL2?"}
+    OPTL2_DEC -->|"no"| L2FINAL["L2 Pixels"]
+    OPTL2_DEC -->|"yes"| OPTL2["OptL2<br/>Gradient Descent<br/><i>min ‖L1_GT − upsample(L2)‖²</i><br/>lr=0.3 · 100 iter · ±15 delta<br/>all 3 RGB channels"]
+    OPTL2 --> L2FINAL
+
+    L2FINAL --> SUBSAMP_DEC{"Chroma<br/>Subsampling?"}
+    SUBSAMP_DEC -->|"4:4:4<br/>(recommended)"| L2ENC_444["JPEG Encode<br/>4:4:4 · baseq=95<br/>~63 KB"]
+    SUBSAMP_DEC -->|"4:2:0"| L2ENC_420["JPEG Encode<br/>4:2:0 · baseq=95<br/>~47 KB"]
+    SUBSAMP_DEC -->|"4:2:0‑opt"| CHROMAOPT["Chroma Optimizer<br/>Gradient Descent on<br/>128×128 Cb/Cr planes"]
+    CHROMAOPT --> L2ENC_420OPT["JPEG Encode<br/>4:2:0 · baseq=95<br/>~49 KB"]
+
+    L2ENC_444 --> L2DEC["L2 JPEG Decode<br/>256×256 RGB"]
+    L2ENC_420 --> L2DEC
+    L2ENC_420OPT --> L2DEC
+
+    %% ── L1 Prediction & Residuals ─────────────────────────────
+    L2DEC -->|"RGB bilinear ↑2x"| L1PRED["L1 Prediction<br/>512×512 RGB"]
+
+    L1PRED --> YCBCR1["RGB → YCbCr<br/><i>float32 BT.601</i><br/>keep Cb/Cr as f32"]
+    L1GT --> YCBCR1_GT["RGB → Y only<br/><i>float32 BT.601</i>"]
+
+    YCBCR1 --> L1RES["L1 Residual<br/><i>round(GT_Y − Pred_Y_f32 + 128)</i><br/>per 256×256 tile · 4 tiles"]
+    YCBCR1_GT --> L1RES
+
+    L1RES --> SPLITQ_DEC{"Split Quality?"}
+    SPLITQ_DEC -->|"uniform: resq"| L1ENC_UNI["JPEG Encode<br/>grayscale · q=resq"]
+    SPLITQ_DEC -->|"split: l1q<br/>(recommended: l1q = l0q+20)"| L1ENC_SPLIT["JPEG Encode<br/>grayscale · q=l1q"]
+
+    %% ── L1 Reconstruction ─────────────────────────────────────
+    L1ENC_UNI --> L1RECON["L1 Reconstruct<br/><i>Y_recon = Pred_Y + (R_dec − 128)</i><br/>Cb/Cr from prediction (no residual)"]
+    L1ENC_SPLIT --> L1RECON
+    L1PRED -.->|"Cb/Cr reused"| L1RECON
+
+    L1RECON -->|"YCbCr → RGB → bilinear ↑2x"| L0PRED["L0 Prediction<br/>1024×1024 RGB"]
+
+    %% ── L0 Prediction & Residuals ─────────────────────────────
+    L0PRED --> YCBCR0["RGB → YCbCr<br/><i>float32 BT.601</i><br/>keep Cb/Cr as f32"]
+    L0GT --> YCBCR0_GT["RGB → Y only<br/><i>float32 BT.601</i>"]
+
+    YCBCR0 --> L0RES["L0 Residual<br/><i>round(GT_Y − Pred_Y_f32 + 128)</i><br/>per 256×256 tile · 16 tiles"]
+    YCBCR0_GT --> L0RES
+
+    L0RES --> L0ENC["JPEG Encode<br/>grayscale · q=l0q"]
+
+    %% ── Stored Output ─────────────────────────────────────────
+    L2ENC_444 --> STORED[("Stored Output<br/>L2 baseline + L1 residuals + L0 residuals<br/>~116 KB at l1q=60 l0q=40 444+OptL2")]
+    L2ENC_420 --> STORED
+    L2ENC_420OPT --> STORED
+    L1ENC_UNI --> STORED
+    L1ENC_SPLIT --> STORED
+    L0ENC --> STORED
+
+    %% ── Styling ────────────────────────────────────────────────
+    classDef optimization fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724
+    classDef decision fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#856404
+    classDef pipeline fill:#d1ecf1,stroke:#17a2b8,stroke-width:1px,color:#0c5460
+    classDef stored fill:#e2e3e5,stroke:#6c757d,stroke-width:2px,color:#383d41
+    classDef precision fill:#cce5ff,stroke:#004085,stroke-width:1px,color:#004085
+
+    class OPTL2,CHROMAOPT optimization
+    class OPTL2_DEC,SUBSAMP_DEC,SPLITQ_DEC decision
+    class SRC,L1GT,L0GT,L2RAW,L2FINAL,L2DEC,L1PRED,L1RES,L1RECON,L0PRED,L0RES pipeline
+    class L2ENC_444,L2ENC_420,L2ENC_420OPT,L1ENC_UNI,L1ENC_SPLIT,L0ENC pipeline
+    class YCBCR1,YCBCR1_GT,YCBCR0,YCBCR0_GT precision
+    class STORED stored
+    class L1RES,L0RES precision
+```
+
+### Decision Point Summary
+
+| Decision | Options | Recommended | Impact |
+|----------|---------|-------------|--------|
+| **OptL2** | off / on | **on** (`--optl2`) | −5% size, +0.4 dB PSNR. Gradient descent reshapes L2 pixels for better L1 prediction. Free at decode. |
+| **Chroma Subsampling** | 4:4:4 / 4:2:0 / 4:2:0-opt | **4:4:4** (`--subsamp 444`) | +15 KB L2 cost, but +1.0 Delta E improvement. Chroma loss in 4:2:0 cascades through L1→L0. |
+| **Split Quality** | uniform / split | **split +20** (`--l1q 60 --l0q 40`) | +2% size, +0.24 dB. More bits on L1 → better L0 predictions. |
+| **Float32 Pipeline** | (always on) | — | −25% Delta E vs u8 pipeline. Cb/Cr kept as f32, residuals computed without u8 quantization. |
+
+**Recommended config:** `origami encode --subsamp 444 --optl2 --l1q 60 --l0q 40`
+→ ~116 KB total, Delta E 2.17, PSNR 36.15 dB for 1024×1024
+
+---
+
 ## Background: The Residual Pyramid
 
 ORIGAMI compresses a tile family (1 L2 + 4 L1 + 16 L0 tiles, each 256x256) by storing:

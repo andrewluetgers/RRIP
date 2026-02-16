@@ -1,0 +1,2215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ORIGAMI Comparison Viewer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 6px;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin: 0 0 6px 0;
+            color: #333;
+            font-size: 20px;
+        }
+
+        /* Process Diagram */
+        .process-diagram {
+            background: white;
+            padding: 10px;
+            margin-top: 6px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pipeline {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .process-title {
+            font-weight: bold;
+            margin: 15px 0 5px 0;
+            color: #495057;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 90px;
+            padding: 10px;
+            margin: 0 5px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .stage.highlight {
+            background: #e7f3ff;
+            border-color: #007bff;
+        }
+
+        .stage-label {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .stage-desc {
+            color: #666;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .arrow {
+            color: #007bff;
+            font-size: 20px;
+            margin: 0 5px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .tile-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .column-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 8px 14px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button.remove-btn {
+            background: #dc3545;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        button.remove-btn:hover {
+            background: #c82333;
+        }
+
+        .comparison-grid {
+            background: white;
+            padding: 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: auto;
+            position: relative;
+            resize: both;
+            min-width: 400px;
+            min-height: 400px;
+            max-height: 92vh;
+        }
+
+        .grid-container {
+            border-collapse: collapse;
+            width: fit-content;
+        }
+
+        .grid-container thead th {
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 10px 8px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            min-width: var(--cell-size, 150px);
+            height: 40px;
+            border: 1px solid #e0e0e0;
+            border-bottom: 2px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .grid-container td {
+            padding: 0;
+            text-align: center;
+            vertical-align: middle;
+            border: 1px solid #e0e0e0;
+            background: white;
+            position: relative;
+        }
+
+        .row-label {
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 15px;
+            text-align: left;
+            padding: 8px !important;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            min-width: 240px;
+            vertical-align: middle;
+        }
+
+        .row-label .stage-name {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .row-label .stage-desc {
+            font-weight: normal;
+            font-size: 13px;
+            color: #6c757d;
+            line-height: 1.4;
+        }
+
+        .image-cell {
+            padding: 0;
+            width: var(--cell-size, 150px);
+            height: var(--cell-size, 150px);
+        }
+
+        .image-viewport {
+            width: 100%;
+            height: 100%;
+            background: #f8f9fa;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            aspect-ratio: 1 / 1;
+        }
+
+        /* Resizable handle */
+        .resize-handle {
+            position: absolute;
+            background: #007bff;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 20;
+        }
+
+        .resize-handle:hover {
+            opacity: 0.5;
+        }
+
+        .resize-handle.horizontal {
+            height: 4px;
+            width: 100%;
+            cursor: row-resize;
+            bottom: -2px;
+            left: 0;
+        }
+
+        .resize-handle.vertical {
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            right: -2px;
+            top: 0;
+        }
+
+        .image-viewport.dragging {
+            cursor: grabbing;
+        }
+
+        .image-viewport img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+
+        .no-image {
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .metric-td {
+            padding: 0;
+            min-width: var(--cell-size, 150px);
+            background: #f8f9fa;
+            height: 1px;
+        }
+
+        .metric-cell {
+            padding: 10px 14px;
+            background: #f8f9fa;
+            font-family: monospace;
+            font-size: 18px;
+            text-align: center;
+            height: 100%;
+        }
+
+        .metric-value {
+            font-weight: normal;
+            color: #007bff;
+            font-size: 20px;
+        }
+
+        .metric-value.best {
+            font-weight: bold;
+        }
+
+        .metric-unit {
+            margin-left: 5px;
+            color: #6c757d;
+            font-size: 15px;
+        }
+
+        .metric-error {
+            color: #dc3545;
+            font-size: 15px;
+        }
+
+        .stage-label {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .column-header {
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .subsamp-label {
+            font-size: 11px;
+            color: #6c757d;
+            font-weight: normal;
+            margin-top: 2px;
+        }
+
+        .remove-column {
+            position: absolute;
+            right: 5px;
+            top: 5px;
+            width: 16px;
+            height: 16px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .navigation {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin: 4px 0;
+        }
+
+        .zoom-btn {
+            padding: 5px 10px;
+            background: #f8f9fa;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .zoom-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        /* Zoom styles */
+        .zoom-fit .image-viewport img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .zoom-actual .image-viewport {
+            width: 256px;
+            height: 256px;
+        }
+
+        .zoom-actual .image-viewport img {
+            width: 256px;
+            height: 256px;
+            max-width: none;
+            max-height: none;
+        }
+
+        .zoom-2x .image-viewport {
+            width: 200px;
+            height: 200px;
+        }
+
+        .zoom-2x .image-viewport img {
+            width: 512px;
+            height: 512px;
+            max-width: none;
+            max-height: none;
+        }
+
+        .loading {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .charts-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .charts-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .charts-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .chart-filters {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .chart-filter-btn {
+            padding: 5px 12px;
+            background: #f0f0f0;
+            color: #555;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+
+        .chart-filter-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .chart-filter-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+            gap: 12px;
+        }
+
+        .chart-card {
+            display: none;
+        }
+
+        .chart-card.visible {
+            display: block;
+        }
+
+        .chart-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .reference-footer {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .reference-footer h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .reference-footer blockquote {
+            margin: 8px 0 8px 16px;
+            padding: 6px 12px;
+            border-left: 3px solid #dee2e6;
+            background: #f8f9fa;
+            font-style: italic;
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.5;
+        }
+
+        .reference-footer blockquote .cite {
+            display: block;
+            margin-top: 4px;
+            font-style: normal;
+            font-size: 11px;
+            color: #6c757d;
+        }
+
+        .reference-footer blockquote .cite a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .reference-footer blockquote .cite a:hover {
+            text-decoration: underline;
+        }
+
+        .reference-footer h4 {
+            margin: 14px 0 6px 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .reference-footer p {
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.6;
+            margin: 6px 0;
+        }
+
+        .reference-footer .note {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 6px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body class="zoom-actual">
+    <div class="header">
+        <h1>ORIGAMI Multi-Run Comparison Viewer <a href="/" style="font-size: 14px; font-weight: normal; margin-left: 16px; color: #17a2b8;">Home</a> <a href="/pipeline.html" style="font-size: 14px; font-weight: normal; margin-left: 8px; color: #17a2b8;">Pipeline Walkthrough &rarr;</a></h1>
+
+        <!-- Process Diagram (collapsed by default) -->
+        <details class="process-diagram">
+            <summary style="cursor: pointer; font-weight: bold; font-size: 16px; color: #333;">Pipeline Diagram &amp; Design Decisions</summary>
+
+            <div class="process-title">Encode Pipeline: L2 Foundation</div>
+            <div class="pipeline">
+                <div class="stage highlight">
+                    <div class="stage-label">Source</div>
+                    <div class="stage-desc">1024x1024<br>RGB Image</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">&darr;2x</div>
+                    <div class="stage-desc">Downsample<br>to L1 (512)</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">&darr;2x</div>
+                    <div class="stage-desc">Downsample<br>to L2 (256)</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #28a745; background: #e8f5e9;">
+                    <div class="stage-label">OptL2</div>
+                    <div class="stage-desc">Gradient descent<br>optimize pixels</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #fd7e14; background: #fff3e0;">
+                    <div class="stage-label">JPEG</div>
+                    <div class="stage-desc">Encode L2<br>baseq=95<br><b>4:4:4</b></div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Decode</div>
+                    <div class="stage-desc">JPEG decode<br>(lossy L2)</div>
+                </div>
+            </div>
+
+            <div class="process-title">Encode Pipeline: L1 &amp; L0 Residuals (per tile)</div>
+            <div class="pipeline">
+                <div class="stage">
+                    <div class="stage-label">L2 dec</div>
+                    <div class="stage-desc">Decoded L2<br>RGB</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">&uarr;2x</div>
+                    <div class="stage-desc">RGB bilinear<br>upsample</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Predict</div>
+                    <div class="stage-desc">f32 YCbCr<br>prediction</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">Residual</div>
+                    <div class="stage-desc">Y<sub>gt</sub> - Y<sub>pred</sub> + 128<br>(f32 precision)</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage" style="border-color: #fd7e14; background: #fff3e0;">
+                    <div class="stage-label">JPEG</div>
+                    <div class="stage-desc">Encode residual<br>quality=l1q/l0q<br><b>grayscale</b></div>
+                </div>
+            </div>
+
+            <div class="process-title">Decode Pipeline (per tile)</div>
+            <div class="pipeline">
+                <div class="stage">
+                    <div class="stage-label">Stored</div>
+                    <div class="stage-desc">L2 JPEG +<br>Residual JPEGs</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage">
+                    <div class="stage-label">Decode</div>
+                    <div class="stage-desc">JPEG decode<br>all tiles</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">Recon</div>
+                    <div class="stage-desc">Y<sub>pred</sub> + (R-128)<br>+ Cb/Cr pred</div>
+                </div>
+                <span class="arrow">&rarr;</span>
+                <div class="stage highlight">
+                    <div class="stage-label">RGB</div>
+                    <div class="stage-desc">YCbCr&rarr;RGB<br>conversion</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 11px; line-height: 1.6;">
+                <strong>Design Decisions:</strong><br>
+                <span style="color: #28a745;">&#9632;</span> <b>OptL2:</b> Gradient descent optimizes L2 pixels before JPEG encoding so predictions are better after decode. Reduces L1 residuals by ~57%.<br>
+                <span style="color: #fd7e14;">&#9632;</span> <b>4:4:4 on L2:</b> No chroma subsampling on L2. Chroma is upsampled 2x (L1) and 4x (L0), amplifying any chroma loss. 4:4:4 costs ~15KB more but gains 1.0 Delta E vs 4:2:0.<br>
+                <b>Grayscale residuals:</b> Only Y-channel residuals stored. Cb/Cr are predicted from parent upsample and reused directly.<br>
+                <b>Float32 pipeline:</b> YCbCr kept as f32 throughout. Residual = round(gt_u8 - pred_f32 + 128). Reduces Delta E by ~25%.<br>
+                <b>RGB-space upsample:</b> Bilinear upsample in RGB, not YCbCr. Matches standard image processing behavior.<br>
+                <b>Chroma optimization (420opt):</b> Tested &mdash; gradient descent on half-res chroma planes. Gains ~0.26 Delta E for ~3KB. Not worth it when using 4:4:4.
+            </div>
+
+            <div style="margin-top: 8px; font-size: 11px; color: #6c757d; text-align: center;">
+                <strong>Key:</strong> L2 = lowest resolution (256x256) &bull; L1 = medium (512x512) &bull; L0 = highest (1024x1024) &bull; baseq/l1q/l0q = JPEG quality settings
+            </div>
+        </details>
+
+        <div class="controls">
+            <div class="tile-selector">
+                <label for="tileSelect">Tile:</label>
+                <select id="tileSelect">
+                    <option value="">Loading...</option>
+                </select>
+                <span id="tileInfo" style="font-size: 14px; color: #666;"></span>
+            </div>
+
+            <div class="column-controls">
+                <label>Add Column:</label>
+                <select id="filterType" onchange="updateFilteredDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                    <option value="">All Types</option>
+                </select>
+                <select id="filterCodec" onchange="updateFilteredDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                    <option value="">All Codecs</option>
+                </select>
+                <select id="addColumn">
+                    <option value="">Select run...</option>
+                </select>
+                <button onclick="addSelectedColumn()">Add</button>
+                <button onclick="addAllFiltered()" title="Add all runs matching current filters">Add Filtered</button>
+                <button onclick="clearAllColumns()" style="background: #6c757d;" title="Remove all columns">Clear All</button>
+            </div>
+        </div>
+
+        <div class="zoom-controls">
+            <label style="font-size: 14px;">Zoom:</label>
+            <button class="zoom-btn" data-zoom="fit" onclick="setZoom('fit')">Fit</button>
+            <button class="zoom-btn active" data-zoom="actual" onclick="setZoom('actual')">Actual (1:1)</button>
+            <button class="zoom-btn" data-zoom="2x" onclick="setZoom('2x')">2x</button>
+        </div>
+    </div>
+
+    <div class="comparison-grid" id="comparisonGrid">
+        <div class="loading">Loading captures...</div>
+    </div>
+
+    <div class="navigation">
+        <button onclick="previousTile()">&larr; Previous Tile</button>
+        <button onclick="nextTile()">Next Tile &rarr;</button>
+    </div>
+
+    <div class="charts-section" id="chartsSection">
+        <div class="charts-header">
+            <h2>Metric Charts</h2>
+            <div class="chart-filters" id="chartFilters"></div>
+        </div>
+        <div class="charts-grid" id="chartsGrid">
+            <div class="loading">Loading charts...</div>
+        </div>
+    </div>
+
+    <div class="reference-footer">
+        <h3>On Image Quality Metrics in Digital Pathology</h3>
+
+        <p>
+            No validated clinical thresholds exist for PSNR, SSIM, LPIPS, or other full-reference image quality
+            metrics in digital pathology. The literature explicitly warns against treating these metrics as
+            reliable proxies for diagnostic quality. The values shown above are useful for <em>relative comparison</em>
+            between encoders and quality levels, but should not be interpreted as pass/fail criteria.
+        </p>
+
+        <h4>No Reliable Metric Predicts Diagnostic Impact</h4>
+        <blockquote>
+            &ldquo;There is no metric available that can reliably predict human judgments of image quality
+            in compressed images.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11889581/" target="_blank">Fischer et al. 2024, WSI Compression Baselines (PMC)</a></span>
+        </blockquote>
+
+        <h4>Compression Tolerance Is Higher Than Metrics Suggest</h4>
+        <p>
+            The only study to measure actual segmentation and pathologist performance across compression levels
+            found that 85% compression preserved 95% of deep learning performance, and that the practical
+            breakdown point aligned with where pathologists themselves reported difficulty &mdash; not where
+            metrics like PSNR or SSIM first begin to degrade.
+        </p>
+        <blockquote>
+            &ldquo;DP images can be compressed by 85% while still maintaining the performance of the DL algorithms
+            at 95% of what is achievable without any compression.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank">Chen et al. 2020, JCO Clinical Cancer Informatics</a></span>
+        </blockquote>
+        <blockquote>
+            &ldquo;The maximum compression level sustainable by DL algorithms is similar to where pathologists
+            also reported difficulties in providing accurate interpretations.&rdquo;
+            <span class="cite">&mdash; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank">Chen et al. 2020, JCO Clinical Cancer Informatics</a></span>
+        </blockquote>
+
+        <h4>LPIPS Was Not Designed for Medical Imaging</h4>
+        <blockquote>
+            &ldquo;[LPIPS] has not been rigorously tested nor developed for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+
+        <h4>Metrics Systematically Fail in Medical Contexts</h4>
+        <blockquote>
+            &ldquo;Currently and to the best of our knowledge, there is no publicly available database
+            with full-reference ratings for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+        <blockquote>
+            &ldquo;Discrepancies in medical scenarios &hellip; might imply wrong judgement of novel methods
+            for medical images.&rdquo;
+            <span class="cite">&mdash; <a href="https://arxiv.org/html/2405.19097v2" target="_blank">Kastryulin et al. 2025, IQA Reassessment</a></span>
+        </blockquote>
+
+        <h4>Codec-Specific Distortion Patterns Confound Metrics</h4>
+        <p>
+            Different codecs (JPEG, JPEG XL, WebP, learned methods) produce structurally different distortion
+            patterns. Pixel-level metrics like PSNR/SSIM and even learned metrics like LPIPS may penalize one
+            codec&rsquo;s artifacts more harshly than another&rsquo;s at equivalent perceptual quality. JPEG XL in particular
+            uses adaptive perceptual quantization that can produce lower metric scores while remaining
+            visually indistinguishable at moderate compression ratios.
+        </p>
+
+        <h4>References</h4>
+        <p style="font-size: 11px; color: #6c757d; line-height: 1.8;">
+            [1] Chen et al. &ldquo;Assessment of Computational Pathology Deep Learning Algorithms&rsquo; Robustness to Image Compression.&rdquo;
+            JCO Clinical Cancer Informatics, 2020.
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7113072/" target="_blank" style="color: #007bff;">PMC</a>
+            &bull; Measures nuclei segmentation F-score and pathologist comfort across JPEG/JPEG2000 compression levels on uncompressed WSIs. Found 85% compression preserved 95% of DL performance. Recommends caution below PSNR 40 dB for new applications.<br>
+            [2] Fischer et al. &ldquo;Enhanced Diagnostic Fidelity in Pathology Whole Slide Image Compression via Deep Learning.&rdquo;
+            MLMI/MICCAI 2023. <a href="https://link.springer.com/chapter/10.1007/978-3-031-45676-3_43" target="_blank" style="color: #007bff;">Springer</a>
+            &bull; Tests JPEG, WebP, JPEG-XL, and deep learning codecs on pathology WSIs. Provides rate-distortion curves but establishes no diagnostic quality cutoffs.<br>
+            [3] Fischer et al. &ldquo;WSI Compression Baselines.&rdquo; PMC 2024.
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11889581/" target="_blank" style="color: #007bff;">PMC</a>
+            &bull; Evaluates JPEG, JPEG-XL, WebP, and learned codecs against uncompressed originals. Proposes foundation-model feature similarity as an alternative to pixel-level metrics. No thresholds recommended.<br>
+            [4] Kastryulin et al. &ldquo;Image Quality Assessment for Medical Imaging: A Reassessment.&rdquo; 2025.
+            <a href="https://arxiv.org/html/2405.19097v2" target="_blank" style="color: #007bff;">arXiv</a>
+            &bull; Comprehensive audit of PSNR, SSIM, and LPIPS across six medical imaging modalities. Finds systematic failures in all three metrics and recommends caution in their use for medical image evaluation.
+        </p>
+    </div>
+
+    <script>
+        let captures = {};
+        let activeColumns = [];
+        let availableTiles = [];
+        let currentTileIndex = 0;
+        let currentZoom = 'actual';
+        let globalScale = 1;
+        let globalPanX = 0;
+        let globalPanY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        // Sanitize capture keys for use as DOM element IDs
+        function colId(col) {
+            return col.replace(/\s+/g, '_');
+        }
+
+        // Image stages to display as rows
+        const imageStages = [
+            {
+                id: 'original_rgb',
+                label: 'Original RGB',
+                stage: 'Stage A',
+                desc: 'Input 256x256 RGB tile at original resolution',
+                type: 'image',
+                file: 'original'
+            },
+            {
+                id: 'l2_parent_original',
+                label: 'L2 Parent Tile',
+                stage: 'Before C',
+                desc: 'Actual L2 JPEG stored on disk (post encode/decode round-trip)',
+                type: 'l2_jpeg',
+                file: 'L2_0_0.jpg'
+            },
+            {
+                id: 'l2_parent_upsampled',
+                label: 'Prediction Source',
+                stage: 'Stage C',
+                desc: 'Upsampled prediction for residual calculation (256x256 extracted from larger mosaic)',
+                type: 'image',
+                file: 'prediction'
+            },
+            {
+                id: 'l2_decoded',
+                label: 'Decoded L2',
+                stage: 'After JPEG',
+                desc: 'L2 tile after JPEG encode/decode round-trip (shows actual chroma surviving 4:2:0 or 4:4:4)',
+                type: 'l2_parent',
+                file: 'decode'
+            },
+            {
+                id: 'y_original',
+                label: 'Y (Luma) Original',
+                stage: 'Stage B',
+                desc: 'Luma channel extracted from original RGB after YCbCr conversion',
+                type: 'image',
+                file: 'luma'
+            },
+            {
+                id: 'cb_chroma',
+                label: 'Cb (Blue Chroma) Prediction',
+                stage: 'From Stage C',
+                desc: 'Blue-difference chroma predicted from L2 parent (reused in reconstruction)',
+                type: 'image',
+                file: 'chroma_cb'
+            },
+            {
+                id: 'cr_chroma',
+                label: 'Cr (Red Chroma) Prediction',
+                stage: 'From Stage C',
+                desc: 'Red-difference chroma predicted from L2 parent (reused in reconstruction)',
+                type: 'image',
+                file: 'chroma_cr'
+            },
+            {
+                id: 'residual_raw',
+                label: 'Y Residual Raw',
+                stage: 'Stage D',
+                desc: 'Difference between original and predicted luma: R = Y - Y_pred',
+                type: 'image',
+                file: 'residual_raw'
+            },
+            {
+                id: 'residual_encoded',
+                label: 'Encoded Residual',
+                stage: 'Stage F',
+                desc: 'Quantized residual centered to [0,255] and JPEG compressed',
+                type: 'image',
+                file: 'residual_centered'
+            },
+            {
+                id: 'reconstructed_rgb',
+                label: 'Reconstructed RGB',
+                stage: 'Stage K',
+                desc: 'Final reconstructed tile after decompression: Y_recon + predicted chroma -> RGB',
+                type: 'image',
+                file: 'reconstructed'
+            },
+            {
+                id: 'tile_size',
+                label: 'Tile Size \u2193',
+                stage: 'Metric',
+                desc: 'Per-tile encoded size (baseline: tile file, ORIGAMI: residual)',
+                type: 'metric',
+                metric: 'tile_size'
+            },
+            {
+                id: 'tile_ratio',
+                label: 'Tile Ratio \u2191',
+                stage: 'Metric',
+                desc: '(source \u00F7 20) \u00F7 tile size',
+                type: 'metric',
+                metric: 'tile_ratio'
+            },
+            {
+                id: 'family_size',
+                label: 'Family Size \u2193',
+                stage: 'Metric',
+                desc: 'L0 (16) + L1 (4) = 20 tiles, LZ4 packed or summed',
+                type: 'metric',
+                metric: 'family_size'
+            },
+            {
+                id: 'family_ratio',
+                label: 'Family Ratio \u2191',
+                stage: 'Metric',
+                desc: 'Original family size \u00F7 encoded family size',
+                type: 'metric',
+                metric: 'family_ratio'
+            },
+            {
+                id: 'l2_size',
+                label: 'L2 Tile Size',
+                stage: 'Metric',
+                desc: 'Size of the L2 baseline JPEG tile (q=95). Included in total but not in residual family size.',
+                type: 'metric',
+                metric: 'l2_size'
+            },
+            {
+                id: 'psnr',
+                label: 'Avg PSNR \u2191',
+                stage: 'Metric',
+                desc: 'Peak Signal-to-Noise Ratio (dB) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'psnr'
+            },
+            {
+                id: 'ssim',
+                label: 'Avg SSIM \u2191',
+                stage: 'Metric',
+                desc: 'Structural Similarity Index (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'ssim'
+            },
+            {
+                id: 'mse',
+                label: 'Avg MSE \u2193',
+                stage: 'Metric',
+                desc: 'Mean Squared Error \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'mse'
+            },
+            {
+                id: 'vif',
+                label: 'Avg VIF \u2191',
+                stage: 'Metric',
+                desc: 'Visual Information Fidelity (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'vif'
+            },
+            {
+                id: 'delta_e',
+                label: 'Avg Delta E \u2193',
+                stage: 'Metric',
+                desc: 'CIE Delta E color difference \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'delta_e'
+            },
+            {
+                id: 'lpips',
+                label: 'Avg LPIPS \u2193',
+                stage: 'Metric',
+                desc: 'Learned Perceptual Image Patch Similarity (0=identical) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'lpips'
+            }
+        ];
+
+        // Cell size variable for resizing
+        let cellSize = 150;
+
+        function sortColumns(columns) {
+            // Sort order: JPEG/JP2 baselines -> YCbCr subsample -> SINGLE ORIGAMI -> tiled ORIGAMI -> PY/RS variants
+            function typeOrder(name) {
+                if (name.startsWith('JPEG ') || name.startsWith('JP2 ')) return 0;
+                if (name.startsWith('YCbCr ')) return 1;
+                if (name.startsWith('SINGLE ')) return 2;
+                if (name.startsWith('ORIGAMI ')) return 3;
+                if (name.startsWith('PY ')) return 4;
+                if (name.startsWith('RS ')) return 5;
+                return 6;
+            }
+            return columns.slice().sort((a, b) => {
+                const aOrder = typeOrder(a);
+                const bOrder = typeOrder(b);
+                if (aOrder !== bOrder) return aOrder - bOrder;
+                // Within same type, sort by trailing quality number ascending
+                const aNum = parseInt(a.match(/(\d+)$/)?.[1] || '0');
+                const bNum = parseInt(b.match(/(\d+)$/)?.[1] || '0');
+                if (aNum !== bNum) return aNum - bNum;
+                // Same quality, sort by name
+                return a.localeCompare(b);
+            });
+        }
+
+        async function loadCaptures() {
+            try {
+                const response = await fetch('/captures.json');
+                captures = await response.json();
+
+                // Restore saved state, or start with no columns
+                const restored = restoreState();
+                if (!restored) {
+                    activeColumns = [];
+                }
+
+                // Populate filter dropdowns and add column dropdown
+                populateFilterDropdowns();
+                updateAddColumnDropdown();
+
+                // Build tile list
+                buildTileList();
+
+                // Load saved tile index or first tile
+                if (availableTiles.length > 0) {
+                    loadTile(currentTileIndex);
+                }
+            } catch (error) {
+                console.error('Failed to load captures:', error);
+            }
+        }
+
+        function buildTileList() {
+            availableTiles = [];
+
+            // Add L2 tile (parent)
+            availableTiles.push({id: 'L2_0_0', level: 'L2', x: 0, y: 0});
+
+            // Add L1 tiles
+            for (let y = 0; y < 2; y++) {
+                for (let x = 0; x < 2; x++) {
+                    availableTiles.push({id: `L1_${x}_${y}`, level: 'L1', x, y});
+                }
+            }
+
+            // Add L0 tiles
+            for (let y = 0; y < 4; y++) {
+                for (let x = 0; x < 4; x++) {
+                    availableTiles.push({id: `L0_${x}_${y}`, level: 'L0', x, y});
+                }
+            }
+
+            // Update tile selector
+            const select = document.getElementById('tileSelect');
+            select.innerHTML = '';
+            availableTiles.forEach((tile, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${tile.id} (${tile.level} at ${tile.x},${tile.y})`;
+                select.appendChild(option);
+            });
+        }
+
+        // Classify a capture key into type and codec
+        function classifyCapture(key) {
+            const cap = captures[key];
+            let type = 'Other';
+            let codec = 'unknown';
+
+            // Strip PY/RS prefix for classification
+            let classKey = key;
+            let implPrefix = '';
+            if (key.startsWith('PY ') || key.startsWith('RS ')) {
+                implPrefix = key.substring(0, 2);
+                classKey = key.substring(3);
+            }
+
+            if (classKey.startsWith('JPEG ') || classKey.startsWith('JP2 ') || key.startsWith('JP2 ')) {
+                type = 'Baseline';
+            } else if (classKey.startsWith('OPTL2 ')) {
+                if (classKey.includes('L1=')) {
+                    type = 'OPTL2 Split';
+                } else {
+                    type = 'OPTL2';
+                }
+            } else if (classKey.startsWith('ORIGAMI ')) {
+                if (classKey.includes('L1=')) {
+                    type = implPrefix ? `${implPrefix} ORIGAMI Split` : 'ORIGAMI Split';
+                } else {
+                    type = implPrefix ? `${implPrefix} ORIGAMI` : 'ORIGAMI';
+                }
+            } else if (classKey.startsWith('SINGLE ')) {
+                type = 'Single';
+            } else if (classKey.startsWith('YCbCr ')) {
+                type = 'YCbCr';
+            }
+
+            // Extract codec from key
+            const codecMatch = key.match(/(?:JPEG|ORIGAMI|OPTL2|SINGLE|YCbCr)\s+(turbo|mozjpeg|jpegli|jpegxl|webp|jpeg2000)/i);
+            if (codecMatch) {
+                codec = codecMatch[1].toLowerCase();
+            } else if (key.startsWith('JP2 ')) {
+                codec = 'jpeg2000';
+            }
+
+            return { type, codec };
+        }
+
+        function populateFilterDropdowns() {
+            const types = new Set();
+            const codecs = new Set();
+
+            Object.keys(captures).forEach(key => {
+                const { type, codec } = classifyCapture(key);
+                types.add(type);
+                codecs.add(codec);
+            });
+
+            const typeSelect = document.getElementById('filterType');
+            typeSelect.innerHTML = '<option value="">All Types</option>';
+            [...types].sort().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                typeSelect.appendChild(opt);
+            });
+
+            const codecSelect = document.getElementById('filterCodec');
+            codecSelect.innerHTML = '<option value="">All Codecs</option>';
+            [...codecs].sort().forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                codecSelect.appendChild(opt);
+            });
+        }
+
+        function getFilteredKeys() {
+            const typeFilter = document.getElementById('filterType').value;
+            const codecFilter = document.getElementById('filterCodec').value;
+
+            return sortColumns(Object.keys(captures)).filter(key => {
+                const { type, codec } = classifyCapture(key);
+                if (typeFilter && type !== typeFilter) return false;
+                if (codecFilter && codec !== codecFilter) return false;
+                return true;
+            });
+        }
+
+        function updateAddColumnDropdown() {
+            const select = document.getElementById('addColumn');
+            select.innerHTML = '<option value="">Select run...</option>';
+
+            getFilteredKeys().forEach(key => {
+                if (!activeColumns.includes(key)) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = key;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function updateFilteredDropdown() {
+            updateAddColumnDropdown();
+        }
+
+        function addAllFiltered() {
+            const toAdd = getFilteredKeys().filter(k => !activeColumns.includes(k));
+            if (toAdd.length === 0) return;
+            activeColumns = sortColumns([...activeColumns, ...toAdd]);
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
+        }
+
+        async function loadTile(index) {
+            if (index < 0 || index >= availableTiles.length) return;
+
+            currentTileIndex = index;
+            saveState();
+            const tile = availableTiles[index];
+
+            document.getElementById('tileSelect').value = index;
+            document.getElementById('tileInfo').textContent =
+                `Level: ${tile.level}, Position: (${tile.x}, ${tile.y})`;
+
+            // Build comparison grid
+            buildComparisonGrid(tile);
+        }
+
+        function buildComparisonGrid(tile) {
+            const grid = document.getElementById('comparisonGrid');
+
+            let html = '<table class="grid-container">';
+
+            // Header row
+            html += '<thead><tr>';
+            html += '<th>Stage</th>';
+            html += '<th>Original</th>';
+
+            activeColumns.forEach(col => {
+                const escapedCol = col.replace(/'/g, "\\'");
+                html += `<th class="column-header">
+                    ${col}
+                    <div class="subsamp-label" id="subsamp_${colId(col)}"></div>
+                    <button class="remove-column" onclick="removeColumn('${escapedCol}')">&times;</button>
+                </th>`;
+            });
+            html += '</tr></thead>';
+
+            html += '<tbody>';
+
+            // Data rows for each image stage
+            imageStages.forEach(stage => {
+                html += '<tr>';
+                html += `<td class="row-label">
+                    <div class="stage-name">${stage.label}</div>
+                    <div class="stage-desc">${stage.desc}</div>
+                </td>`;
+
+                if (stage.type === 'metric') {
+                    // Metric row - display text/numbers
+                    // Original column for metrics (show baseline sizes)
+                    html += '<td class="metric-td">';
+                    html += `<div class="metric-cell" id="orig_${stage.id}">`;
+                    // Source image: 604,392 bytes
+                    // Family = L0 (16) + L1 (4) = 20 tiles, no L2
+                    const sourceBytes = 604392;
+                    const sourcePerTile = sourceBytes / 20;
+                    const sourcePerTileKB = (sourcePerTile / 1024).toFixed(1);
+                    const sourceKB = (sourceBytes / 1024).toFixed(1);
+
+                    if (stage.metric === 'tile_size') {
+                        html += `<span class="metric-value">${sourcePerTileKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(source \u00F7 20)</span>`;
+                    } else if (stage.metric === 'tile_ratio') {
+                        html += '<span class="metric-value">1:1</span>';
+                    } else if (stage.metric === 'family_size') {
+                        html += `<span class="metric-value">${sourceKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(1024px source)</span>`;
+                    } else if (stage.metric === 'family_ratio') {
+                        html += '<span class="metric-value">1:1</span>';
+                    } else if (stage.metric === 'l2_size') {
+                        html += '<span class="metric-value">\u2014</span>';
+                    } else if (stage.metric === 'psnr') {
+                        html += '<span class="metric-value">&infin;</span><span class="metric-unit">dB</span>';
+                    } else if (stage.metric === 'ssim') {
+                        html += '<span class="metric-value">1.0000</span>';
+                    } else if (stage.metric === 'mse') {
+                        html += '<span class="metric-value">0.0</span>';
+                    } else if (stage.metric === 'vif') {
+                        html += '<span class="metric-value">1.0000</span>';
+                    } else if (stage.metric === 'delta_e') {
+                        html += '<span class="metric-value">0.00</span>';
+                    } else if (stage.metric === 'lpips') {
+                        html += '<span class="metric-value">0.0000</span>';
+                    } else {
+                        html += '<span class="metric-value">Baseline</span>';
+                    }
+                    html += '</div>';
+                    html += '</td>';
+
+                    // Capture columns for metrics
+                    activeColumns.forEach(col => {
+                        html += '<td class="metric-td">';
+                        html += `<div class="metric-cell" id="${colId(col)}_${stage.id}">`;
+                        html += '<span class="metric-value">Loading...</span>';
+                        html += '</div>';
+                        html += '</td>';
+                    });
+                } else {
+                    // Image row - display images
+                    // Original column
+                    html += '<td class="image-cell">';
+                    html += '<div class="image-viewport">';
+                    html += `<div id="orig_${stage.id}" class="loading">...</div>`;
+                    html += '</div>';
+                    html += '</td>';
+
+                    // Capture columns
+                    activeColumns.forEach(col => {
+                        html += '<td class="image-cell">';
+                        html += '<div class="image-viewport">';
+                        html += `<div id="${colId(col)}_${stage.id}" class="loading">...</div>`;
+                        html += '</div>';
+                        html += '</td>';
+                    });
+                }
+
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            grid.innerHTML = html;
+
+            // Load images for all columns
+            loadTileImages(tile);
+
+            // Setup interactions after a short delay to ensure images are in DOM
+            setTimeout(setupImageInteractions, 100);
+        }
+
+        async function loadTileImages(tile) {
+            // Load original column - use the highest quality ORIGAMI run as reference
+            let referenceCapture = null;
+
+            // Prefer highest quality ORIGAMI run, then highest JPEG baseline
+            const origamiRuns = Object.keys(captures)
+                .filter(k => captures[k].type === 'origami')
+                .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
+                .sort((a, b) => b.quality - a.quality);
+            if (origamiRuns.length > 0) {
+                referenceCapture = origamiRuns[0].key;
+            } else {
+                const baselineRuns = Object.keys(captures)
+                    .filter(k => captures[k].type === 'jpeg_baseline')
+                    .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
+                    .sort((a, b) => b.quality - a.quality);
+                if (baselineRuns.length > 0) {
+                    referenceCapture = baselineRuns[0].key;
+                }
+            }
+
+            if (referenceCapture && captures[referenceCapture]) {
+                imageStages.forEach(stage => {
+                    if (stage.type !== 'metric') {
+                        loadStageImage('orig', stage, tile, referenceCapture, true);
+                    }
+                });
+            }
+
+            // Load each capture column, collecting metric promises
+            const metricPromises = [];
+            activeColumns.forEach(col => {
+                if (captures[col]) {
+                    imageStages.forEach(stage => {
+                        if (stage.type === 'metric') {
+                            metricPromises.push(loadMetric(col, stage, tile, col));
+                        } else {
+                            loadStageImage(col, stage, tile, col, false);
+                        }
+                    });
+                    // Fetch manifest to populate subsamp label in column header
+                    fetchManifestMeta(col);
+                }
+            });
+
+            // After all metrics load, colorize by relative quality
+            Promise.all(metricPromises).then(() => colorizeMetrics());
+        }
+
+        // Which metrics are "higher is better" (true) vs "lower is better" (false)
+        const metricDirection = {
+            tile_size: false,
+            tile_ratio: true,
+            family_size: false,
+            family_ratio: true,
+            psnr: true,
+            ssim: true,
+            mse: false,
+            vif: true,
+            delta_e: false,
+            lpips: false,
+        };
+
+        function colorizeMetrics() {
+            const metricStages = imageStages.filter(s => s.type === 'metric');
+
+            metricStages.forEach(stage => {
+                const higherBetter = metricDirection[stage.metric] ?? true;
+                const cells = [];
+
+                activeColumns.forEach(col => {
+                    const el = document.getElementById(`${colId(col)}_${stage.id}`);
+                    if (el && el.dataset.metricValue !== undefined) {
+                        cells.push({ el, value: parseFloat(el.dataset.metricValue) });
+                    }
+                });
+
+                if (cells.length < 2) return;
+
+                const values = cells.map(c => c.value);
+                const bestVal = higherBetter ? Math.max(...values) : Math.min(...values);
+                const worstVal = higherBetter ? Math.min(...values) : Math.max(...values);
+                const range = Math.abs(bestVal - worstVal);
+
+                cells.forEach(({ el, value }) => {
+                    // Bold only the best value(s)
+                    const valSpan = el.querySelector('.metric-value');
+                    if (valSpan) {
+                        valSpan.classList.toggle('best', value === bestVal);
+                    }
+
+                    if (range === 0) {
+                        el.style.background = 'rgba(40, 167, 69, 0.15)';
+                        return;
+                    }
+                    // 0 = worst, 1 = best
+                    const normalized = higherBetter
+                        ? (value - worstVal) / range
+                        : (worstVal - value) / range;
+                    // Best gets strong green, worst gets nearly transparent
+                    const alpha = (0.08 + normalized * 0.25).toFixed(3);
+                    el.style.background = `rgba(40, 167, 69, ${alpha})`;
+                });
+            });
+        }
+
+        // Cache of manifest metadata per capture key
+        const manifestMetaCache = {};
+
+        async function fetchManifestMeta(captureKey) {
+            const labelEl = document.getElementById(`subsamp_${colId(captureKey)}`);
+            if (!labelEl) return;
+
+            try {
+                if (!manifestMetaCache[captureKey]) {
+                    const response = await fetch(`/manifest?capture=${captureKey}`);
+                    if (response.ok) {
+                        manifestMetaCache[captureKey] = await response.json();
+                    }
+                }
+                const manifest = manifestMetaCache[captureKey];
+                if (!manifest) return;
+
+                const parts = [];
+                if (manifest.subsamp) parts.push(manifest.subsamp);
+                if (manifest.optl2) parts.push('optL2');
+                if (manifest.l2_optimization && manifest.l2_optimization.enabled) parts.push('optL2');
+                if (parts.length > 0) {
+                    labelEl.textContent = parts.join(' | ');
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        async function loadMetric(columnId, stage, tile, captureKey) {
+            const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
+            if (!container) return;
+
+            try {
+                const capture = captures[captureKey];
+                const manifestPath = `/manifest?capture=${captureKey}`;
+                const response = await fetch(manifestPath);
+
+                if (response.ok) {
+                    const manifest = await response.json();
+                    let value = null;
+                    let html = '';
+
+                    const isJpegBaseline = capture.type === 'jpeg_baseline' || manifest.type === 'jpeg_baseline';
+                    const isSingleType = manifest.type === 'single_origami' || manifest.type === 'single_ycbcr';
+
+                    // Handle single_origami and single_ycbcr types
+                    if (isSingleType) {
+                        const sizes = manifest.sizes || {};
+                        const metrics = (manifest.metrics && manifest.metrics.reconstruction) || {};
+                        const totalKB = (sizes.total_compressed_size || 0) / 1024;
+
+                        switch(stage.metric) {
+                            case 'tile_size':
+                            case 'family_size':
+                                value = sizes.total_compressed_size || null;
+                                if (value) html = `<span class="metric-value">${totalKB.toFixed(1)}</span><span class="metric-unit">KB</span>`;
+                                break;
+                            case 'tile_ratio':
+                            case 'family_ratio':
+                                value = sizes.compression_ratio || null;
+                                if (value) html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
+                                break;
+                            case 'psnr':
+                                value = metrics.psnr ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
+                                break;
+                            case 'ssim':
+                                value = metrics.ssim ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'mse':
+                                value = metrics.mse ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(1)}</span>`;
+                                break;
+                            case 'vif':
+                                value = metrics.vif ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'delta_e':
+                                value = metrics.delta_e ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(2)}</span>`;
+                                break;
+                            case 'lpips':
+                                value = metrics.lpips ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'l2_size':
+                                value = sizes.prior_size || manifest.l2_bytes || null;
+                                if (value) {
+                                    const kb = (value / 1024).toFixed(1);
+                                    html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                                }
+                                break;
+                        }
+
+                        if (html) {
+                            container.innerHTML = html;
+                            if (value !== null) container.dataset.metricValue = value;
+                        } else {
+                            container.innerHTML = '<span class="metric-error">N/A</span>';
+                        }
+                        return;
+                    }
+
+                    function getOrigamiMetric(manifest, tile, metricName) {
+                        const level = tile.level;
+                        const coords = tile.id.split('_').slice(1).join('_');
+                        const tileKey = `tile_${coords}`;
+                        if (manifest.decompression_phase && manifest.decompression_phase[level]) {
+                            const tileData = manifest.decompression_phase[level][tileKey];
+                            if (tileData && tileData[metricName] !== undefined) {
+                                return tileData[metricName];
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Source image: 604,392 bytes, family = 20 tiles (L0+L1)
+                    const sourceBytes = 604392;
+                    const sourcePerTile = sourceBytes / 20;
+
+                    // Helper: get L0+L1 family bytes (no L2)
+                    function getFamilyBytes(manifest, isBaseline) {
+                        if (isBaseline) {
+                            // Pack has 20 entries (L0+L1)
+                            if (manifest.pack && manifest.pack.size) return manifest.pack.size;
+                            // Fallback: sum L0+L1 tile sizes
+                            if (manifest.tiles) {
+                                let sum = 0;
+                                for (const k in manifest.tiles) {
+                                    if (k.startsWith('L0_') || k.startsWith('L1_')) {
+                                        sum += manifest.tiles[k].size_bytes;
+                                    }
+                                }
+                                if (sum > 0) return sum;
+                            }
+                        } else {
+                            // Python manifest: size_comparison
+                            if (manifest.size_comparison) {
+                                const l0 = manifest.size_comparison.origami_L0_residuals || 0;
+                                const l1 = manifest.size_comparison.origami_L1_residuals || 0;
+                                if (l0 + l1 > 0) return l0 + l1;
+                            }
+                            // Rust manifest: tiles[] array with residual_bytes + l2_bytes
+                            if (Array.isArray(manifest.tiles)) {
+                                let sum = manifest.l2_bytes || 0;
+                                for (const t of manifest.tiles) {
+                                    sum += t.residual_bytes || 0;
+                                }
+                                if (sum > 0) return sum;
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Helper: get per-tile bytes for current tile (L0/L1 only)
+                    function getTileBytes(manifest, tile, isBaseline) {
+                        if (tile.level === 'L2') return null; // excluded
+                        if (isBaseline) {
+                            if (manifest.tiles && manifest.tiles[tile.id]) {
+                                return manifest.tiles[tile.id].size_bytes;
+                            }
+                        } else {
+                            // Python manifest: compression_phase
+                            const coords = tile.id.split('_').slice(1).join('_');
+                            const tileKey = `tile_${coords}`;
+                            const phase = manifest.compression_phase && manifest.compression_phase[tile.level];
+                            if (phase && phase[tileKey]) {
+                                for (const fname in phase[tileKey]) {
+                                    if (fname.includes('residual_jpeg') && phase[tileKey][fname].file_size) {
+                                        return phase[tileKey][fname].file_size;
+                                    }
+                                }
+                            }
+                            // Rust manifest: tiles[] array — find matching tile
+                            if (Array.isArray(manifest.tiles)) {
+                                const parts = tile.id.split('_'); // e.g. "L0_2_1"
+                                const tx = parseInt(parts[1]);
+                                const ty = parseInt(parts[2]);
+                                const level = tile.level;
+                                for (const t of manifest.tiles) {
+                                    if (t.level === level && t.tx === tx && t.ty === ty) {
+                                        return t.residual_bytes;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Average a visual metric across all L0+L1 family tiles
+                    // Map from viewer metric keys to Rust manifest tile field names
+                    const rustMetricKey = {
+                        'final_psnr': 'y_psnr_db',
+                        'final_mse': 'y_mse',
+                    };
+
+                    function avgFamilyMetric(manifest, isBaseline, baselineKey, origamiKey) {
+                        const vals = [];
+                        if (isBaseline) {
+                            if (manifest.tiles) {
+                                for (const k in manifest.tiles) {
+                                    if ((k.startsWith('L0_') || k.startsWith('L1_')) && manifest.tiles[k][baselineKey] != null) {
+                                        vals.push(manifest.tiles[k][baselineKey]);
+                                    }
+                                }
+                            }
+                        } else {
+                            // Python manifest format: decompression_phase.L0/L1.tile_x_y.final_psnr
+                            for (const level of ['L0', 'L1']) {
+                                const phase = manifest.decompression_phase && manifest.decompression_phase[level];
+                                if (phase) {
+                                    for (const tk in phase) {
+                                        if (phase[tk][origamiKey] != null) {
+                                            vals.push(phase[tk][origamiKey]);
+                                        }
+                                    }
+                                }
+                            }
+                            // Rust manifest format: tiles[] array with y_psnr_db, y_mse
+                            if (vals.length === 0 && Array.isArray(manifest.tiles)) {
+                                const rk = rustMetricKey[origamiKey];
+                                if (rk) {
+                                    for (const t of manifest.tiles) {
+                                        if (t[rk] != null) {
+                                            vals.push(t[rk]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                    }
+
+                    switch(stage.metric) {
+                        case 'tile_size': {
+                            const tileBytes = getTileBytes(manifest, tile, isJpegBaseline);
+                            if (tileBytes) {
+                                value = tileBytes;
+                                const kb = (tileBytes / 1024).toFixed(2);
+                                const label = isJpegBaseline ? '' : '<br><span class="metric-unit">(residual)</span>';
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>${label}`;
+                            }
+                            break;
+                        }
+                        case 'tile_ratio': {
+                            const tileBytes = getTileBytes(manifest, tile, isJpegBaseline);
+                            if (tileBytes) {
+                                value = sourcePerTile / tileBytes;
+                                html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
+                            }
+                            break;
+                        }
+                        case 'family_size': {
+                            const familyBytes = getFamilyBytes(manifest, isJpegBaseline);
+                            if (familyBytes) {
+                                value = familyBytes;
+                                const kb = (familyBytes / 1024).toFixed(1);
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                            }
+                            break;
+                        }
+                        case 'family_ratio': {
+                            const familyBytes = getFamilyBytes(manifest, isJpegBaseline);
+                            if (familyBytes) {
+                                value = sourceBytes / familyBytes;
+                                html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
+                            }
+                            break;
+                        }
+                        case 'l2_size': {
+                            let l2Bytes = null;
+                            if (isJpegBaseline) {
+                                // Baseline runs: look for L2_0_0 tile size
+                                if (manifest.tiles && manifest.tiles['L2_0_0']) {
+                                    l2Bytes = manifest.tiles['L2_0_0'].size_bytes;
+                                }
+                            } else {
+                                // ORIGAMI runs: L2 baseline size
+                                // Rust encoder manifest: top-level l2_bytes
+                                if (manifest.l2_bytes) {
+                                    l2Bytes = manifest.l2_bytes;
+                                } else if (manifest.size_comparison && manifest.size_comparison.origami_L2_baseline) {
+                                    l2Bytes = manifest.size_comparison.origami_L2_baseline;
+                                } else if (manifest.size_comparison && manifest.size_comparison.baseline_L2) {
+                                    l2Bytes = manifest.size_comparison.baseline_L2;
+                                }
+                            }
+                            if (l2Bytes) {
+                                value = l2Bytes;
+                                const kb = (l2Bytes / 1024).toFixed(1);
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                            }
+                            break;
+                        }
+                        case 'psnr':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'psnr', 'final_psnr');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
+                            }
+                            break;
+                        case 'ssim':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'ssim', 'final_ssim');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                            }
+                            break;
+                        case 'mse':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'mse', 'final_mse');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(1)}</span>`;
+                            }
+                            break;
+                        case 'vif':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'vif', 'final_vif');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                            }
+                            break;
+                        case 'delta_e':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'delta_e', 'final_delta_e');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(2)}</span>`;
+                            }
+                            break;
+                        case 'lpips':
+                            value = avgFamilyMetric(manifest, isJpegBaseline, 'lpips', 'final_lpips');
+                            if (value !== null) {
+                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                            }
+                            break;
+                    }
+
+                    if (html) {
+                        container.innerHTML = html;
+                        if (value !== null) {
+                            container.dataset.metricValue = value;
+                        }
+                    } else {
+                        container.innerHTML = '<span class="metric-error">N/A</span>';
+                    }
+                } else {
+                    container.innerHTML = '<span class="metric-error">No data</span>';
+                }
+            } catch (error) {
+                console.error('Error loading metric:', error);
+                container.innerHTML = '<span class="metric-error">Error</span>';
+            }
+        }
+
+        // Map viewer stage IDs to manifest image keys for single_origami type
+        const singleOrigamiStageMap = {
+            'original_rgb': 'original',
+            'l2_parent_original': 'prior_decoded',
+            'l2_parent_upsampled': 'prediction',    // Not used as l2_parent type
+            'y_original': 'Y_original',
+            'residual_raw': 'residual_raw',
+            'residual_encoded': 'residual_centered',
+            'reconstructed_rgb': 'reconstructed',
+        };
+
+        // Map viewer stage IDs to manifest image keys for single_ycbcr type
+        const singleYcbcrStageMap = {
+            'original_rgb': 'original',
+            'y_original': 'Y_original',
+            'cb_chroma': 'Cb_original_half',
+            'cr_chroma': 'Cr_original_half',
+            'reconstructed_rgb': 'reconstructed',
+        };
+
+        function loadStageImage(columnId, stage, tile, captureKey, isOriginal) {
+            const container = document.getElementById(`${colId(columnId)}_${stage.id}`);
+            if (!container) return;
+
+            const capture = captures[captureKey];
+            let imagePath = null;
+
+            // Handle single_origami and single_ycbcr types
+            const isSingleOrigami = capture && capture.type === 'single_origami';
+            const isSingleYcbcr = capture && capture.type === 'single_ycbcr';
+
+            if (isSingleOrigami || isSingleYcbcr) {
+                const stageMap = isSingleOrigami ? singleOrigamiStageMap : singleYcbcrStageMap;
+                let imageKey = stageMap[stage.id];
+
+                // For non-original columns, skip showing original/reference data
+                if (!isOriginal && (stage.id === 'original_rgb' || stage.id === 'y_original')) {
+                    return;
+                }
+
+                // Special case: Original column for reconstructed shows original
+                if (isOriginal && stage.id === 'reconstructed_rgb') {
+                    imageKey = 'original';
+                }
+
+                // For single_origami, map the l2_parent_upsampled stage
+                if (isSingleOrigami && stage.id === 'l2_parent_upsampled') {
+                    imageKey = 'prediction';
+                }
+
+                if (imageKey) {
+                    imagePath = `/image/${imageKey}.png?capture=${captureKey}`;
+                }
+
+                if (imagePath) {
+                    const img = document.createElement('img');
+                    img.src = imagePath;
+                    img.onerror = () => {
+                        container.innerHTML = '<div class="no-image">N/A</div>';
+                    };
+                    container.innerHTML = '';
+                    container.appendChild(img);
+                } else {
+                    container.innerHTML = '<div class="no-image">N/A</div>';
+                }
+                return;
+            }
+
+            // Special case: Show original RGB in the Original column for reconstructed stage
+            if (isOriginal && stage.id === 'reconstructed_rgb') {
+                imagePath = `/image/${tile.id}_original.png?capture=${captureKey}`;
+            }
+            // Special handling for L2 parent types
+            else if (stage.type === 'l2_jpeg') {
+                // Serve the actual L2 JPEG from the run root directory
+                const capture = captures[captureKey];
+                if (capture) {
+                    imagePath = `/run-image/${capture.name}/${stage.file}`;
+                }
+            }
+            else if (stage.type === 'l2_parent') {
+                const parentX = tile.level === 'L2' ? tile.x : Math.floor(tile.x / (tile.level === 'L0' ? 4 : 2));
+                const parentY = tile.level === 'L2' ? tile.y : Math.floor(tile.y / (tile.level === 'L0' ? 4 : 2));
+                imagePath = `/image/L2_${parentX}_${parentY}_${stage.file}.png?capture=${captureKey}`;
+            } else if (stage.type === 'image') {
+                imagePath = `/image/${tile.id}_${stage.file}.png?capture=${captureKey}`;
+            } else if (stage.type === 'array') {
+                imagePath = `/array/${tile.id}_${stage.file}.npy?capture=${captureKey}`;
+            }
+
+            if (imagePath) {
+                // For non-original columns showing original data, skip
+                if (!isOriginal && (stage.id === 'original_rgb' || stage.id === 'y_original')) {
+                    return;
+                }
+
+                const img = document.createElement('img');
+                img.src = imagePath;
+                img.onerror = () => {
+                    container.innerHTML = '<div class="no-image">N/A</div>';
+                };
+                container.innerHTML = '';
+                container.appendChild(img);
+            } else {
+                container.innerHTML = '<div class="no-image">N/A</div>';
+            }
+        }
+
+        function addSelectedColumn() {
+            const select = document.getElementById('addColumn');
+            const col = select.value;
+
+            if (col && !activeColumns.includes(col)) {
+                activeColumns.push(col);
+                activeColumns = sortColumns(activeColumns);
+                updateAddColumnDropdown();
+                saveState();
+                loadTile(currentTileIndex);
+            }
+        }
+
+        function removeColumn(col) {
+            const index = activeColumns.indexOf(col);
+            if (index > -1) {
+                activeColumns.splice(index, 1);
+                updateAddColumnDropdown();
+                saveState();
+                loadTile(currentTileIndex);
+            }
+        }
+
+        function previousTile() {
+            if (currentTileIndex > 0) {
+                loadTile(currentTileIndex - 1);
+            }
+        }
+
+        function nextTile() {
+            if (currentTileIndex < availableTiles.length - 1) {
+                loadTile(currentTileIndex + 1);
+            }
+        }
+
+        function setZoom(zoom) {
+            currentZoom = zoom;
+            document.body.className = `zoom-${zoom}`;
+
+            // Reset transform values when changing zoom mode
+            globalScale = 1;
+            globalPanX = 0;
+            globalPanY = 0;
+
+            // Update all images
+            applyTransform();
+
+            // Update buttons
+            document.querySelectorAll('.zoom-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.zoom === zoom);
+            });
+
+            saveState();
+        }
+
+        function applyTransform() {
+            document.querySelectorAll('.image-viewport img').forEach(img => {
+                if (currentZoom === 'fit') {
+                    img.style.transform = '';
+                } else {
+                    img.style.transform = `translate(${globalPanX}px, ${globalPanY}px) scale(${globalScale})`;
+                }
+            });
+        }
+
+        function setupImageInteractions() {
+            // Remove existing viewport listeners by replacing elements
+            document.querySelectorAll('.image-viewport').forEach(viewport => {
+                const clone = viewport.cloneNode(true);
+                viewport.parentNode.replaceChild(clone, viewport);
+            });
+
+            // Add fresh listeners to all viewports
+            document.querySelectorAll('.image-viewport').forEach(viewport => {
+                // Scroll zoom with controlled increments
+                viewport.addEventListener('wheel', (e) => {
+                    if (currentZoom === 'fit') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const zoomSpeed = 0.05;
+                    const delta = e.deltaY > 0 ? (1 - zoomSpeed) : (1 + zoomSpeed);
+
+                    globalScale *= delta;
+                    globalScale = Math.max(0.5, Math.min(globalScale, 5));
+
+                    applyTransform();
+                }, { passive: false });
+
+                // Mouse drag start
+                viewport.addEventListener('mousedown', (e) => {
+                    if (currentZoom === 'fit') return;
+                    isDragging = true;
+                    dragStartX = e.clientX - globalPanX;
+                    dragStartY = e.clientY - globalPanY;
+                    viewport.classList.add('dragging');
+                    e.preventDefault();
+                });
+            });
+
+            // Setup resize functionality
+            setupResizeHandles();
+        }
+
+        function setupResizeHandles() {
+            const grid = document.getElementById('comparisonGrid');
+            let isResizing = false;
+            let startX, startY, startSize;
+
+            // Create a resize handle
+            const resizeHandle = document.createElement('div');
+            resizeHandle.style.position = 'fixed';
+            resizeHandle.style.width = '20px';
+            resizeHandle.style.height = '20px';
+            resizeHandle.style.background = '#007bff';
+            resizeHandle.style.cursor = 'nwse-resize';
+            resizeHandle.style.opacity = '0.5';
+            resizeHandle.style.display = 'none';
+            resizeHandle.style.zIndex = '1000';
+            document.body.appendChild(resizeHandle);
+
+            // Position resize handle at bottom-right corner of any cell
+            grid.addEventListener('mousemove', (e) => {
+                if (isResizing) return;
+
+                const cell = e.target.closest('.image-cell');
+                if (cell) {
+                    const rect = cell.getBoundingClientRect();
+                    const distX = e.clientX - (rect.right - 20);
+                    const distY = e.clientY - (rect.bottom - 20);
+
+                    if (distX > 0 && distX < 20 && distY > 0 && distY < 20) {
+                        resizeHandle.style.display = 'block';
+                        resizeHandle.style.left = (rect.right - 20) + 'px';
+                        resizeHandle.style.top = (rect.bottom - 20) + 'px';
+                    } else {
+                        resizeHandle.style.display = 'none';
+                    }
+                } else {
+                    resizeHandle.style.display = 'none';
+                }
+            });
+
+            // Start resizing
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startSize = cellSize;
+                e.preventDefault();
+                document.body.style.cursor = 'nwse-resize';
+            });
+
+            // Resize
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                const delta = Math.max(deltaX, deltaY);
+
+                cellSize = Math.max(100, Math.min(400, startSize + delta));
+                document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
+
+                // Reapply transform after resize
+                applyTransform();
+            });
+
+            // Stop resizing
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    resizeHandle.style.display = 'none';
+                }
+            });
+        }
+
+        function loadAllColumns() {
+            activeColumns = sortColumns(Object.keys(captures));
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
+        }
+
+        function clearAllColumns() {
+            activeColumns = [];
+            updateAddColumnDropdown();
+            saveState();
+            loadTile(currentTileIndex);
+        }
+
+        // --- LocalStorage persistence ---
+        const STORAGE_KEY = 'origami_viewer_state';
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    activeColumns,
+                    currentTileIndex,
+                    currentZoom,
+                    cellSize,
+                }));
+            } catch (e) { /* ignore */ }
+        }
+
+        function restoreState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return false;
+                const state = JSON.parse(raw);
+                if (state.activeColumns && Array.isArray(state.activeColumns)) {
+                    // Only keep columns that still exist in captures
+                    activeColumns = state.activeColumns.filter(c => captures[c]);
+                }
+                if (typeof state.currentTileIndex === 'number') {
+                    currentTileIndex = state.currentTileIndex;
+                }
+                if (state.currentZoom) {
+                    setZoom(state.currentZoom);
+                }
+                if (typeof state.cellSize === 'number') {
+                    cellSize = state.cellSize;
+                    document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
+                }
+                return activeColumns.length > 0;
+            } catch (e) { return false; }
+        }
+
+        // Setup global event handlers once
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            globalPanX = e.clientX - dragStartX;
+            globalPanY = e.clientY - dragStartY;
+
+            applyTransform();
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.querySelectorAll('.image-viewport.dragging').forEach(vp => {
+                    vp.classList.remove('dragging');
+                });
+            }
+        });
+
+        // Tile selector change handler
+        document.getElementById('tileSelect').addEventListener('change', function() {
+            loadTile(parseInt(this.value));
+        });
+
+        // Chart filter categories
+        // f is now a path like "rust/psnr_vs_quality.png" — use basename for metric matching
+        const chartBasename = f => f.split('/').pop();
+        const chartCategories = {
+            'all':            { label: 'All',              match: () => true },
+            // Subdirectory filters
+            'dir_rust':       { label: 'Rust',             match: f => f.startsWith('rust/') },
+            'dir_comparison': { label: 'Comparison',       match: f => f.startsWith('comparison/') },
+            'dir_turbo':      { label: 'Turbo',            match: f => f.startsWith('turbo/') },
+            'dir_all':        { label: 'All Encoders',     match: f => f.startsWith('all/') },
+            // Metric filters (match on basename)
+            'vs_quality':     { label: 'Metric vs Quality', match: f => { const b = chartBasename(f); return b.includes('_vs_quality') && !b.includes('size_vs_quality') && !b.includes('pack_size_vs_quality'); } },
+            'size_quality':   { label: 'Size vs Quality',   match: f => { const b = chartBasename(f); return b === 'size_vs_quality.png' || b === 'pack_size_vs_quality.png'; } },
+            'rd_size':        { label: 'Metric vs Size',    match: f => { const b = chartBasename(f); return b.includes('_vs_size.png') && !b.includes('pack'); } },
+            'rd_pack':        { label: 'Metric vs Pack Size', match: f => chartBasename(f).includes('_vs_pack_size.png') },
+            'psnr':           { label: 'PSNR',             match: f => chartBasename(f).startsWith('psnr_') },
+            'ssim':           { label: 'SSIM',             match: f => chartBasename(f).startsWith('ssim_') },
+            'vif':            { label: 'VIF',              match: f => chartBasename(f).startsWith('vif_') },
+            'delta_e':        { label: 'Delta E',          match: f => chartBasename(f).startsWith('delta_e_') },
+            'mse':            { label: 'MSE',              match: f => chartBasename(f).startsWith('mse_') },
+            'lpips':          { label: 'LPIPS',            match: f => chartBasename(f).startsWith('lpips_') },
+        };
+
+        let activeChartFilter = 'all';
+        let allChartFiles = [];
+
+        function setChartFilter(category) {
+            activeChartFilter = category;
+
+            // Update button states
+            document.querySelectorAll('.chart-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === category);
+            });
+
+            // Show/hide chart cards
+            const matcher = chartCategories[category].match;
+            document.querySelectorAll('.chart-card').forEach(card => {
+                const file = card.dataset.file;
+                card.classList.toggle('visible', matcher(file));
+            });
+        }
+
+        async function loadCharts() {
+            try {
+                const response = await fetch('/charts.json');
+                allChartFiles = await response.json();
+                const grid = document.getElementById('chartsGrid');
+                const filters = document.getElementById('chartFilters');
+
+                if (allChartFiles.length === 0) {
+                    grid.innerHTML = '<div class="loading">No charts found. Run: uv run python evals/scripts/generate_charts.py</div>';
+                    return;
+                }
+
+                // Build filter buttons
+                filters.innerHTML = Object.entries(chartCategories).map(([key, cat]) => {
+                    const count = allChartFiles.filter(f => cat.match(f)).length;
+                    if (count === 0 && key !== 'all') return '';
+                    const active = key === activeChartFilter ? ' active' : '';
+                    return `<button class="chart-filter-btn${active}" data-category="${key}" onclick="setChartFilter('${key}')">${cat.label} (${count})</button>`;
+                }).join('');
+
+                // Build chart cards
+                grid.innerHTML = allChartFiles.map(file => {
+                    const name = file.replace('.png', '').replace(/\//g, ' / ').replace(/_/g, ' ');
+                    const visible = chartCategories[activeChartFilter].match(file) ? ' visible' : '';
+                    return `<div class="chart-card${visible}" data-file="${file}">
+                        <img src="/charts/${file}" alt="${name}" loading="lazy">
+                    </div>`;
+                }).join('');
+            } catch (error) {
+                document.getElementById('chartsGrid').innerHTML =
+                    '<div class="loading">Failed to load charts</div>';
+            }
+        }
+
+        // Initialize on load
+        loadCaptures();
+        loadCharts();
+    </script>
+</body>
+</html>

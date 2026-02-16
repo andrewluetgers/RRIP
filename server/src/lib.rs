@@ -1,3 +1,6 @@
+pub mod core;
+pub mod turbojpeg_optimized;
+pub mod fast_upsample_ycbcr;
 pub mod optimized;
 pub mod metrics_optimized;
 // pub mod parallel_generation;  // Will integrate directly into main.rs

@@ -51,6 +51,7 @@ class JpegEncoder(enum.Enum):
     MOZJPEG = "mozjpeg"
     JPEGXL = "jpegxl"
     WEBP = "webp"
+    JPEG2000 = "jpeg2000"
 
 
 def is_jxl_encoder(encoder: JpegEncoder) -> bool:
@@ -61,6 +62,11 @@ def is_jxl_encoder(encoder: JpegEncoder) -> bool:
 def is_webp_encoder(encoder: JpegEncoder) -> bool:
     """Return True if the encoder produces WebP output instead of JPEG."""
     return encoder == JpegEncoder.WEBP
+
+
+def is_jp2_encoder(encoder: JpegEncoder) -> bool:
+    """Return True if the encoder produces JPEG 2000 output instead of JPEG."""
+    return encoder == JpegEncoder.JPEG2000
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +270,36 @@ def decode_jxl_to_image(source) -> Image.Image:
 
 
 # ---------------------------------------------------------------------------
+# JPEG 2000 (Pillow / OpenJPEG — native support, no external tools needed)
+# ---------------------------------------------------------------------------
+
+def _quality_to_jp2_rate(quality: int) -> float:
+    """Map JPEG-style quality (1-100) to JPEG 2000 compression rate.
+    Lower rate = higher quality. Rate is the compression ratio target."""
+    # Exponential mapping: Q30->80, Q50->25, Q70->8, Q90->2.5
+    import math
+    rate = 500 * math.exp(-0.055 * quality)
+    return max(1.0, rate)
+
+
+def _encode_jp2_to_file(image: Image.Image, output_path: str, quality: int) -> int:
+    """Encode JPEG 2000 using Pillow (OpenJPEG). Returns file size in bytes."""
+    rate = _quality_to_jp2_rate(quality)
+    image.save(output_path, format="JPEG2000", irreversible=True,
+               quality_mode="rates", quality_layers=[rate])
+    return Path(output_path).stat().st_size
+
+
+def _encode_jp2_to_bytes(image: Image.Image, quality: int) -> bytes:
+    """Encode JPEG 2000 using Pillow (OpenJPEG). Returns JP2 bytes."""
+    rate = _quality_to_jp2_rate(quality)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG2000", irreversible=True,
+               quality_mode="rates", quality_layers=[rate])
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # WebP (Pillow — native support, no external tools needed)
 # ---------------------------------------------------------------------------
 
@@ -314,6 +350,8 @@ def encode_jpeg_to_file(
         return _encode_jxl_to_file(image, output_path, quality)
     elif encoder == JpegEncoder.WEBP:
         return _encode_webp_to_file(image, output_path, quality)
+    elif encoder == JpegEncoder.JPEG2000:
+        return _encode_jp2_to_file(image, output_path, quality)
     else:
         return _encode_libjpeg(image, output_path, quality)
 
@@ -346,6 +384,8 @@ def encode_jpeg_to_bytes(
         return _encode_jxl_to_bytes(image, quality)
     elif encoder == JpegEncoder.WEBP:
         return _encode_webp_to_bytes(image, quality)
+    elif encoder == JpegEncoder.JPEG2000:
+        return _encode_jp2_to_bytes(image, quality)
     else:
         buf = io.BytesIO()
         image.save(buf, format="JPEG", quality=quality, optimize=True, subsampling=0)
@@ -353,11 +393,13 @@ def encode_jpeg_to_bytes(
 
 
 def file_extension(encoder: JpegEncoder) -> str:
-    """Return the file extension for the given encoder (.jpg, .jxl, or .webp)."""
+    """Return the file extension for the given encoder (.jpg, .jxl, .webp, or .jp2)."""
     if encoder == JpegEncoder.JPEGXL:
         return ".jxl"
     if encoder == JpegEncoder.WEBP:
         return ".webp"
+    if encoder == JpegEncoder.JPEG2000:
+        return ".jp2"
     return ".jpg"
 
 
@@ -372,6 +414,9 @@ def parse_encoder_arg(value: str) -> JpegEncoder:
         "jpegxl": JpegEncoder.JPEGXL,
         "jxl": JpegEncoder.JPEGXL,
         "webp": JpegEncoder.WEBP,
+        "jpeg2000": JpegEncoder.JPEG2000,
+        "jp2": JpegEncoder.JPEG2000,
+        "j2k": JpegEncoder.JPEG2000,
     }
     key = value.lower().strip()
     if key not in mapping:

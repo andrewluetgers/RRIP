@@ -131,6 +131,10 @@ pub struct EncodeArgs {
     /// JPEG quality for L2 RGB residual (1-100, 0 = skip L2 residual)
     #[arg(long, default_value_t = 95)]
     pub l2resq: u8,
+
+    /// Maximum per-pixel deviation for OptL2 gradient descent (default: 15)
+    #[arg(long, default_value_t = 15)]
+    pub max_delta: u8,
 }
 
 /// Return the file extension for the given encoder name.
@@ -565,7 +569,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     if args.optl2 {
         use crate::core::optimize_l2::optimize_l2_for_prediction;
         info!("Running OptL2 gradient descent optimization...");
-        l2_rgb = optimize_l2_for_prediction(&l2_rgb, &l1_rgb, l2_w, l2_h, l1_w, l1_h, 15, 500, 0.3);
+        l2_rgb = optimize_l2_for_prediction(&l2_rgb, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3);
     }
 
     // Encode L2 baseline

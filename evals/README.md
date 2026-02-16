@@ -209,9 +209,68 @@ evals/
 
 ## Quick Start
 
-### Generating Runs
+### Generating Runs (Rust Encoder)
 
-All scripts should be run from the project root directory.
+The Rust encoder generates single-family evaluation runs with debug images. There are **two steps** — encoding and metrics computation. Both are required for the comparison viewer to show full metrics.
+
+**Step 1: Encode** — generates the pyramid tiles, residuals, and debug images:
+
+```bash
+# From the server/ directory (or use full path to binary)
+# Basic split-quality run (default baseq=95, optl2 delta=±15)
+origami encode \
+    --image ../evals/test-images/L0-1024.jpg \
+    --out ../evals/runs/rs_444_optl2_l1q60_l0q40 \
+    --subsamp 444 --optl2 --l1q 60 --l0q 40 \
+    --debug-images --manifest
+
+# Custom baseq and delta
+origami encode \
+    --image ../evals/test-images/L0-1024.jpg \
+    --out ../evals/runs/rs_444_b80_optl2_d20_l1q50_l0q30 \
+    --baseq 80 --subsamp 444 --optl2 --max-delta 20 \
+    --l1q 50 --l0q 30 --debug-images --manifest
+```
+
+Key flags:
+- `--debug-images` — **required** for the comparison viewer (writes compress/ and decompress/ PNGs)
+- `--manifest` — **required** for metrics (writes manifest.json with per-tile PSNR/MSE)
+- `--baseq` — L2 JPEG quality (default 95)
+- `--subsamp` — chroma subsampling: `444`, `420`, `420opt` (default `444`)
+- `--optl2` — enable L2 gradient descent optimization
+- `--max-delta` — max pixel deviation for OptL2 (default 15)
+- `--l1q` / `--l0q` — residual quality for L1/L0 tiles
+- `--resq` — uniform residual quality (if not using split l1q/l0q)
+
+**Step 2: Compute full metrics** — SSIM, VIF, Delta E, LPIPS:
+
+```bash
+# From project root
+uv run python evals/scripts/compute_metrics.py evals/runs/rs_444_optl2_l1q60_l0q40
+
+# Multiple runs at once
+uv run python evals/scripts/compute_metrics.py evals/runs/rs_444_b80_optl2_d20_*
+
+# All Rust runs missing metrics
+uv run python evals/scripts/compute_metrics.py
+```
+
+The Rust encoder only computes Y-channel PSNR and MSE. The `compute_metrics.py` script reads the debug images and adds SSIM, VIF, Delta E, and LPIPS to the manifest. **Without this step, those columns will show "N/A" in the viewer.**
+
+#### Run Directory Naming Convention
+
+The comparison viewer uses directory names to classify runs. Follow these patterns:
+
+| Pattern | Example |
+|---------|---------|
+| `rs_{subsamp}_optl2_l1q{N}_l0q{N}` | `rs_444_optl2_l1q60_l0q40` |
+| `rs_{subsamp}_optl2_j{N}` | `rs_444_optl2_j50` (uniform quality) |
+| `rs_{subsamp}_optl2_d{N}_l1q{N}_l0q{N}` | `rs_444_optl2_d20_l1q60_l0q40` (delta sweep) |
+| `rs_{subsamp}_b{N}_optl2_d{N}_l1q{N}_l0q{N}` | `rs_444_b80_optl2_d20_l1q50_l0q30` (custom baseq) |
+
+If the directory name doesn't match any known pattern, the viewer will show it as-is with limited metadata.
+
+### Generating Runs (Python — Legacy)
 
 ```bash
 # Single ORIGAMI run
@@ -229,25 +288,6 @@ bash evals/scripts/run_all_captures.sh
 # Jpegli baselines + ORIGAMI (batch)
 bash evals/scripts/run_jpegli_captures.sh
 ```
-
-Parameters for ORIGAMI runs:
-- `--resq` - JPEG quality for residual images (10-100)
-- `--l1q` - Override quality for L1 residuals (default: use `--resq`)
-- `--l0q` - Override quality for L0 residuals (default: use `--resq`)
-- `--baseq` - JPEG quality for baseline L2 tile (default 95)
-- `--pac` - Create a PAC file for tile serving
-- `--tile` - Tile size in pixels (default 256)
-- `--encoder` - `libjpeg-turbo` (default), `jpegli`, `mozjpeg`, `jpegxl`, or `webp`
-- `--out` - Output directory (defaults to `evals/runs/...`)
-
-Split-quality example (higher L1, lower L0):
-```bash
-python evals/scripts/wsi_residual_debug_with_manifest.py \
-    --image evals/test-images/L0-1024.jpg \
-    --l1q 70 --l0q 40 --pac
-```
-
-See [split-quality-research.md](split-quality-research.md) for the full analysis showing that balanced splits gain +1.5 dB for free.
 
 ### Viewing Results
 
@@ -273,6 +313,8 @@ The viewer automatically scans `evals/runs/` for all run directories.
 | ORIGAMI (split) | 4:4:4 | Yes | `rs_444_optl2_l1q{N}_l0q{N}` |
 | ORIGAMI (split) | 4:2:0 | Yes | `rs_420_optl2_l1q{N}_l0q{N}` |
 | ORIGAMI (split) | 4:2:0 opt | Yes | `rs_420opt_optl2_l1q{N}_l0q{N}` |
+| Delta sweep | 4:4:4 | Yes | `rs_444_optl2_d{D}_l1q{N}_l0q{N}` |
+| Custom baseq | 4:4:4 | Yes | `rs_444_b{B}_optl2_d{D}_l1q{N}_l0q{N}` |
 
 ### Baselines & Legacy
 

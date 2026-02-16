@@ -47,17 +47,33 @@ fn main() {
     } else {
         // Default: compile C wrapper against libjpeg-turbo's libjpeg API.
         // turbojpeg-sys exports DEP_TURBOJPEG_ROOT pointing to its build output.
-        let turbo_root = env::var("DEP_TURBOJPEG_ROOT")
-            .expect("DEP_TURBOJPEG_ROOT not set — turbojpeg-sys should provide this");
-        let include_dir = format!("{}/include", turbo_root);
+        // When TURBOJPEG_SOURCE=pkg-config, turbojpeg-sys uses system libs and
+        // doesn't set DEP_TURBOJPEG_ROOT — fall back to pkg-config for includes.
+        let (include_dir, jpeg_lib) = if let Ok(turbo_root) = env::var("DEP_TURBOJPEG_ROOT") {
+            (
+                format!("{}/include", turbo_root),
+                Some(format!("{}/lib/libjpeg.a", turbo_root)),
+            )
+        } else {
+            // pkg-config mode: use system libjpeg-turbo headers
+            let include = Command::new("pkg-config")
+                .args(["--cflags-only-I", "libjpeg"])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().replace("-I", "").to_string())
+                .unwrap_or_else(|_| "/opt/homebrew/include".to_string());
+            let include = if include.is_empty() { "/opt/homebrew/include".to_string() } else { include };
+            (include, None)
+        };
 
         compile_c_wrapper(&include_dir, &out_dir);
 
         let wrapper_lib = out_dir.join("liblibjpeg_compress.a");
         println!("cargo:rustc-link-arg={}", wrapper_lib.display());
-        // Link libjpeg.a from turbojpeg-sys (the standard libjpeg62 API)
-        let jpeg_lib = format!("{}/lib/libjpeg.a", turbo_root);
-        println!("cargo:rustc-link-arg={}", jpeg_lib);
+        // Link libjpeg.a from turbojpeg-sys (static build only)
+        if let Some(jpeg_lib) = jpeg_lib {
+            println!("cargo:rustc-link-arg={}", jpeg_lib);
+        }
+        // When using pkg-config, turbojpeg-sys handles the linking itself
     }
 
     println!("cargo:rerun-if-env-changed=MOZJPEG_LIB_DIR");

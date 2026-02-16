@@ -16,9 +16,11 @@ use clap::Args;
 use sysinfo::System;
 use tokio::sync::{mpsc, Semaphore};
 use tokio::task;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+use crate::core::pack::{open_bundle, BundleFile};
 use crate::core::pyramid::{parse_tile_size, max_level_from_files};
 use crate::core::reconstruct::{
     BufferPool, OutputFormat, ReconstructInput, ReconstructOpts, reconstruct_family,
@@ -93,18 +95,24 @@ struct ModeQuery {
     mode: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Slide {
     slide_id: String,
     dzi_path: PathBuf,
     files_dir: PathBuf,
     residuals_dir: PathBuf,
     pack_dir: PathBuf,
+    /// mmapped bundle file (preferred over pack_dir for residual serving)
+    bundle: Option<Arc<BundleFile>>,
     tile_size: u32,
     max_level: u32,
     l0: u32,
     l1: u32,
     l2: u32,
+    /// Human-readable label (e.g. "Origami 60/40" or "JPEG Q98")
+    label: String,
+    /// Total disk size in MB for all served content
+    disk_size_mb: f64,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -382,7 +390,12 @@ async fn async_main(args: ServeArgs) -> Result<()> {
             get(get_residual_tile),
         )
         .route("/viewer/:slide_id", get(viewer))
+        .route("/compare/:left/:right", get(compare_viewer))
+        .route("/compare4/:a/:b/:c/:d", get(compare4_viewer))
+        .route("/compare", get(compare_picker))
+        .route("/slides.json", get(list_slides))
         .with_state(state)
+        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http());
 
     let addr = format!("0.0.0.0:{}", args.port);
@@ -397,6 +410,7 @@ async fn async_main(args: ServeArgs) -> Result<()> {
     for slide in slides.values() {
         info!("viewer url: http://{}/viewer/{}", addr, slide.slide_id);
     }
+    info!("compare url: http://{}/compare/<left>/<right>", addr);
     info!("dzi url: http://{}/dzi/<slide_id>.dzi", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
@@ -771,6 +785,405 @@ async fn viewer(
     Ok(Html(html))
 }
 
+async fn compare_viewer(
+    State(state): State<AppState>,
+    AxumPath((left, right)): AxumPath<(String, String)>,
+) -> Result<Html<String>, StatusCode> {
+    let sl = state.slides.get(&left).ok_or(StatusCode::NOT_FOUND)?;
+    let sr = state.slides.get(&right).ok_or(StatusCode::NOT_FOUND)?;
+    let left_label = format!("{} ({:.0} MB)", sl.label, sl.disk_size_mb);
+    let right_label = format!("{} ({:.0} MB)", sr.label, sr.disk_size_mb);
+
+    let html = format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Compare: {left_label} vs {right_label}</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #111; color: #eee; }}
+    .container {{ display: flex; height: 100%; }}
+    .panel {{ flex: 1; position: relative; border-right: 2px solid #333; }}
+    .panel:last-child {{ border-right: none; }}
+    .panel .viewer {{ width: 100%; height: 100%; }}
+    .label {{ position: absolute; top: 12px; left: 12px; z-index: 100;
+              background: rgba(0,0,0,0.7); color: #fff; padding: 6px 14px;
+              border-radius: 6px; font-size: 14px; font-weight: 600;
+              pointer-events: none; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="panel">
+      <div class="label">{left_label}</div>
+      <div id="osd-left" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="label">{right_label}</div>
+      <div id="osd-right" class="viewer"></div>
+    </div>
+  </div>
+  <script>
+    var osdOpts = {{
+      prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+      animationTime: 0.6,
+      springStiffness: 12,
+      visibilityRatio: 1.0,
+      constrainDuringPan: false,
+      immediateRender: false,
+      blendTime: 0.15,
+      maxZoomPixelRatio: 2,
+      pixelsPerWheelLine: 60,
+      zoomPerScroll: 1.2,
+      zoomPerClick: 2.0,
+      minZoomImageRatio: 0.5,
+      maxZoomLevel: 40,
+      gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
+      gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: false, clickToZoom: false, dblClickToZoom: true, pinchToZoom: true }},
+    }};
+
+    var left = OpenSeadragon(Object.assign({{ id: "osd-left", showNavigator: true,
+      tileSources: "/dzi/{left}.dzi" }}, osdOpts));
+    var right = OpenSeadragon(Object.assign({{ id: "osd-right", showNavigator: false,
+      tileSources: "/dzi/{right}.dzi" }}, osdOpts));
+
+    var syncing = false;
+    function syncTo(src, dst) {{
+      if (syncing) return;
+      syncing = true;
+      dst.viewport.panTo(src.viewport.getCenter(false), false);
+      dst.viewport.zoomTo(src.viewport.getZoom(false), null, false);
+      syncing = false;
+    }}
+
+    left.addHandler('zoom',   function() {{ syncTo(left, right); }});
+    left.addHandler('pan',    function() {{ syncTo(left, right); }});
+    right.addHandler('zoom',  function() {{ syncTo(right, left); }});
+    right.addHandler('pan',   function() {{ syncTo(right, left); }});
+  </script>
+</body>
+</html>"##
+    );
+
+    info!("compare viewer requested left={} right={}", left, right);
+    Ok(Html(html))
+}
+
+async fn compare4_viewer(
+    State(state): State<AppState>,
+    AxumPath((a, b, c, d)): AxumPath<(String, String, String, String)>,
+) -> Result<Html<String>, StatusCode> {
+    let slides: Vec<_> = [&a, &b, &c, &d].iter().map(|id| {
+        state.slides.get(id.as_str()).ok_or(StatusCode::NOT_FOUND)
+    }).collect::<Result<Vec<_>, _>>()?;
+    let labels: Vec<String> = slides.iter().map(|s| {
+        format!("{} ({:.0} MB)", s.label, s.disk_size_mb)
+    }).collect();
+    let ids = [&a, &b, &c, &d];
+
+    let html = format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Compare 4-up</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #111; color: #eee; }}
+    .grid {{ display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; gap: 2px; background: #333; }}
+    .panel {{ position: relative; background: #111; overflow: hidden; }}
+    .panel .viewer {{ width: 100%; height: 100%; }}
+    .label {{ position: absolute; top: 8px; left: 8px; z-index: 100;
+              background: rgba(0,0,0,0.75); color: #fff; padding: 5px 12px;
+              border-radius: 5px; font-size: 13px; font-weight: 600;
+              pointer-events: none; }}
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <div class="panel">
+      <div class="label">{label0}</div>
+      <div id="osd-0" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="label">{label1}</div>
+      <div id="osd-1" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="label">{label2}</div>
+      <div id="osd-2" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="label">{label3}</div>
+      <div id="osd-3" class="viewer"></div>
+    </div>
+  </div>
+  <script>
+    var osdOpts = {{
+      prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+      showNavigator: false,
+      animationTime: 0.6,
+      springStiffness: 12,
+      visibilityRatio: 1.0,
+      constrainDuringPan: false,
+      immediateRender: false,
+      blendTime: 0.15,
+      maxZoomPixelRatio: 2,
+      pixelsPerWheelLine: 60,
+      zoomPerScroll: 1.2,
+      zoomPerClick: 2.0,
+      minZoomImageRatio: 0.5,
+      maxZoomLevel: 40,
+      gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
+      gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: false, clickToZoom: false, dblClickToZoom: true, pinchToZoom: true }},
+    }};
+
+    var viewers = [
+      OpenSeadragon(Object.assign({{ id: "osd-0", showNavigator: true, tileSources: "/dzi/{id0}.dzi" }}, osdOpts)),
+      OpenSeadragon(Object.assign({{ id: "osd-1", tileSources: "/dzi/{id1}.dzi" }}, osdOpts)),
+      OpenSeadragon(Object.assign({{ id: "osd-2", tileSources: "/dzi/{id2}.dzi" }}, osdOpts)),
+      OpenSeadragon(Object.assign({{ id: "osd-3", tileSources: "/dzi/{id3}.dzi" }}, osdOpts)),
+    ];
+
+    var syncing = false;
+    function syncFrom(src) {{
+      if (syncing) return;
+      syncing = true;
+      var center = src.viewport.getCenter(false);
+      var zoom = src.viewport.getZoom(false);
+      for (var i = 0; i < viewers.length; i++) {{
+        if (viewers[i] !== src) {{
+          viewers[i].viewport.panTo(center, false);
+          viewers[i].viewport.zoomTo(zoom, null, false);
+        }}
+      }}
+      syncing = false;
+    }}
+
+    for (var i = 0; i < viewers.length; i++) {{
+      (function(v) {{
+        v.addHandler('zoom', function() {{ syncFrom(v); }});
+        v.addHandler('pan',  function() {{ syncFrom(v); }});
+      }})(viewers[i]);
+    }}
+  </script>
+</body>
+</html>"##,
+        label0 = labels[0], label1 = labels[1], label2 = labels[2], label3 = labels[3],
+        id0 = ids[0], id1 = ids[1], id2 = ids[2], id3 = ids[3],
+    );
+
+    info!("compare4 viewer requested: {} / {} / {} / {}", a, b, c, d);
+    Ok(Html(html))
+}
+
+async fn list_slides(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let mut slides: Vec<serde_json::Value> = state.slides.iter().map(|(id, s)| {
+        serde_json::json!({
+            "id": id,
+            "label": s.label,
+            "disk_size_mb": s.disk_size_mb,
+        })
+    }).collect();
+    slides.sort_by(|a, b| a["label"].as_str().unwrap_or("").cmp(b["label"].as_str().unwrap_or("")));
+    axum::Json(slides)
+}
+
+async fn compare_picker(
+    State(state): State<AppState>,
+) -> Html<String> {
+    // Build sorted slide list for initial rendering
+    let mut slide_ids: Vec<&str> = state.slides.keys().map(|s| s.as_str()).collect();
+    slide_ids.sort();
+
+    let html = r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Compare Slides</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #111; color: #eee; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; gap: 2px; background: #333; }
+    .panel { position: relative; background: #111; overflow: hidden; }
+    .panel .viewer { width: 100%; height: 100%; }
+    .panel-header { position: absolute; top: 8px; left: 8px; z-index: 100; display: flex; align-items: center; gap: 6px; }
+    .panel-header select {
+      background: rgba(0,0,0,0.85); color: #fff; border: 1px solid #555;
+      padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;
+      cursor: pointer; max-width: 300px;
+    }
+    .panel-header select:hover { border-color: #888; }
+    .size-label {
+      background: rgba(0,0,0,0.75); color: #aaa; padding: 4px 8px;
+      border-radius: 4px; font-size: 11px; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-header"><select id="sel-0"></select><span id="size-0" class="size-label"></span></div>
+      <div id="osd-0" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><select id="sel-1"></select><span id="size-1" class="size-label"></span></div>
+      <div id="osd-1" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><select id="sel-2"></select><span id="size-2" class="size-label"></span></div>
+      <div id="osd-2" class="viewer"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><select id="sel-3"></select><span id="size-3" class="size-label"></span></div>
+      <div id="osd-3" class="viewer"></div>
+    </div>
+  </div>
+  <script>
+    var slides = [];
+    var viewers = [null, null, null, null];
+    var syncing = false;
+
+    var osdOpts = {
+      prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+      showNavigator: false,
+      animationTime: 0.6,
+      springStiffness: 12,
+      visibilityRatio: 1.0,
+      constrainDuringPan: false,
+      immediateRender: false,
+      blendTime: 0.15,
+      maxZoomPixelRatio: 2,
+      pixelsPerWheelLine: 60,
+      zoomPerScroll: 1.2,
+      zoomPerClick: 2.0,
+      minZoomImageRatio: 0.5,
+      maxZoomLevel: 40,
+      gestureSettingsMouse: { flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true },
+      gestureSettingsTouch: { flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: false, clickToZoom: false, dblClickToZoom: true, pinchToZoom: true },
+    };
+
+    function syncFrom(src) {
+      if (syncing) return;
+      syncing = true;
+      var center = src.viewport.getCenter(false);
+      var zoom = src.viewport.getZoom(false);
+      for (var i = 0; i < viewers.length; i++) {
+        if (viewers[i] && viewers[i] !== src) {
+          viewers[i].viewport.panTo(center, false);
+          viewers[i].viewport.zoomTo(zoom, null, false);
+        }
+      }
+      syncing = false;
+    }
+
+    function createViewer(idx, slideId) {
+      if (viewers[idx]) {
+        viewers[idx].destroy();
+      }
+      var v = OpenSeadragon(Object.assign({
+        id: "osd-" + idx,
+        showNavigator: idx === 0,
+        tileSources: "/dzi/" + slideId + ".dzi"
+      }, osdOpts));
+      v.addHandler('zoom', function() { syncFrom(v); });
+      v.addHandler('pan',  function() { syncFrom(v); });
+      viewers[idx] = v;
+
+      // Sync new viewer to existing position
+      for (var i = 0; i < viewers.length; i++) {
+        if (i !== idx && viewers[i]) {
+          v.addOnceHandler('open', function() {
+            var ref = null;
+            for (var j = 0; j < viewers.length; j++) {
+              if (j !== idx && viewers[j]) { ref = viewers[j]; break; }
+            }
+            if (ref) {
+              syncing = true;
+              v.viewport.panTo(ref.viewport.getCenter(false), true);
+              v.viewport.zoomTo(ref.viewport.getZoom(false), null, true);
+              syncing = false;
+            }
+          });
+          break;
+        }
+      }
+
+      // Update size label
+      var slide = slides.find(function(s) { return s.id === slideId; });
+      document.getElementById("size-" + idx).textContent =
+        slide ? slide.disk_size_mb.toFixed(0) + " MB" : "";
+    }
+
+    function populateSelectors() {
+      for (var idx = 0; idx < 4; idx++) {
+        var sel = document.getElementById("sel-" + idx);
+        sel.innerHTML = "";
+        for (var j = 0; j < slides.length; j++) {
+          var opt = document.createElement("option");
+          opt.value = slides[j].id;
+          opt.textContent = slides[j].label;
+          sel.appendChild(opt);
+        }
+      }
+    }
+
+    function onSelectChange(idx) {
+      var sel = document.getElementById("sel-" + idx);
+      createViewer(idx, sel.value);
+      // Save to URL hash
+      var ids = [];
+      for (var i = 0; i < 4; i++) {
+        ids.push(document.getElementById("sel-" + i).value);
+      }
+      window.location.hash = ids.join("/");
+    }
+
+    // Load slides and initialize
+    fetch("/slides.json").then(function(r) { return r.json(); }).then(function(data) {
+      slides = data;
+      populateSelectors();
+
+      // Parse initial selection from URL hash or use first 4 slides
+      var hash = window.location.hash.replace("#", "");
+      var initial = hash ? hash.split("/") : [];
+      for (var i = 0; i < 4; i++) {
+        var sel = document.getElementById("sel-" + i);
+        if (initial[i] && slides.find(function(s) { return s.id === initial[i]; })) {
+          sel.value = initial[i];
+        } else if (slides[i]) {
+          sel.value = slides[Math.min(i, slides.length - 1)].id;
+        }
+        sel.onchange = (function(idx) { return function() { onSelectChange(idx); }; })(i);
+        createViewer(i, sel.value);
+      }
+    });
+  </script>
+</body>
+</html>"##.to_string();
+
+    info!("compare picker viewer requested");
+    Html(html)
+}
+
 fn parse_tile_name(name: &str) -> Option<(u32, u32)> {
     let trimmed = name
         .strip_suffix(".jpg")
@@ -866,17 +1279,71 @@ fn discover_slides(
         let l0 = max_level;
         let l1 = max_level.saturating_sub(1);
         let l2 = max_level.saturating_sub(2);
+
+        // Compute label and disk size from summary.json
+        let summary_path = slide_root.join("summary.json");
+        let (label, disk_size_mb) = if let Ok(data) = fs::read_to_string(&summary_path) {
+            if let Ok(summary) = serde_json::from_str::<serde_json::Value>(&data) {
+                let mode = summary.get("mode").and_then(|v| v.as_str()).unwrap_or("");
+                let lbl = if mode == "ingest-jpeg-only" {
+                    let q = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
+                    format!("JPEG Q{}", q)
+                } else {
+                    let baseq = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let l1q = summary.get("l1q").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let l0q = summary.get("l0q").and_then(|v| v.as_u64()).unwrap_or(0);
+                    format!("Origami {}/{}/{}", baseq, l1q, l0q)
+                };
+                let size = if mode == "ingest-jpeg-only" {
+                    // JPEG-only: total_bytes covers everything
+                    let total = summary.get("total_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    total as f64 / 1_048_576.0
+                } else {
+                    // Origami: l2_bytes + residual_bytes (pack files)
+                    let l2 = summary.get("l2_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let res = summary.get("residual_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    (l2 + res) as f64 / 1_048_576.0
+                };
+                (lbl, size)
+            } else {
+                (slide_id.clone(), 0.0)
+            }
+        } else {
+            (slide_id.clone(), 0.0)
+        };
+
+        // Try to open a bundle file (preferred over individual .pack files)
+        let pack_dir_path = slide_root.join(pack_dir);
+        let bundle_path = pack_dir_path.join("residuals.bundle");
+        let bundle = if bundle_path.exists() {
+            match open_bundle(&bundle_path) {
+                Ok(b) => {
+                    info!("  opened bundle: {} ({}x{})", bundle_path.display(), b.grid_cols(), b.grid_rows());
+                    Some(Arc::new(b))
+                }
+                Err(e) => {
+                    info!("  bundle open failed ({}), falling back to individual packs", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let slide = Slide {
             slide_id: slide_id.clone(),
             dzi_path,
             files_dir,
             residuals_dir: slide_root.join(residuals_dir),
-            pack_dir: slide_root.join(pack_dir),
+            pack_dir: pack_dir_path,
+            bundle,
             tile_size,
             max_level,
             l0,
             l1,
             l2,
+            label,
+            disk_size_mb,
         };
         slides.insert(slide_id, slide);
     }
@@ -906,6 +1373,7 @@ fn generate_family_server(
         files_dir: &slide.files_dir,
         residuals_dir: Some(&slide.residuals_dir),
         pack_dir: Some(&slide.pack_dir),
+        bundle: slide.bundle.as_deref(),
         tile_size: slide.tile_size,
         l0: slide.l0,
         l1: slide.l1,

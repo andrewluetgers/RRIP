@@ -296,6 +296,70 @@ async function scanCaptures() {
       continue;
     }
 
+    // --- Delta sweep: rs_{subsamp}_optl2_d{N}_l1q{N}_l0q{N} ---
+    const deltaSweepMatch = dirName.match(/^rs_(444|420opt|420)_optl2_d(\d+)_l1q(\d+)_l0q(\d+)$/);
+    if (deltaSweepMatch) {
+      const subsamp = deltaSweepMatch[1];
+      const delta = parseInt(deltaSweepMatch[2]);
+      const l1q = parseInt(deltaSweepMatch[3]);
+      const l0q = parseInt(deltaSweepMatch[4]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        captures[`RS ORIGAMI turbo L1=${l1q} L0=${l0q} ${subsamp} optL2 \u00b1${delta}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: l0q,
+          j: l0q,
+          l1q,
+          l0q,
+          subsamp,
+          optl2: true,
+          delta,
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- Custom baseq: rs_{subsamp}_b{N}_optl2_d{N}_l1q{N}_l0q{N} ---
+    const baseqMatch = dirName.match(/^rs_(444|420opt|420)_b(\d+)_optl2_d(\d+)_l1q(\d+)_l0q(\d+)$/);
+    if (baseqMatch) {
+      const subsamp = baseqMatch[1];
+      const baseq = parseInt(baseqMatch[2]);
+      const delta = parseInt(baseqMatch[3]);
+      const l1q = parseInt(baseqMatch[4]);
+      const l0q = parseInt(baseqMatch[5]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        captures[`RS ORIGAMI turbo B${baseq} L1=${l1q} L0=${l0q} ${subsamp} optL2 \u00b1${delta}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: l0q,
+          j: l0q,
+          baseq,
+          l1q,
+          l0q,
+          subsamp,
+          optl2: true,
+          delta,
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
     // Fallback: unrecognized directories with content
     const hasImages = fs.existsSync(path.join(dirPath, 'images'));
     const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
@@ -496,9 +560,13 @@ app.get('/image/*', async (req, res) => {
 
     // New format: compress/ and decompress/ with numbered prefixes
     if (!filePath) {
-      // Try decompress directory first for reconstructed files
-      if (imagePath.includes('reconstructed') && fs.existsSync(decompressDir)) {
+      // Try decompress directory first for reconstructed/decode files
+      if ((imagePath.includes('reconstructed') || imagePath.includes('decode')) && fs.existsSync(decompressDir)) {
         filePath = findNumberedFile(decompressDir, baseName);
+        // Try L2 name without coordinates
+        if (!filePath && l2BaseName) {
+          filePath = findNumberedFile(decompressDir, l2BaseName);
+        }
       }
 
       // Try compress directory
@@ -525,13 +593,32 @@ app.get('/image/*', async (req, res) => {
 // Serve chart images from evals/charts/
 const CHARTS_DIR = path.join(__dirname, '../charts');
 
+// Recursively find all .png files under a directory, returning paths relative to base
+async function findPngsRecursive(dir, base) {
+  let results = [];
+  let entries;
+  try {
+    entries = await fsPromises.readdir(dir, { withFileTypes: true });
+  } catch (e) {
+    return results;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await findPngsRecursive(fullPath, base);
+      results = results.concat(sub);
+    } else if (entry.name.endsWith('.png')) {
+      results.push(path.relative(base, fullPath));
+    }
+  }
+  return results;
+}
+
 // GET /charts.json - List available chart files (must be before static middleware)
 app.get('/charts.json', async (req, res) => {
   try {
-    const files = await fsPromises.readdir(CHARTS_DIR);
-    const charts = files
-      .filter(f => f.endsWith('.png'))
-      .sort();
+    const charts = await findPngsRecursive(CHARTS_DIR, CHARTS_DIR);
+    charts.sort();
     res.json(charts);
   } catch (e) {
     res.json([]);
@@ -539,9 +626,72 @@ app.get('/charts.json', async (req, res) => {
 });
 
 app.use('/charts', express.static(CHARTS_DIR));
+app.use('/figures', express.static(path.join(__dirname, '../../paper/figures')));
+app.use('/paper', express.static(path.join(__dirname, '../../paper')));
+app.use('/docs', express.static(path.join(__dirname, '../../docs')));
 
 // Serve run data files directly
 app.use('/static', express.static(RUNS_DIR));
+
+// GET /pipeline-data - Return pre-computed comparison data for the pipeline walkthrough
+const PIPELINE_RUNS = [
+  'rs_444_optl2_l1q60_l0q40',
+  'rs_444_l1q60_l0q40',
+  'rs_420_optl2_l1q60_l0q40',
+  'rs_420opt_optl2_l1q60_l0q40',
+  'rs_444_optl2_j40',
+  'jpeg_baseline_q40',
+];
+
+app.get('/pipeline-data', async (req, res) => {
+  try {
+    const result = {};
+    for (const runName of PIPELINE_RUNS) {
+      const runDir = path.join(RUNS_DIR, runName);
+      const data = { name: runName, manifest: null, summary: null, compressFiles: [], decompressFiles: [] };
+
+      // Read manifest
+      for (const mf of ['manifest.json']) {
+        const mp = path.join(runDir, mf);
+        if (fs.existsSync(mp)) {
+          try { data.manifest = JSON.parse(fs.readFileSync(mp, 'utf-8')); } catch (e) {}
+        }
+      }
+
+      // Read summary
+      const sp = path.join(runDir, 'summary.json');
+      if (fs.existsSync(sp)) {
+        try { data.summary = JSON.parse(fs.readFileSync(sp, 'utf-8')); } catch (e) {}
+      }
+
+      // List compress/decompress files
+      const compDir = path.join(runDir, 'compress');
+      if (fs.existsSync(compDir)) {
+        try { data.compressFiles = fs.readdirSync(compDir).sort(); } catch (e) {}
+      }
+      const decompDir = path.join(runDir, 'decompress');
+      if (fs.existsSync(decompDir)) {
+        try { data.decompressFiles = fs.readdirSync(decompDir).sort(); } catch (e) {}
+      }
+
+      // For baseline, also read summary.txt for aggregated metrics
+      if (runName.includes('jpeg_baseline')) {
+        const st = path.join(runDir, 'summary.txt');
+        if (fs.existsSync(st)) {
+          try { data.summaryText = fs.readFileSync(st, 'utf-8'); } catch (e) {}
+        }
+      }
+
+      result[runName] = data;
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Serve raw run files for pipeline page image access
+app.use('/run-image', express.static(RUNS_DIR));
 
 // Start server
 app.listen(PORT, () => {

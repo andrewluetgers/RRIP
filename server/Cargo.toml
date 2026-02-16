@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 default-run = "origami"
 
+[lib]
+name = "origami"
+path = "src/lib.rs"
+
 [[bin]]
 name = "origami"
 path = "src/main.rs"
@@ -19,7 +23,7 @@ rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread"] }
-tower-http = { version = "0.5", features = ["trace"] }
+tower-http = { version = "0.5", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 turbojpeg = "0.5"
@@ -32,12 +36,14 @@ lz4_flex = "0.11"
 libc = "0.2"
 jpegxl-rs = { version = "0.11", optional = true, features = ["vendored"] }
 webp = "0.3"
+openslide-rs = { version = "2.0", optional = true }
 
 [features]
 default = []
 mozjpeg = []   # Links pre-built mozjpeg via build.rs (see scripts/build_mozjpeg.sh)
 jpegli = []    # Links pre-built jpegli via build.rs (see scripts/build_jpegli.sh)
 jpegxl = ["jpegxl-rs"]  # Statically builds and links libjxl via vendored feature
+openslide = ["dep:openslide-rs"]  # WSI ingest via OpenSlide (requires system OpenSlide 4.0+)
 
 [[bin]]
 name = "test_pack_compression"

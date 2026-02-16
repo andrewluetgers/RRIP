@@ -2,38 +2,27 @@
 """Generate metric charts comparing ORIGAMI and JPEG baseline encoders.
 
 Reads manifest.json from each run in evals/runs/ and produces charts showing
-how metrics vary across quality levels (30–90) for all encoder backends.
+how metrics vary across quality levels for Rust encoder variants and baselines.
 
 Usage:
     uv run python evals/scripts/generate_charts.py
 
 Output directory: evals/charts/
 
-Charts generated:
-  Metric vs Quality (5):
-    - psnr_vs_quality.png, ssim_vs_quality.png, vif_vs_quality.png,
-      delta_e_vs_quality.png, mse_vs_quality.png
-
-  Size vs Quality (2):
-    - size_vs_quality.png    — raw tile bytes summed
-    - pack_size_vs_quality.png — LZ4-packed family size
-
-  Rate-Distortion — metric vs raw size (2):
-    - psnr_vs_size.png, ssim_vs_size.png
-
-  Rate-Distortion — metric vs pack size (5):
-    - psnr_vs_pack_size.png, ssim_vs_pack_size.png, vif_vs_pack_size.png,
-      delta_e_vs_pack_size.png, mse_vs_pack_size.png
+Chart sets:
+  rust/       — All Rust encoder variants (444, 444+OptL2, 420+OptL2,
+                420opt+OptL2) with uniform and +20 split quality, plus
+                JPEG baseline
+  comparison/ — Rust 444+OptL2 vs Python OptL2 (legacy 420 pipeline)
 
 Series style:
   - Dashed lines + square markers = JPEG baselines
-  - Solid lines + circle markers = ORIGAMI residual encoding
-  - Blue = libjpeg-turbo, Orange = mozjpeg, Green = JPEG XL
-  - Arrows (↑/↓) on axis labels indicate which direction is better
+  - Solid lines + circle markers = ORIGAMI uniform quality
+  - Dotted lines + diamond markers = ORIGAMI +20 split quality
+  - Arrows on axis labels indicate which direction is better
 
 Prerequisites:
-  - Run data must exist in evals/runs/ (generate with jpeg_baseline.py
-    and wsi_residual_debug_with_manifest.py)
+  - Run data must exist in evals/runs/ (generate with generate-evals.sh)
   - Requires matplotlib and numpy (available via uv)
 """
 
@@ -53,57 +42,57 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "charts"
 
 QUALITIES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90]
 
-# Finer quality grid for split series (includes 5-step increments)
-SPLIT_QUALITIES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
-
-# --- "turbo" chart set: just turbo-based series ---
-TURBO_BASELINE_DIRS = {
-    "JPEG turbo": "jpeg_baseline_q{q}",
+# --- "rust" chart set: Rust encoder variants + JPEG baseline ---
+RUST_BASELINE_DIRS = {
+    "JPEG baseline": "jpeg_baseline_q{q}",
 }
 
-TURBO_ORIGAMI_DIRS = {
-    "ORIGAMI turbo": "debug_j{q}_pac",
-    "OptL2 turbo": "optl2_debug_j{q}_pac",
+RUST_ORIGAMI_DIRS = {
+    "RS 444": "rs_444_j{q}",
+    "RS 444+OptL2": "rs_444_optl2_j{q}",
+    "RS 420+OptL2": "rs_420_optl2_j{q}",
+    "RS 420opt+OptL2": "rs_420opt_optl2_j{q}",
 }
 
-TURBO_SPLIT_SERIES = {
-    "+20 split": {"offset": 20, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
-    "balanced split": {"offset": 30, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
-    "OptL2 +20 split": {"offset": 20, "dir": "optl2_debug_l1q{l1q}_l0q{l0q}_pac"},
+RUST_SPLIT_SERIES = {
+    "RS 444 +20 split": {"offset": 20, "dir": "rs_444_l1q{l1q}_l0q{l0q}"},
+    "RS 444+OptL2 +20 split": {"offset": 20, "dir": "rs_444_optl2_l1q{l1q}_l0q{l0q}"},
+    "RS 420+OptL2 +20 split": {"offset": 20, "dir": "rs_420_optl2_l1q{l1q}_l0q{l0q}"},
+    "RS 420opt+OptL2 +20 split": {"offset": 20, "dir": "rs_420opt_optl2_l1q{l1q}_l0q{l0q}"},
 }
 
-# --- "all" chart set: all encoder backends ---
-ALL_BASELINE_DIRS = {
-    "JPEG turbo": "jpeg_baseline_q{q}",
-    "JPEG mozjpeg": "mozjpeg_jpeg_baseline_q{q}",
-    "JPEG jpegxl": "jpegxl_jpeg_baseline_q{q}",
+# --- "comparison" chart set: Rust best vs Python OptL2 legacy ---
+COMP_BASELINE_DIRS = {
+    "JPEG baseline": "jpeg_baseline_q{q}",
 }
 
-ALL_ORIGAMI_DIRS = {
-    "ORIGAMI turbo": "debug_j{q}_pac",
-    "ORIGAMI mozjpeg": "mozjpeg_debug_j{q}_pac",
-    "ORIGAMI jpegxl": "jpegxl_debug_j{q}_pac",
-    "OptL2 turbo": "optl2_debug_j{q}_pac",
+COMP_ORIGAMI_DIRS = {
+    "RS 444+OptL2": "rs_444_optl2_j{q}",
+    "Py OptL2 (420)": "optl2_debug_j{q}_pac",
 }
 
-ALL_SPLIT_SERIES = {
-    "+20 split": {"offset": 20, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
-    "balanced split": {"offset": 30, "dir": "debug_l1q{l1q}_l0q{l0q}_pac"},
-    "OptL2 +20 split": {"offset": 20, "dir": "optl2_debug_l1q{l1q}_l0q{l0q}_pac"},
+COMP_SPLIT_SERIES = {
+    "RS 444+OptL2 +20 split": {"offset": 20, "dir": "rs_444_optl2_l1q{l1q}_l0q{l0q}"},
+    "Py OptL2 +20 split": {"offset": 20, "dir": "optl2_debug_l1q{l1q}_l0q{l0q}_pac"},
 }
 
 # Colors and markers for each series
 STYLES = {
-    "JPEG turbo":     {"color": "#1f77b4", "marker": "s", "linestyle": "--"},
-    "JPEG mozjpeg":   {"color": "#ff7f0e", "marker": "s", "linestyle": "--"},
-    "JPEG jpegxl":    {"color": "#2ca02c", "marker": "s", "linestyle": "--"},
-    "ORIGAMI turbo":  {"color": "#1f77b4", "marker": "o", "linestyle": "-"},
-    "ORIGAMI mozjpeg":{"color": "#ff7f0e", "marker": "o", "linestyle": "-"},
-    "ORIGAMI jpegxl": {"color": "#2ca02c", "marker": "o", "linestyle": "-"},
-    "OptL2 turbo":    {"color": "#17becf", "marker": "o", "linestyle": "-"},
-    "+20 split":      {"color": "#d62728", "marker": "D", "linestyle": "-"},
-    "balanced split": {"color": "#9467bd", "marker": "^", "linestyle": "-"},
-    "OptL2 +20 split":{"color": "#bcbd22", "marker": "D", "linestyle": "-"},
+    # Baselines (dashed, squares)
+    "JPEG baseline":  {"color": "#1f77b4", "marker": "s", "linestyle": "--"},
+    # Rust uniform (solid, circles)
+    "RS 444":                {"color": "#aec7e8", "marker": "o", "linestyle": "-"},
+    "RS 444+OptL2":          {"color": "#2ca02c", "marker": "o", "linestyle": "-"},
+    "RS 420+OptL2":          {"color": "#ff7f0e", "marker": "o", "linestyle": "-"},
+    "RS 420opt+OptL2":       {"color": "#d62728", "marker": "o", "linestyle": "-"},
+    # Rust splits (diamonds)
+    "RS 444 +20 split":           {"color": "#aec7e8", "marker": "D", "linestyle": ":"},
+    "RS 444+OptL2 +20 split":    {"color": "#2ca02c", "marker": "D", "linestyle": ":"},
+    "RS 420+OptL2 +20 split":    {"color": "#ff7f0e", "marker": "D", "linestyle": ":"},
+    "RS 420opt+OptL2 +20 split": {"color": "#d62728", "marker": "D", "linestyle": ":"},
+    # Python legacy (dashed, triangles)
+    "Py OptL2 (420)":       {"color": "#9467bd", "marker": "^", "linestyle": "--"},
+    "Py OptL2 +20 split":   {"color": "#9467bd", "marker": "D", "linestyle": ":"},
 }
 
 METRICS = {
@@ -131,10 +120,12 @@ def _filter_data(data, min_quality):
     return filtered
 
 
+LABEL_SERIES = {"RS 444+OptL2 +20 split", "JPEG baseline"}
+
 def _annotate_quality_labels(ax, data, x_source, metric_key):
-    """Annotate quality labels on JXL series dots for KB-based x-axis charts."""
+    """Annotate quality labels on key series for KB-based x-axis charts."""
     for series_name, series in data.items():
-        if "jpegxl" not in series_name.lower():
+        if series_name not in LABEL_SERIES:
             continue
         qs = series["qualities"]
         xs = [s / 1024 for s in series[x_source]]
@@ -145,7 +136,10 @@ def _annotate_quality_labels(ax, data, x_source, metric_key):
         for q, x, y in zip(qs, xs, vals):
             if y is None:
                 continue
-            ax.annotate(f"{q}", (x, y),
+            # Label every other quality to reduce clutter
+            if q % 20 != 0 and q != 10:
+                continue
+            ax.annotate(f"q{q}", (x, y),
                         fontsize=7, fontweight="bold",
                         color=style["color"], alpha=0.8,
                         textcoords="offset points", xytext=(5, 3))
@@ -215,7 +209,12 @@ def load_origami_metrics(run_dir):
 
 
 def collect_data(baseline_dirs, origami_dirs, split_series):
-    """Collect metric data for the given series across all quality levels."""
+    """Collect metric data for the given series across all quality levels.
+
+    Automatically discovers which quality levels exist for each series
+    by probing the runs directory, so it handles both step-5 (Python)
+    and step-10 (Rust) quality grids.
+    """
     data = {}
 
     # Baselines
@@ -232,7 +231,7 @@ def collect_data(baseline_dirs, origami_dirs, split_series):
                 series["pack_sizes"].append(m.get("pack_size_bytes", 0))
         data[series_name] = series
 
-    # ORIGAMI
+    # ORIGAMI (uniform quality)
     for series_name, dir_pattern in origami_dirs.items():
         series = {"qualities": [], "metrics": {k: [] for k in METRICS}, "sizes": [], "pack_sizes": []}
         for q in QUALITIES:
@@ -251,7 +250,7 @@ def collect_data(baseline_dirs, origami_dirs, split_series):
         offset = spec["offset"]
         dir_pattern = spec["dir"]
         series = {"qualities": [], "metrics": {k: [] for k in METRICS}, "sizes": [], "pack_sizes": []}
-        for l0q in SPLIT_QUALITIES:
+        for l0q in QUALITIES:
             l1q = l0q + offset
             if l1q > 90:
                 continue
@@ -533,25 +532,25 @@ def generate_chart_set(data, out_dir):
 
 
 def main():
-    # --- Turbo-only chart set ---
-    print("=== Turbo-only charts ===")
-    print("Collecting turbo data...")
-    turbo_data = collect_data(TURBO_BASELINE_DIRS, TURBO_ORIGAMI_DIRS, TURBO_SPLIT_SERIES)
-    for name, series in turbo_data.items():
+    # --- Rust encoder chart set (all Rust variants + JPEG baseline) ---
+    print("=== Rust encoder charts ===")
+    print("Collecting data...")
+    rust_data = collect_data(RUST_BASELINE_DIRS, RUST_ORIGAMI_DIRS, RUST_SPLIT_SERIES)
+    for name, series in rust_data.items():
         print(f"  {name}: {len(series['qualities'])} quality levels")
-    turbo_dir = OUTPUT_DIR / "turbo"
-    generate_chart_set(turbo_data, turbo_dir)
-    print(f"Turbo charts saved to {turbo_dir}")
+    rust_dir = OUTPUT_DIR / "rust"
+    generate_chart_set(rust_data, rust_dir)
+    print(f"Rust charts saved to {rust_dir}")
 
-    # --- All-encoders chart set ---
-    print("\n=== All-encoders charts ===")
-    print("Collecting all-encoder data...")
-    all_data = collect_data(ALL_BASELINE_DIRS, ALL_ORIGAMI_DIRS, ALL_SPLIT_SERIES)
-    for name, series in all_data.items():
+    # --- Comparison chart set (Rust best vs Python OptL2 legacy) ---
+    print("\n=== Rust vs Python comparison charts ===")
+    print("Collecting data...")
+    comp_data = collect_data(COMP_BASELINE_DIRS, COMP_ORIGAMI_DIRS, COMP_SPLIT_SERIES)
+    for name, series in comp_data.items():
         print(f"  {name}: {len(series['qualities'])} quality levels")
-    all_dir = OUTPUT_DIR / "all"
-    generate_chart_set(all_data, all_dir)
-    print(f"All-encoder charts saved to {all_dir}")
+    comp_dir = OUTPUT_DIR / "comparison"
+    generate_chart_set(comp_data, comp_dir)
+    print(f"Comparison charts saved to {comp_dir}")
 
     print(f"\nAll charts saved to {OUTPUT_DIR}")
 

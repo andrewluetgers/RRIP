@@ -267,6 +267,69 @@ echo "GET http://localhost:8080/tiles/slide1/10/5_3.jpg" | vegeta attack -durati
 4. **Load Tests**: Concurrent request handling, cache stampede prevention
 5. **Encoder A/B Tests**: Compare JPEG sizes and quality across turbojpeg/mozjpeg/jpegli
 
+## RunPod GPU Development
+
+### Setup
+
+- **API key**: stored in env var `RUNPOD_API_KEY`
+- **SSH key**: `~/.ssh/id_runpod`
+- **Pod image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
+
+### Querying Pods
+
+**Important**: RunPod API uses `Authorization: Bearer` header, NOT `api-key` header.
+
+```bash
+# List all pods via RunPod GraphQL API
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query":"{ myself { pods { id name desiredStatus machine { gpuDisplayName } runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort type } gpus { id } } } } }"}' \
+  https://api.runpod.io/graphql
+```
+
+### SSH Access
+
+```bash
+# Connect to a pod (get IP and port from API query above)
+ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT>
+```
+
+### Syncing Code
+
+**Important**: Always exclude `target/`, `target2/`, `node_modules/`, and `data/` — they are massive.
+
+```bash
+rsync -avz --progress \
+  --exclude 'target' --exclude 'target2' --exclude 'node_modules' \
+  --exclude '.git' --exclude 'evals/runs' --exclude 'evals/test-images' \
+  --exclude 'data' --exclude '.venv' --exclude '__pycache__' \
+  -e "ssh -i ~/.ssh/id_runpod -p <PORT>" \
+  /Users/andrewluetgers/projects/dev/RRIP/ \
+  root@<IP>:/workspace/RRIP/
+```
+
+### Building on Pod
+
+```bash
+# Rust should already be installed; if not:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Build CPU encoder (turbojpeg only)
+cd /workspace/RRIP/server
+cargo build --release
+
+# Build GPU encoder
+cd /workspace/RRIP/gpu-encode
+cargo build --release
+```
+
+### Current Pod: origami-b200
+
+- **Pod ID**: `tyjyett3vxrvbe`
+- **GPU**: NVIDIA B200 (183 GB VRAM)
+- **CUDA driver**: 580.126.09
+- **Workspace**: `/workspace/RRIP`
+
 ## Debugging Tips
 
 - Enable debug logging: `RUST_LOG=debug`

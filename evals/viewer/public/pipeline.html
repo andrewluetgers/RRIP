@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ORIGAMI Pipeline Walkthrough</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 0;
+            background: #f5f5f5;
+            color: #333;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .top-bar {
+            background: #1a1a2e;
+            color: white;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+        .top-bar a { color: #8ecae6; text-decoration: none; font-size: 14px; }
+        .top-bar a:hover { text-decoration: underline; }
+        .top-bar h1 { margin: 0; font-size: 20px; font-weight: 600; }
+
+        /* Two-column layout */
+        .main-layout {
+            display: flex;
+            height: calc(100vh - 46px);
+            overflow: hidden;
+        }
+
+        .left-panel {
+            width: 420px;
+            min-width: 320px;
+            flex-shrink: 0;
+            overflow-y: auto;
+            background: white;
+            border-right: 1px solid #dee2e6;
+            padding: 16px;
+        }
+
+        .right-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+
+        /* Tabs */
+        .tab-bar {
+            display: flex;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 12px;
+        }
+        .tab-btn {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab-btn:hover { color: #333; }
+        .tab-btn.active {
+            color: #17a2b8;
+            border-bottom-color: #17a2b8;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Diagram (Mermaid tab) */
+        .diagram-section h2 { margin: 0 0 8px 0; font-size: 16px; }
+        .mermaid { overflow-x: auto; }
+        .mermaid svg { max-width: 100%; height: auto; }
+
+        /* Visual pipeline */
+        .vis-stage {
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .vis-stage-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        .vis-stage-sublabel {
+            font-size: 10px;
+            color: #6c757d;
+            margin-bottom: 4px;
+        }
+        .vis-op {
+            display: inline-block;
+            background: #d1ecf1;
+            border: 1px solid #17a2b8;
+            border-radius: 4px;
+            padding: 3px 10px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #0c5460;
+            margin: 6px 0;
+        }
+        .vis-arrow {
+            display: block;
+            text-align: center;
+            color: #adb5bd;
+            font-size: 16px;
+            line-height: 1;
+            margin: 2px 0;
+        }
+        .vis-stored {
+            display: inline-block;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #856404;
+            margin-left: 6px;
+        }
+        .vis-tile-grid {
+            display: inline-grid;
+            gap: 2px;
+        }
+        .vis-tile-grid.g1x1 { grid-template-columns: 1fr; }
+        .vis-tile-grid.g2x2 { grid-template-columns: 1fr 1fr; }
+        .vis-tile-grid.g4x4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        .vis-tile {
+            border: 1px solid #ccc;
+            border-radius: 2px;
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+        .vis-tile img {
+            display: block;
+            image-rendering: pixelated;
+        }
+        .vis-channels {
+            display: inline-flex;
+            gap: 4px;
+            align-items: flex-end;
+        }
+        .vis-channel {
+            text-align: center;
+        }
+        .vis-channel-label {
+            font-size: 9px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        .vis-channel-y .vis-channel-label { color: #666; }
+        .vis-channel-cb .vis-channel-label { color: #5a9cc5; }
+        .vis-channel-cr .vis-channel-label { color: #c55a5a; }
+        .vis-equation {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .vis-eq-op {
+            font: bold 16px sans-serif;
+            color: #666;
+        }
+        .vis-chroma-reuse {
+            display: inline-block;
+            font-size: 9px;
+            color: #6c757d;
+            border: 1px dashed #adb5bd;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-left: 4px;
+        }
+
+        .intro {
+            margin-top: 16px;
+            padding: 12px 0 0 0;
+            border-top: 1px solid #e9ecef;
+        }
+        .intro p { margin: 6px 0; line-height: 1.5; font-size: 13px; color: #495057; }
+
+        /* Chapter cards */
+        .chapter {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .chapter-header {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid transparent;
+            transition: background 0.15s;
+        }
+        .chapter-header:hover { background: #f8f9fa; }
+        .chapter.open .chapter-header { border-bottom-color: #e9ecef; }
+        .chapter-num {
+            background: #17a2b8;
+            color: white;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .chapter-title { font-size: 15px; font-weight: 600; flex: 1; }
+        .chapter-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .tag-foundation { background: #d1ecf1; color: #0c5460; }
+        .tag-optimization { background: #d4edda; color: #155724; }
+        .tag-decision { background: #fff3cd; color: #856404; }
+        .tag-result { background: #e2e3e5; color: #383d41; }
+        .chapter-toggle {
+            font-size: 16px;
+            color: #adb5bd;
+            transition: transform 0.2s;
+        }
+        .chapter.open .chapter-toggle { transform: rotate(90deg); }
+
+        .chapter-body {
+            display: none;
+            padding: 16px;
+        }
+        .chapter.open .chapter-body { display: block; }
+
+        .chapter-desc {
+            line-height: 1.6;
+            margin-bottom: 12px;
+            color: #495057;
+            font-size: 13px;
+        }
+
+        /* Image group with zoom controls */
+        .image-group {
+            margin-bottom: 12px;
+        }
+        .image-group-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+        .zoom-btn {
+            padding: 3px 10px;
+            font-size: 11px;
+            border: 1px solid #ced4da;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #495057;
+            font-weight: 500;
+        }
+        .zoom-btn:hover { background: #e9ecef; }
+        .zoom-btn.active {
+            background: #17a2b8;
+            color: white;
+            border-color: #17a2b8;
+        }
+        .zoom-label {
+            font-size: 11px;
+            color: #6c757d;
+            margin-left: auto;
+            user-select: none;
+        }
+
+        .image-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* Image viewport with zoom/pan */
+        .image-card {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .image-viewport {
+            width: 256px;
+            height: 256px;
+            overflow: hidden;
+            position: relative;
+            cursor: grab;
+            background: #f0f0f0;
+        }
+        .image-viewport.dragging { cursor: grabbing; }
+        .image-viewport img {
+            display: block;
+            image-rendering: pixelated;
+            transform-origin: 0 0;
+            pointer-events: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .image-card .caption {
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #f8f9fa;
+            color: #495057;
+            text-align: center;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Data table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+        .data-table th {
+            background: #f1f3f5;
+            padding: 6px 10px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .data-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .data-table tr.highlight td { background: #d4edda; font-weight: 500; }
+        .data-table tr.baseline td { background: #fff3cd; }
+
+        /* Decision box */
+        .decision-box {
+            background: #f0f7ff;
+            border-left: 4px solid #17a2b8;
+            padding: 10px 14px;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .decision-box strong { color: #0c5460; }
+
+        /* Chart embed */
+        .chart-embed { margin-top: 8px; }
+        .chart-embed img {
+            max-width: 100%;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+        }
+        .chart-embed .chart-label {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+
+        .loading-msg {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <h1>ORIGAMI Pipeline Walkthrough</h1>
+    <a href="/">Home</a>
+    <a href="/comparison.html">Comparison Viewer</a>
+</div>
+
+<div class="main-layout">
+    <div class="left-panel">
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('visual')">Visual</button>
+            <button class="tab-btn" onclick="switchTab('flowchart')">Flowchart</button>
+        </div>
+
+        <div id="tab-visual" class="tab-content active">
+            <div id="visual-pipeline">
+                <div class="loading-msg">Loading pipeline images...</div>
+            </div>
+        </div>
+
+        <div id="tab-flowchart" class="tab-content">
+            <div class="diagram-section">
+                <pre id="mermaid-src" style="display:none">
+flowchart TD
+    SRC["Source Image&lt;br/&gt;1024x1024 RGB"]
+    SRC -->|"Lanczos down 2x"| L1GT["L1 Ground Truth&lt;br/&gt;512x512 RGB"]
+    SRC -->|"keep as"| L0GT["L0 Ground Truth&lt;br/&gt;1024x1024 RGB"]
+    L1GT -->|"Lanczos down 2x"| L2RAW["L2 Raw&lt;br/&gt;256x256 RGB"]
+
+    L2RAW --> OPTL2_DEC{"OptL2?"}
+    OPTL2_DEC -->|"no"| L2FINAL["L2 Pixels"]
+    OPTL2_DEC -->|"yes"| OPTL2["OptL2&lt;br/&gt;Gradient Descent"]
+    OPTL2 --> L2FINAL
+
+    L2FINAL --> SUBSAMP_DEC{"Chroma&lt;br/&gt;Subsampling?"}
+    SUBSAMP_DEC -->|"4:4:4"| L2ENC["JPEG Encode&lt;br/&gt;baseq=95"]
+    SUBSAMP_DEC -->|"4:2:0"| L2ENC
+
+    L2ENC --> L2DEC["L2 Decode"]
+    L2DEC -->|"Bilinear up 2x"| L1PRED["L1 Prediction"]
+
+    L1PRED --> L1RES["L1 Residual&lt;br/&gt;Y_gt - Y_pred + 128"]
+    L1GT --> L1RES
+
+    L1RES --> SPLITQ{"Split Quality?"}
+    SPLITQ -->|"uniform: resq"| L1ENC["JPEG Encode&lt;br/&gt;grayscale"]
+    SPLITQ -->|"split: l1q"| L1ENC
+
+    L1ENC --> L1RECON["L1 Reconstruct"]
+    L1PRED -.->|"Cb/Cr reused"| L1RECON
+    L1RECON -->|"Bilinear up 2x"| L0PRED["L0 Prediction"]
+
+    L0PRED --> L0RES["L0 Residual"]
+    L0GT --> L0RES
+    L0RES --> L0ENC["JPEG Encode&lt;br/&gt;grayscale q=l0q"]
+
+    L2ENC --> STORED[("Stored Output")]
+    L1ENC --> STORED
+    L0ENC --> STORED
+
+    classDef optimization fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724
+    classDef decision fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#856404
+    classDef pipeline fill:#d1ecf1,stroke:#17a2b8,stroke-width:1px,color:#0c5460
+    classDef stored fill:#e2e3e5,stroke:#6c757d,stroke-width:2px,color:#383d41
+
+    class OPTL2 optimization
+    class OPTL2_DEC,SUBSAMP_DEC,SPLITQ decision
+    class SRC,L1GT,L0GT,L2RAW,L2FINAL,L2DEC,L1PRED,L1RES,L1RECON,L0PRED,L0RES,L1ENC,L0ENC,L2ENC pipeline
+    class STORED stored
+                </pre>
+            </div>
+        </div>
+
+        <div class="intro">
+            <p>Scroll to zoom on images, drag to pan. Zoom and pan are synced within each group.</p>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div id="chapters">
+            <div class="loading-msg" id="loadingMsg">Loading pipeline data...</div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
+    window._mermaid = mermaid;
+</script>
+
+<script>
+    // ── Tab switching ──
+    let mermaidRendered = false;
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.toLowerCase() === tab);
+        });
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+
+        // Lazily render Mermaid when flowchart tab is first shown
+        if (tab === 'flowchart' && !mermaidRendered && window._mermaid) {
+            mermaidRendered = true;
+            const src = document.getElementById('mermaid-src');
+            const container = src.parentElement;
+            const graphDef = src.textContent;
+            window._mermaid.render('mermaid-diagram', graphDef).then(({ svg }) => {
+                const div = document.createElement('div');
+                div.innerHTML = svg;
+                container.appendChild(div);
+            });
+        }
+    }
+
+    // ── Visual pipeline builder ──
+    function visTile(src, size) {
+        return `<div class="vis-tile"><img src="${src}" width="${size}" height="${size}"></div>`;
+    }
+
+    function buildVisualPipeline(data) {
+        const REC = 'rs_444_optl2_l1q60_l0q40';
+        const rec = data[REC] || {};
+        const cf = rec.compressFiles || [];
+        const df = rec.decompressFiles || [];
+        const ci = (f) => `/run-image/${REC}/compress/${f}`;
+        const di = (f) => `/run-image/${REC}/decompress/${f}`;
+        const find = (files, pat) => files.find(f => f.includes(pat)) || '';
+
+        const T = 70;  // uniform tile size for all images
+
+        let html = '';
+
+        // Stage 1: Source — L0 ground truth 4x4 grid (x across, y down)
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L0 Original Pixels (1024&times;1024)</div>
+            <div class="vis-tile-grid g4x4">
+                ${visTile(ci(find(cf, 'L0_0_0_original')), T)}
+                ${visTile(ci(find(cf, 'L0_1_0_original')), T)}
+                ${visTile(ci(find(cf, 'L0_2_0_original')), T)}
+                ${visTile(ci(find(cf, 'L0_3_0_original')), T)}
+                ${visTile(ci(find(cf, 'L0_0_1_original')), T)}
+                ${visTile(ci(find(cf, 'L0_1_1_original')), T)}
+                ${visTile(ci(find(cf, 'L0_2_1_original')), T)}
+                ${visTile(ci(find(cf, 'L0_3_1_original')), T)}
+                ${visTile(ci(find(cf, 'L0_0_2_original')), T)}
+                ${visTile(ci(find(cf, 'L0_1_2_original')), T)}
+                ${visTile(ci(find(cf, 'L0_2_2_original')), T)}
+                ${visTile(ci(find(cf, 'L0_3_2_original')), T)}
+                ${visTile(ci(find(cf, 'L0_0_3_original')), T)}
+                ${visTile(ci(find(cf, 'L0_1_3_original')), T)}
+                ${visTile(ci(find(cf, 'L0_2_3_original')), T)}
+                ${visTile(ci(find(cf, 'L0_3_3_original')), T)}
+            </div>
+            <div class="vis-stage-sublabel">16 tiles (L0) &middot; 256&times;256 each</div>
+        </div>`;
+
+        // Arrow + Lanczos
+        html += `<div class="vis-arrow">&darr;</div>
+                  <div class="vis-stage"><span class="vis-op">Lanczos downsample 2&times;</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Stage 2: L1 Ground Truth 2x2 (x across, y down)
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L1 Ground Truth (512&times;512)</div>
+            <div class="vis-tile-grid g2x2">
+                ${visTile(ci(find(cf, 'L1_0_0_original')), T)}
+                ${visTile(ci(find(cf, 'L1_1_0_original')), T)}
+                ${visTile(ci(find(cf, 'L1_0_1_original')), T)}
+                ${visTile(ci(find(cf, 'L1_1_1_original')), T)}
+            </div>
+            <div class="vis-stage-sublabel">4 tiles (L1) &middot; 256&times;256 each</div>
+        </div>`;
+
+        // Arrow + Lanczos
+        html += `<div class="vis-arrow">&darr;</div>
+                  <div class="vis-stage"><span class="vis-op">Lanczos downsample 2&times;</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Stage 3: L2 + OptL2
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L2 (256&times;256) + OptL2</div>
+            <div class="vis-tile-grid g1x1">
+                ${visTile(ci(find(cf, 'L2_original')), T)}
+            </div>
+            <div class="vis-stage-sublabel">Pixels nudged for better prediction</div>
+        </div>`;
+
+        // Arrow + JPEG encode
+        html += `<div class="vis-arrow">&darr;</div>
+                  <div class="vis-stage"><span class="vis-op">JPEG encode Q95 &rarr; decode</span><span class="vis-stored">stored</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Arrow + Upsample
+        html += `<div class="vis-stage"><span class="vis-op">Bilinear upsample 2&times;</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Stage 4: L1 Prediction as 2x2 grid (upsampled L2, same layout as L1 GT)
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L1 Prediction (upsampled L2)</div>
+            <div class="vis-tile-grid g2x2">
+                ${visTile(ci(find(cf, 'L1_0_0_prediction')), T)}
+                ${visTile(ci(find(cf, 'L1_1_0_prediction')), T)}
+                ${visTile(ci(find(cf, 'L1_0_1_prediction')), T)}
+                ${visTile(ci(find(cf, 'L1_1_1_prediction')), T)}
+            </div>
+            <div class="vis-stage-sublabel">L2 decoded &rarr; bilinear 2&times; &rarr; split into 4 tiles</div>
+        </div>`;
+
+        // Stage 4b: Channel decomposition of one tile
+        html += `<div class="vis-arrow">&darr;</div>`;
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">Tile 0,0 &rarr; YCbCr channels</div>
+            <div class="vis-channels">
+                <div class="vis-channel vis-channel-y">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_luma'))}" width="${T}" height="${T}"></div>
+                    <div class="vis-channel-label">Y (luma)</div>
+                </div>
+                <div class="vis-channel vis-channel-cb">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_chroma_cb'))}" width="${T}" height="${T}"></div>
+                    <div class="vis-channel-label">Cb</div>
+                </div>
+                <div class="vis-channel vis-channel-cr">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_chroma_cr'))}" width="${T}" height="${T}"></div>
+                    <div class="vis-channel-label">Cr</div>
+                </div>
+                <span class="vis-chroma-reuse">Cb/Cr reused &darr;</span>
+            </div>
+        </div>`;
+
+        // Stage 5: L1 Residual equation
+        html += `<div class="vis-arrow">&darr;</div>`;
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L1 Residual = GT_Y &minus; Pred_Y + 128</div>
+            <div class="vis-equation">
+                <div class="vis-channel">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_luma'))}" width="${T}" height="${T}"></div>
+                    <div class="vis-channel-label" style="color:#666">GT luma</div>
+                </div>
+                <span class="vis-eq-op">&minus;</span>
+                <div class="vis-channel">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_prediction'))}" width="${T}" height="${T}" style="opacity:0.7"></div>
+                    <div class="vis-channel-label" style="color:#666">Pred luma</div>
+                </div>
+                <span class="vis-eq-op">=</span>
+                <div class="vis-channel">
+                    <div class="vis-tile"><img src="${ci(find(cf, 'L1_0_0_residual_centered'))}" width="${T}" height="${T}"></div>
+                    <div class="vis-channel-label" style="color:#666">Residual</div>
+                </div>
+            </div>
+            <div class="vis-stage-sublabel" style="margin-top:4px">
+                &times;4 tiles <span class="vis-stored">JPEG grayscale &rarr; stored</span>
+            </div>
+        </div>`;
+
+        // Arrow + Reconstruct
+        html += `<div class="vis-arrow">&darr;</div>
+                  <div class="vis-stage"><span class="vis-op">Reconstruct: Y_pred + (R &minus; 128) + Cb/Cr</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Stage 6: L1 Reconstructed
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L1 Reconstructed</div>
+            <div class="vis-tile-grid g2x2">
+                ${visTile(di(find(df, 'L1_0_0_reconstructed')), T)}
+                ${visTile(di(find(df, 'L1_1_0_reconstructed')), T)}
+                ${visTile(di(find(df, 'L1_0_1_reconstructed')), T)}
+                ${visTile(di(find(df, 'L1_1_1_reconstructed')), T)}
+            </div>
+        </div>`;
+
+        // Arrow + Upsample
+        html += `<div class="vis-arrow">&darr;</div>
+                  <div class="vis-stage"><span class="vis-op">Bilinear upsample 2&times;</span></div>
+                  <div class="vis-arrow">&darr;</div>`;
+
+        // Stage 7: L0 Residual
+        html += `<div class="vis-stage">
+            <div class="vis-stage-label">L0 Prediction &rarr; Residual</div>
+            <div class="vis-equation">
+                <div class="vis-tile"><img src="${ci(find(cf, 'L0_0_0_luma'))}" width="${T}" height="${T}"></div>
+                <span class="vis-eq-op">&minus;</span>
+                <div class="vis-tile"><img src="${ci(find(cf, 'L0_0_0_prediction'))}" width="${T}" height="${T}" style="opacity:0.7"></div>
+                <span class="vis-eq-op">=</span>
+                <div class="vis-tile"><img src="${ci(find(cf, 'L0_0_0_residual_centered'))}" width="${T}" height="${T}"></div>
+            </div>
+            <div class="vis-stage-sublabel" style="margin-top:4px">
+                &times;16 tiles <span class="vis-stored">JPEG &rarr; stored</span>
+            </div>
+        </div>`;
+
+        // Summary
+        html += `<div class="vis-stage" style="margin-top:12px;padding:8px;background:#f1f3f5;border-radius:6px">
+            <div class="vis-stage-label">Stored Output</div>
+            <div class="vis-stage-sublabel">1 L2 JPEG + 4 L1 residuals + 16 L0 residuals = 21 tiles</div>
+        </div>`;
+
+        document.getElementById('visual-pipeline').innerHTML = html;
+    }
+
+    // ── Image zoom/pan state per group ──
+    // Each image-group gets its own zoom/pan state, synced across all viewports in the group.
+
+    // Scale is in CSS pixels per image pixel.
+    // 1:1 = scale 1 (one image pixel = one CSS pixel, matching how images display
+    // in any standard viewer — the OS/browser handles screen DPI transparently).
+
+    const groupStates = new Map(); // groupId -> { scale, panX, panY, mode }
+
+    function getGroupState(groupId) {
+        if (!groupStates.has(groupId)) {
+            groupStates.set(groupId, { scale: 1, panX: 0, panY: 0, mode: 'fit' });
+        }
+        return groupStates.get(groupId);
+    }
+
+    function applyGroupTransform(groupId) {
+        const state = getGroupState(groupId);
+        const group = document.querySelector(`[data-group-id="${groupId}"]`);
+        if (!group) return;
+
+        const viewports = group.querySelectorAll('.image-viewport');
+        viewports.forEach(vp => {
+            const img = vp.querySelector('img');
+            if (!img) return;
+
+            if (state.mode === 'fit') {
+                const vpW = vp.clientWidth;
+                const vpH = vp.clientHeight;
+                const natW = img.naturalWidth || 256;
+                const natH = img.naturalHeight || 256;
+                const fitScale = Math.min(vpW / natW, vpH / natH);
+                const offsetX = (vpW - natW * fitScale) / 2;
+                const offsetY = (vpH - natH * fitScale) / 2;
+                img.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${fitScale})`;
+            } else {
+                img.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
+            }
+        });
+
+        const label = group.querySelector('.zoom-label');
+        if (label) {
+            if (state.mode === 'fit') {
+                const vp = viewports[0];
+                const img = vp ? vp.querySelector('img') : null;
+                if (vp && img && img.naturalWidth) {
+                    const fitScale = Math.min(vp.clientWidth / img.naturalWidth, vp.clientHeight / img.naturalHeight);
+                    label.textContent = `${Math.round(fitScale * 100)}%`;
+                } else {
+                    label.textContent = 'Fit';
+                }
+            } else {
+                label.textContent = `${Math.round(state.scale * 100)}%`;
+            }
+        }
+    }
+
+    function setGroupZoom(groupId, mode) {
+        const state = getGroupState(groupId);
+        state.mode = mode;
+
+        if (mode === 'actual') {
+            state.scale = 1;
+        } else if (mode === '2x') {
+            state.scale = 2;
+        }
+
+        // Center the image in the viewport for non-fit modes
+        if (mode !== 'fit') {
+            const group = document.querySelector(`[data-group-id="${groupId}"]`);
+            const vp = group ? group.querySelector('.image-viewport') : null;
+            const img = vp ? vp.querySelector('img') : null;
+            const natW = img ? (img.naturalWidth || 256) : 256;
+            const natH = img ? (img.naturalHeight || 256) : 256;
+            const vpW = vp ? vp.clientWidth : 256;
+            const vpH = vp ? vp.clientHeight : 256;
+            state.panX = (vpW - natW * state.scale) / 2;
+            state.panY = (vpH - natH * state.scale) / 2;
+        }
+
+        // Update button states
+        const group = document.querySelector(`[data-group-id="${groupId}"]`);
+        if (group) {
+            group.querySelectorAll('.zoom-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.zoom === mode);
+            });
+        }
+
+        applyGroupTransform(groupId);
+    }
+
+    function setupGroupInteractions(groupId) {
+        const group = document.querySelector(`[data-group-id="${groupId}"]`);
+        if (!group) return;
+
+        const viewports = group.querySelectorAll('.image-viewport');
+        let isDragging = false;
+        let dragStartX = 0, dragStartY = 0;
+        let panStartX = 0, panStartY = 0;
+
+        viewports.forEach(vp => {
+            // Wheel zoom — free zoom, clears mode to "free"
+            vp.addEventListener('wheel', (e) => {
+                const state = getGroupState(groupId);
+                if (state.mode === 'fit') {
+                    // Switch out of fit mode: compute current fit scale as starting point
+                    const img = vp.querySelector('img');
+                    const natW = img ? (img.naturalWidth || 256) : 256;
+                    const natH = img ? (img.naturalHeight || 256) : 256;
+                    state.scale = Math.min(vp.clientWidth / natW, vp.clientHeight / natH);
+                    state.panX = (vp.clientWidth - natW * state.scale) / 2;
+                    state.panY = (vp.clientHeight - natH * state.scale) / 2;
+                    state.mode = 'free';
+                    // Clear active button states
+                    group.querySelectorAll('.zoom-btn').forEach(btn => btn.classList.remove('active'));
+                }
+                e.preventDefault();
+
+                const rect = vp.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const zoomSpeed = 0.08;
+                const delta = e.deltaY > 0 ? (1 - zoomSpeed) : (1 + zoomSpeed);
+                const newScale = Math.max(0.1, Math.min(state.scale * delta, 16));
+
+                const scaleRatio = newScale / state.scale;
+                state.panX = mouseX - scaleRatio * (mouseX - state.panX);
+                state.panY = mouseY - scaleRatio * (mouseY - state.panY);
+                state.scale = newScale;
+
+                applyGroupTransform(groupId);
+            }, { passive: false });
+
+            // Drag pan
+            vp.addEventListener('mousedown', (e) => {
+                const state = getGroupState(groupId);
+                if (state.mode === 'fit') return;
+                e.preventDefault();
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                panStartX = state.panX;
+                panStartY = state.panY;
+                viewports.forEach(v => v.classList.add('dragging'));
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const state = getGroupState(groupId);
+            state.panX = panStartX + (e.clientX - dragStartX);
+            state.panY = panStartY + (e.clientY - dragStartY);
+            applyGroupTransform(groupId);
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            const group = document.querySelector(`[data-group-id="${groupId}"]`);
+            if (group) {
+                group.querySelectorAll('.image-viewport').forEach(v => v.classList.remove('dragging'));
+            }
+        });
+
+        // Apply initial transform once images load
+        const imgs = group.querySelectorAll('.image-viewport img');
+        let loaded = 0;
+        imgs.forEach(img => {
+            if (img.complete) {
+                loaded++;
+                if (loaded === imgs.length) applyGroupTransform(groupId);
+            } else {
+                img.addEventListener('load', () => {
+                    loaded++;
+                    if (loaded === imgs.length) applyGroupTransform(groupId);
+                });
+            }
+        });
+    }
+
+    // ── Helpers ──
+
+    function compressImg(run, filename) {
+        return `/run-image/${run}/compress/${filename}`;
+    }
+    function decompressImg(run, filename) {
+        return `/run-image/${run}/decompress/${filename}`;
+    }
+    function tileImg(run, filename) {
+        return `/run-image/${run}/tiles/${filename}`;
+    }
+
+    function findFile(files, pattern) {
+        return files.find(f => f.includes(pattern)) || null;
+    }
+
+    function formatBytes(b) {
+        if (b < 1024) return b + ' B';
+        return (b / 1024).toFixed(1) + ' KB';
+    }
+
+    function manifestMetrics(manifest) {
+        if (!manifest || !manifest.tiles) return {};
+        const tiles = manifest.tiles;
+        const l1 = tiles.filter(t => t.level === 'L1');
+        const l0 = tiles.filter(t => t.level === 'L0');
+        const l1Bytes = l1.reduce((s, t) => s + t.residual_bytes, 0);
+        const l0Bytes = l0.reduce((s, t) => s + t.residual_bytes, 0);
+        const l1Psnr = l1.length ? l1.reduce((s, t) => s + t.y_psnr_db, 0) / l1.length : 0;
+        const l0Psnr = l0.length ? l0.reduce((s, t) => s + t.y_psnr_db, 0) / l0.length : 0;
+        const totalBytes = manifest.l2_bytes + l1Bytes + l0Bytes;
+        return { l1Bytes, l0Bytes, l1Psnr, l0Psnr, totalBytes, l2Bytes: manifest.l2_bytes };
+    }
+
+    let groupCounter = 0;
+
+    function imgCard(src, caption) {
+        return `<div class="image-card">
+            <div class="image-viewport">
+                <img src="${src}" alt="${caption}" loading="lazy">
+            </div>
+            <div class="caption">${caption}</div>
+        </div>`;
+    }
+
+    function imageGroup(cardsHtml) {
+        const gid = 'g' + (groupCounter++);
+        return `<div class="image-group" data-group-id="${gid}">
+            <div class="image-group-controls">
+                <button class="zoom-btn active" data-zoom="fit" onclick="setGroupZoom('${gid}','fit')">Fit</button>
+                <button class="zoom-btn" data-zoom="actual" onclick="setGroupZoom('${gid}','actual')">1:1</button>
+                <button class="zoom-btn" data-zoom="2x" onclick="setGroupZoom('${gid}','2x')">2x</button>
+                <span class="zoom-label"></span>
+            </div>
+            <div class="image-grid">${cardsHtml}</div>
+        </div>`;
+    }
+
+    async function loadPipelineData() {
+        let data;
+        try {
+            const resp = await fetch('/pipeline-data');
+            data = await resp.json();
+        } catch (e) {
+            document.getElementById('loadingMsg').textContent = 'Failed to load pipeline data. Is the viewer server running?';
+            return;
+        }
+
+        const REC = 'rs_444_optl2_l1q60_l0q40';
+        const NO_OPT = 'rs_444_l1q60_l0q40';
+        const SUB420 = 'rs_420_optl2_l1q60_l0q40';
+        const SUB420OPT = 'rs_420opt_optl2_l1q60_l0q40';
+        const UNIFORM = 'rs_444_optl2_j40';
+        const BASELINE = 'jpeg_baseline_q40';
+
+        // Build visual pipeline in left panel
+        buildVisualPipeline(data);
+
+        const rec = data[REC] || {};
+        const noOpt = data[NO_OPT] || {};
+        const sub420 = data[SUB420] || {};
+        const sub420opt = data[SUB420OPT] || {};
+        const uniform = data[UNIFORM] || {};
+        const baseline = data[BASELINE] || {};
+
+        const recM = manifestMetrics(rec.manifest);
+        const noOptM = manifestMetrics(noOpt.manifest);
+        const sub420M = manifestMetrics(sub420.manifest);
+        const sub420optM = manifestMetrics(sub420opt.manifest);
+        const uniformM = manifestMetrics(uniform.manifest);
+
+        let baselineTotalBytes = 0;
+        let baselinePsnr = 0;
+        let baselineDeltaE = 0;
+        if (baseline.manifest && baseline.manifest.tiles) {
+            const bt = baseline.manifest.tiles;
+            const tileEntries = Object.values(bt);
+            baselineTotalBytes = tileEntries.reduce((s, t) => s + t.size_bytes, 0);
+            baselinePsnr = tileEntries.reduce((s, t) => s + t.psnr, 0) / tileEntries.length;
+            baselineDeltaE = tileEntries.reduce((s, t) => s + t.delta_e, 0) / tileEntries.length;
+        }
+
+        const chapters = [
+            {
+                num: 1,
+                title: 'Source Image & Pyramid Levels',
+                tag: 'Foundation', tagClass: 'tag-foundation',
+                desc: `ORIGAMI compresses a tile family: 1 L2 tile (256x256), 4 L1 tiles (256x256 each, covering 512x512), and 16 L0 tiles (256x256 each, covering 1024x1024). L2 is stored as a JPEG baseline at Q95. L1 and L0 tiles are predicted from the parent level via bilinear upsampling, and only the luma residual (prediction error) is stored. Chroma (Cb/Cr) is inherited from the prediction.`,
+                images: () => {
+                    const cf = rec.compressFiles || [];
+                    const l2Orig = findFile(cf, 'L2_original');
+                    const l1Orig = findFile(cf, 'L1_0_0_original');
+                    const l0Orig = findFile(cf, 'L0_0_0_original');
+                    let cards = '';
+                    if (l2Orig) cards += imgCard(compressImg(REC, l2Orig), 'L2 (256x256)');
+                    if (l1Orig) cards += imgCard(compressImg(REC, l1Orig), 'L1 tile 0,0 (256x256)');
+                    if (l0Orig) cards += imgCard(compressImg(REC, l0Orig), 'L0 tile 0,0 (256x256)');
+                    return imageGroup(cards);
+                },
+                table: null,
+                chart: null
+            },
+            {
+                num: 2,
+                title: 'L2 Optimization (OptL2)',
+                tag: 'Optimization', tagClass: 'tag-optimization',
+                desc: `L2 has two jobs: it's a visible tile at the lowest zoom level, and it's the prediction source for L1. The better L2 predicts L1 after upsampling, the smaller the residual (prediction error), and the fewer bytes we need to store. OptL2 uses gradient descent to nudge each L2 pixel so that when the image is bilinearly upsampled to L1 size, the result more closely matches the true L1 tiles. The &plusmn;15 per-channel constraint ensures L2 still looks correct as a standalone tile &mdash; the shifts are imperceptible at that zoom level. The optimization runs across all 3 RGB channels (100 iterations, lr=0.3), which also improves chroma prediction for free &mdash; important because chroma is never corrected by residuals.`,
+                images: () => {
+                    const noOptCf = noOpt.compressFiles || [];
+                    const recCf = rec.compressFiles || [];
+                    const noOptRes = findFile(noOptCf, 'L1_0_0_residual_raw');
+                    const recRes = findFile(recCf, 'L1_0_0_residual_raw');
+                    let cards = '';
+                    if (noOptRes) cards += imgCard(compressImg(NO_OPT, noOptRes), 'L1 residual (no OptL2) &mdash; brighter = more error');
+                    if (recRes) cards += imgCard(compressImg(REC, recRes), 'L1 residual (with OptL2) &mdash; visibly lighter');
+                    return imageGroup(cards);
+                },
+                decision: 'Decision: Optimize L2 pixels for downstream prediction? <strong>Yes.</strong> Residuals shrink by 48%, total size -1.4%, and chroma accuracy improves.',
+                table: () => {
+                    return `<table class="data-table">
+                        <tr><th>Config</th><th>L2 Size</th><th>L1 Residuals</th><th>L0 Residuals</th><th>Total</th><th>L1 PSNR</th></tr>
+                        <tr class="baseline"><td>No OptL2 (444, l1q60/l0q40)</td>
+                            <td>${formatBytes(noOptM.l2Bytes)}</td>
+                            <td>${formatBytes(noOptM.l1Bytes)}</td>
+                            <td>${formatBytes(noOptM.l0Bytes)}</td>
+                            <td>${formatBytes(noOptM.totalBytes)}</td>
+                            <td>${noOptM.l1Psnr.toFixed(2)} dB</td></tr>
+                        <tr class="highlight"><td>With OptL2 (444, l1q60/l0q40)</td>
+                            <td>${formatBytes(recM.l2Bytes)}</td>
+                            <td>${formatBytes(recM.l1Bytes)}</td>
+                            <td>${formatBytes(recM.l0Bytes)}</td>
+                            <td>${formatBytes(recM.totalBytes)}</td>
+                            <td>${recM.l1Psnr.toFixed(2)} dB</td></tr>
+                    </table>`;
+                },
+                chart: { src: '/charts/rust/size_vs_quality.png', label: 'Size vs quality across all configurations' }
+            },
+            {
+                num: 3,
+                title: 'Chroma Subsampling (4:4:4 vs 4:2:0)',
+                tag: 'Decision', tagClass: 'tag-decision',
+                desc: `L2 is encoded as JPEG, which supports chroma subsampling. In 4:2:0, chroma is halved to 128x128 inside the JPEG encoder, then upsampled back to 256x256 on decode. This means chroma passes through a destructive 256&rarr;128&rarr;256 round-trip <em>before</em> the 256&rarr;512 bilinear upsample that produces L1 predictions. Since chroma is never corrected by residuals, this loss cascades through every level. 4:4:4 preserves full chroma resolution at a cost of ~15 KB more in L2.`,
+                images: () => {
+                    const recCf = rec.compressFiles || [];
+                    const sub420Cf = sub420.compressFiles || [];
+                    const recCb = findFile(recCf, 'L2_chroma_cb');
+                    const recCr = findFile(recCf, 'L2_chroma_cr');
+                    const sub420Cb = findFile(sub420Cf, 'L2_chroma_cb');
+                    const sub420Cr = findFile(sub420Cf, 'L2_chroma_cr');
+                    let cards = '';
+                    if (recCb) cards += imgCard(compressImg(REC, recCb), '4:4:4 Cb');
+                    if (recCr) cards += imgCard(compressImg(REC, recCr), '4:4:4 Cr');
+                    if (sub420Cb) cards += imgCard(compressImg(SUB420, sub420Cb), '4:2:0 Cb (blurrier)');
+                    if (sub420Cr) cards += imgCard(compressImg(SUB420, sub420Cr), '4:2:0 Cr (blurrier)');
+                    return imageGroup(cards);
+                },
+                decision: 'Decision: 4:4:4 vs 4:2:0? <strong>4:4:4.</strong> +15 KB L2 cost but eliminates the single largest quality bottleneck. 4:2:0 chroma loss cascades through L1 and L0.',
+                table: () => {
+                    return `<table class="data-table">
+                        <tr><th>Config</th><th>L2 Size</th><th>Total Size</th><th>L1 PSNR</th><th>L0 PSNR</th></tr>
+                        <tr class="highlight"><td>4:4:4 + OptL2</td>
+                            <td>${formatBytes(recM.l2Bytes)}</td>
+                            <td>${formatBytes(recM.totalBytes)}</td>
+                            <td>${recM.l1Psnr.toFixed(2)} dB</td>
+                            <td>${recM.l0Psnr.toFixed(2)} dB</td></tr>
+                        <tr><td>4:2:0-opt + OptL2</td>
+                            <td>${formatBytes(sub420optM.l2Bytes)}</td>
+                            <td>${formatBytes(sub420optM.totalBytes)}</td>
+                            <td>${sub420optM.l1Psnr.toFixed(2)} dB</td>
+                            <td>${sub420optM.l0Psnr.toFixed(2)} dB</td></tr>
+                        <tr class="baseline"><td>4:2:0 + OptL2</td>
+                            <td>${formatBytes(sub420M.l2Bytes)}</td>
+                            <td>${formatBytes(sub420M.totalBytes)}</td>
+                            <td>${sub420M.l1Psnr.toFixed(2)} dB</td>
+                            <td>${sub420M.l0Psnr.toFixed(2)} dB</td></tr>
+                    </table>`;
+                },
+                chart: { src: '/charts/rust/delta_e_vs_quality.png', label: 'Delta E vs quality &mdash; 4:4:4 consistently lower (better)' }
+            },
+            {
+                num: 4,
+                title: 'Float32 Pipeline & Residual Computation',
+                tag: 'Foundation', tagClass: 'tag-foundation',
+                desc: `The encoder converts RGB to YCbCr using float32 BT.601 coefficients. Critically, Cb and Cr are kept as f32 throughout &mdash; never quantized to u8 until the final JPEG encode. Residuals are computed as <code>round(Y_gt_u8 - Y_pred_f32 + 128)</code>, avoiding up-to-3-LSB quantization error. This reduced Delta E from 3.24 to 2.42 (&minus;25%).`,
+                images: () => {
+                    const cf = rec.compressFiles || [];
+                    const pred = findFile(cf, 'L1_0_0_prediction');
+                    const luma = findFile(cf, 'L1_0_0_luma');
+                    const resRaw = findFile(cf, 'L1_0_0_residual_raw');
+                    const resCentered = findFile(cf, 'L1_0_0_residual_centered');
+                    let cards = '';
+                    if (pred) cards += imgCard(compressImg(REC, pred), 'L1 prediction (from L2 upsample)');
+                    if (luma) cards += imgCard(compressImg(REC, luma), 'L1 ground truth luma');
+                    if (resRaw) cards += imgCard(compressImg(REC, resRaw), 'Residual raw (|GT - pred|)');
+                    if (resCentered) cards += imgCard(compressImg(REC, resCentered), 'Residual centered (+128)');
+                    return imageGroup(cards);
+                },
+                decision: 'The float32 pipeline is always on &mdash; there is no reason to use u8. The &minus;25% Delta E improvement is free.',
+                table: () => {
+                    return `<table class="data-table">
+                        <tr><th>Pipeline</th><th>Delta E</th><th>Improvement</th></tr>
+                        <tr class="baseline"><td>u8 YCbCr (old)</td><td>3.24</td><td>&mdash;</td></tr>
+                        <tr class="highlight"><td>Float32 YCbCr (current)</td><td>2.42</td><td>&minus;25%</td></tr>
+                    </table>`;
+                },
+                chart: null
+            },
+            {
+                num: 5,
+                title: 'Split Quality Encoding',
+                tag: 'Decision', tagClass: 'tag-decision',
+                desc: `L1 residuals serve double duty: they reconstruct L1 tiles, and those reconstructed tiles become the prediction source for L0. Higher-fidelity L1 reconstruction means better L0 predictions and smaller L0 residuals. Split-quality gives L1 a higher JPEG quality than L0 (recommended: l1q = l0q + 20). The extra bytes spent on L1 are partially offset by L0 savings.`,
+                images: () => {
+                    const recDf = rec.decompressFiles || [];
+                    const uniDf = uniform.decompressFiles || [];
+                    const recRecon = findFile(recDf, 'L1_0_0_reconstructed');
+                    const uniRecon = findFile(uniDf, 'L1_0_0_reconstructed');
+                    let cards = '';
+                    if (uniRecon) cards += imgCard(decompressImg(UNIFORM, uniRecon), 'Uniform q=40 (L1 reconstructed)');
+                    if (recRecon) cards += imgCard(decompressImg(REC, recRecon), 'Split l1q=60 l0q=40 (L1 reconstructed)');
+                    return imageGroup(cards);
+                },
+                decision: 'Decision: Uniform vs split quality? <strong>Split +20.</strong> +2% size for +0.24 dB. L1 residuals grow but L0 residuals shrink.',
+                table: () => {
+                    return `<table class="data-table">
+                        <tr><th>Config</th><th>L1 Residuals</th><th>L0 Residuals</th><th>Total</th><th>L1 PSNR</th><th>L0 PSNR</th></tr>
+                        <tr class="baseline"><td>Uniform q=40 (OptL2, 444)</td>
+                            <td>${formatBytes(uniformM.l1Bytes)}</td>
+                            <td>${formatBytes(uniformM.l0Bytes)}</td>
+                            <td>${formatBytes(uniformM.totalBytes)}</td>
+                            <td>${uniformM.l1Psnr.toFixed(2)} dB</td>
+                            <td>${uniformM.l0Psnr.toFixed(2)} dB</td></tr>
+                        <tr class="highlight"><td>Split l1q=60 l0q=40 (OptL2, 444)</td>
+                            <td>${formatBytes(recM.l1Bytes)}</td>
+                            <td>${formatBytes(recM.l0Bytes)}</td>
+                            <td>${formatBytes(recM.totalBytes)}</td>
+                            <td>${recM.l1Psnr.toFixed(2)} dB</td>
+                            <td>${recM.l0Psnr.toFixed(2)} dB</td></tr>
+                    </table>`;
+                },
+                chart: { src: '/charts/rust/psnr_vs_size.png', label: 'PSNR vs total size &mdash; split quality achieves higher PSNR at similar size' }
+            },
+            {
+                num: 6,
+                title: 'Final Result vs JPEG Baseline',
+                tag: 'Result', tagClass: 'tag-result',
+                desc: `All optimizations combined: 4:4:4 chroma, OptL2, split quality (l1q=60, l0q=40), float32 pipeline. Compared against JPEG baseline at Q40, which stores each 256x256 tile independently. ORIGAMI achieves smaller total size AND better quality &mdash; the residual pyramid exploits inter-scale redundancy that per-tile JPEG cannot.`,
+                images: () => {
+                    const recDf = rec.decompressFiles || [];
+                    const recRecon = findFile(recDf, 'L0_0_0_reconstructed');
+                    const recCf = rec.compressFiles || [];
+                    const recOrig = findFile(recCf, 'L0_0_0_original');
+                    let cards = '';
+                    if (recOrig) cards += imgCard(compressImg(REC, recOrig), 'Source (L0 tile 0,0)');
+                    if (recRecon) cards += imgCard(decompressImg(REC, recRecon), 'ORIGAMI reconstructed');
+                    return imageGroup(cards);
+                },
+                decision: null,
+                table: () => {
+                    return `<table class="data-table">
+                        <tr><th>Method</th><th>Total Size</th><th>Avg PSNR</th><th>Avg Delta E</th><th>vs JPEG Baseline</th></tr>
+                        <tr class="baseline"><td>JPEG Q40 baseline (16 tiles)</td>
+                            <td>${formatBytes(baselineTotalBytes)}</td>
+                            <td>${baselinePsnr.toFixed(2)} dB</td>
+                            <td>${baselineDeltaE.toFixed(2)}</td>
+                            <td>&mdash;</td></tr>
+                        <tr class="highlight"><td>ORIGAMI recommended</td>
+                            <td>${formatBytes(recM.totalBytes)}</td>
+                            <td>${recM.l0Psnr.toFixed(2)} dB</td>
+                            <td>&mdash;</td>
+                            <td>${((1 - recM.totalBytes / baselineTotalBytes) * 100).toFixed(0)}% smaller</td></tr>
+                    </table>`;
+                },
+                chart: { src: '/charts/comparison/psnr_vs_size.png', label: 'PSNR vs size &mdash; ORIGAMI Pareto-dominates JPEG at every operating point' }
+            },
+        ];
+
+        // Render chapters
+        const container = document.getElementById('chapters');
+        container.innerHTML = '';
+
+        for (const ch of chapters) {
+            const div = document.createElement('div');
+            div.className = 'chapter';
+            div.innerHTML = `
+                <div class="chapter-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="chapter-num">${ch.num}</div>
+                    <div class="chapter-title">${ch.title}</div>
+                    <span class="chapter-tag ${ch.tagClass}">${ch.tag}</span>
+                    <span class="chapter-toggle">&#9654;</span>
+                </div>
+                <div class="chapter-body">
+                    <div class="chapter-desc">${ch.desc}</div>
+                    ${ch.images()}
+                    ${ch.decision ? `<div class="decision-box">${ch.decision}</div>` : ''}
+                    ${ch.table ? ch.table() : ''}
+                    ${ch.chart ? `<div class="chart-embed">
+                        <img src="${ch.chart.src}" alt="${ch.chart.label}" loading="lazy">
+                        <div class="chart-label">${ch.chart.label}</div>
+                    </div>` : ''}
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // Auto-open all chapters
+        container.querySelectorAll('.chapter').forEach(ch => ch.classList.add('open'));
+
+        // Setup zoom/pan interactions for each image group
+        document.querySelectorAll('.image-group').forEach(group => {
+            const gid = group.dataset.groupId;
+            setupGroupInteractions(gid);
+        });
+    }
+
+    loadPipelineData();
+</script>
+</body>
+</html>

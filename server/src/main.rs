@@ -7,6 +7,8 @@ mod turbojpeg_optimized;
 mod serve;
 mod encode;
 mod decode;
+#[cfg(feature = "openslide")]
+mod ingest;
 
 #[derive(Parser)]
 #[command(name = "origami", about = "ORIGAMI tile server and residual encoder")]
@@ -23,6 +25,9 @@ enum Commands {
     Encode(encode::EncodeArgs),
     /// Decode (reconstruct) tiles from residuals or pack files
     Decode(decode::DecodeArgs),
+    /// Ingest a WSI slide (DICOM, SVS, etc.) into a ready-to-serve slide directory
+    #[cfg(feature = "openslide")]
+    Ingest(ingest::IngestArgs),
 }
 
 fn main() -> Result<()> {
@@ -38,5 +43,7 @@ fn main() -> Result<()> {
         Commands::Serve(args) => serve::run(args),
         Commands::Encode(args) => encode::run(args),
         Commands::Decode(args) => decode::run(args),
+        #[cfg(feature = "openslide")]
+        Commands::Ingest(args) => ingest::run(args),
     }
 }
