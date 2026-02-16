@@ -217,18 +217,67 @@ impl GpuContext {
         Ok(rgb)
     }
 
+    /// Bulk u8 → f32 conversion on GPU.
+    pub fn u8_to_f32(
+        &self,
+        src: &CudaSlice<u8>,
+        total: i32,
+    ) -> Result<CudaSlice<f32>> {
+        let mut dst = unsafe { self.stream.alloc::<f32>(total as usize) }
+            .map_err(|e| anyhow!("alloc f32 failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("u8_to_f32_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(src);
+        launch.arg(&mut dst);
+        launch.arg(&total);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("u8_to_f32 kernel launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
+    /// Bulk f32 → u8 conversion on GPU (clamp + round).
+    pub fn f32_to_u8(
+        &self,
+        src: &CudaSlice<f32>,
+        total: i32,
+    ) -> Result<CudaSlice<u8>> {
+        let mut dst = unsafe { self.stream.alloc::<u8>(total as usize) }
+            .map_err(|e| anyhow!("alloc u8 failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("f32_to_u8_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(src);
+        launch.arg(&mut dst);
+        launch.arg(&total);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("f32_to_u8 kernel launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
     /// Composite 16 tiles into a 4x4 family canvas.
+    ///
+    /// tiles: [N * tiles_per_row^2 * tile_h * tile_w * 3] u8 on device
+    /// Returns: [N * canvas_h * canvas_w * 3] u8 on device
     pub fn composite_tiles(
         &self,
         tiles: &CudaSlice<u8>,
-        tile_offsets_x: &CudaSlice<i32>,
-        tile_offsets_y: &CudaSlice<i32>,
         n: i32,
-        tile_h: i32,
         tile_w: i32,
-        canvas_h: i32,
+        tile_h: i32,
         canvas_w: i32,
-        tiles_per_family: i32,
+        canvas_h: i32,
+        tiles_per_row: i32,
     ) -> Result<CudaSlice<u8>> {
         let total_out = (n * canvas_h * canvas_w * 3) as usize;
         let mut canvas = self.stream.alloc_zeros::<u8>(total_out)
@@ -243,14 +292,12 @@ impl GpuContext {
         let mut launch = self.stream.launch_builder(&f);
         launch.arg(tiles);
         launch.arg(&mut canvas);
-        launch.arg(tile_offsets_x);
-        launch.arg(tile_offsets_y);
         launch.arg(&n);
-        launch.arg(&tile_h);
         launch.arg(&tile_w);
-        launch.arg(&canvas_h);
+        launch.arg(&tile_h);
         launch.arg(&canvas_w);
-        launch.arg(&tiles_per_family);
+        launch.arg(&canvas_h);
+        launch.arg(&tiles_per_row);
         unsafe { launch.launch(cfg) }
             .map_err(|e| anyhow!("composite kernel launch failed: {}", e))?;
 

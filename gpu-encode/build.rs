@@ -5,8 +5,6 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
     // Compile CUDA kernels if nvcc is available
-    // For now, we use cudarc's PTX loading at runtime, so .cu files are compiled
-    // via nvcc at build time and embedded as PTX strings.
     let cuda_files = [
         "src/kernels/optl2.cu",
         "src/kernels/composite.cu",
@@ -63,4 +61,13 @@ fn main() {
 
     // Export the OUT_DIR so the crate can find PTX files at runtime
     println!("cargo:rustc-env=CUDA_PTX_DIR={}", out_dir.display());
+
+    // Link nvJPEG (part of CUDA Toolkit)
+    // CUDA_PATH can override the default search path
+    let cuda_path = env::var("CUDA_PATH")
+        .unwrap_or_else(|_| "/usr/local/cuda".to_string());
+    println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
+    println!("cargo:rustc-link-search=native={}/lib", cuda_path);
+    println!("cargo:rustc-link-lib=dylib=nvjpeg");
+    println!("cargo:rustc-link-lib=dylib=cudart");
 }

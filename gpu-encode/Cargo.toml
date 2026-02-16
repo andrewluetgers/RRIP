@@ -37,8 +37,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Image processing (for Lanczos downsample on CPU fallback)
+# Image processing (for Lanczos downsample on CPU, image loading)
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
+# WebP encoding for L2 RGB residuals (only CPU operation)
+webp = "0.3"
 
 [build-dependencies]
 cc = "1.0"

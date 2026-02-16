@@ -23,45 +23,77 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Encode a DICOM WSI
+    /// Encode residuals (single image or DICOM WSI)
     Encode {
-        /// Path to DICOM WSI file
-        #[arg(long)]
-        slide: PathBuf,
+        /// Path to DICOM WSI file (mutually exclusive with --image)
+        #[arg(long, required_unless_present = "image")]
+        slide: Option<PathBuf>,
+
+        /// Single image path (mutually exclusive with --slide)
+        #[arg(long, required_unless_present = "slide")]
+        image: Option<PathBuf>,
 
         /// Output directory
         #[arg(long)]
         out: PathBuf,
 
-        /// Tile size (must match DICOM tile size, typically 224)
-        #[arg(long, default_value_t = 224)]
+        /// Tile size (default 256 for single-image, typically 224 for DICOM)
+        #[arg(long, default_value_t = 256)]
         tile: u32,
 
-        /// JPEG quality for L2 baseline tiles
+        /// JPEG quality for residual encoding (1-100)
+        #[arg(long, default_value_t = 50)]
+        resq: u8,
+
+        /// Override quality for L1 residuals (default: use --resq)
+        #[arg(long)]
+        l1q: Option<u8>,
+
+        /// Override quality for L0 residuals (default: use --resq)
+        #[arg(long)]
+        l0q: Option<u8>,
+
+        /// JPEG quality for L2 baseline encoding (1-100)
         #[arg(long, default_value_t = 95)]
         baseq: u8,
 
-        /// JPEG quality for L1 residuals
-        #[arg(long, default_value_t = 60)]
-        l1q: u8,
-
-        /// JPEG quality for L0 residuals
-        #[arg(long, default_value_t = 40)]
-        l0q: u8,
-
-        /// Enable OptL2 gradient descent optimization
-        #[arg(long)]
-        optl2: bool,
-
-        /// Maximum per-pixel deviation for OptL2 (default: 15)
-        #[arg(long, default_value_t = 15)]
-        max_delta: u8,
-
-        /// Chroma subsampling for L2: 444, 420
+        /// Chroma subsampling: 444, 420
         #[arg(long, default_value = "444")]
         subsamp: String,
 
-        /// Batch size (number of families per GPU batch)
+        /// Encoder backend (GPU always uses turbojpeg for JPEG steps)
+        #[arg(long, default_value = "turbojpeg")]
+        encoder: String,
+
+        /// Maximum number of L2 parent tiles to process (for testing)
+        #[arg(long)]
+        max_parents: Option<usize>,
+
+        /// Also create pack files
+        #[arg(long)]
+        pack: bool,
+
+        /// Write manifest.json with per-tile metrics
+        #[arg(long)]
+        manifest: bool,
+
+        /// Optimize L2 tile for better bilinear predictions (gradient descent)
+        #[arg(long)]
+        optl2: bool,
+
+        /// Write debug PNG images (originals, predictions, reconstructions)
+        #[arg(long)]
+        debug_images: bool,
+
+        /// JPEG quality for L2 RGB residual (1-100, 0 = skip)
+        #[arg(long, default_value_t = 95)]
+        l2resq: u8,
+
+        /// Maximum per-pixel deviation for OptL2 gradient descent
+        #[arg(long, default_value_t = 15)]
+        max_delta: u8,
+
+        /// Batch size (number of families per GPU batch, DICOM mode only)
         #[arg(long, default_value_t = 64)]
         batch_size: usize,
     },
@@ -88,30 +120,65 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Encode {
-            slide, out, tile, baseq, l1q, l0q, optl2, max_delta, subsamp, batch_size,
+            slide, image, out, tile, resq, l1q, l0q, baseq, subsamp, encoder: _,
+            max_parents, pack, manifest, optl2, debug_images, l2resq, max_delta,
+            batch_size,
         } => {
-            info!("ORIGAMI GPU Encoder");
-            info!("  slide: {}", slide.display());
-            info!("  out: {}", out.display());
+            let l1q_resolved = l1q.unwrap_or(resq);
+            let l0q_resolved = l0q.unwrap_or(resq);
 
             let config = pipeline::EncodeConfig {
                 tile_size: tile,
-                baseq, l1q, l0q, optl2, max_delta, subsamp, batch_size,
+                baseq,
+                l1q: l1q_resolved,
+                l0q: l0q_resolved,
+                optl2,
+                max_delta,
+                subsamp,
+                l2resq,
+                pack,
+                manifest,
+                debug_images,
+                max_parents,
+                batch_size,
                 device: cli.device,
             };
 
-            let summary = pipeline::encode_wsi(&slide, &out, config)?;
+            if let Some(image_path) = image {
+                info!("ORIGAMI GPU Encoder (single-image mode)");
+                info!("  image: {}", image_path.display());
+                info!("  out: {}", out.display());
 
-            info!("Encode complete:");
-            info!("  families: {}", summary.families_encoded);
-            info!("  L2 bytes: {:.1} MB", summary.l2_bytes as f64 / 1_048_576.0);
-            info!("  residual bytes: {:.1} MB", summary.residual_bytes as f64 / 1_048_576.0);
-            info!("  elapsed: {:.2}s", summary.elapsed_secs);
-            info!(
-                "  throughput: {:.1} families/s ({:.2} ms/family)",
-                summary.families_encoded as f64 / summary.elapsed_secs,
-                summary.elapsed_secs * 1000.0 / summary.families_encoded as f64
-            );
+                let summary = pipeline::encode_single_image(&image_path, &out, config)?;
+
+                info!("Encode complete:");
+                info!("  L1 tiles: {}", summary.l1_tiles);
+                info!("  L0 tiles: {}", summary.l0_tiles);
+                info!("  L2 bytes: {:.1} KB", summary.l2_bytes as f64 / 1024.0);
+                info!("  total bytes: {:.1} KB", summary.total_bytes as f64 / 1024.0);
+                info!("  elapsed: {:.2}s", summary.elapsed_secs);
+            } else if let Some(slide_path) = slide {
+                info!("ORIGAMI GPU Encoder (DICOM WSI mode)");
+                info!("  slide: {}", slide_path.display());
+                info!("  out: {}", out.display());
+
+                let summary = pipeline::encode_wsi(&slide_path, &out, config)?;
+
+                info!("Encode complete:");
+                info!("  families: {}", summary.families_encoded);
+                info!("  L2 bytes: {:.1} MB", summary.l2_bytes as f64 / 1_048_576.0);
+                info!("  residual bytes: {:.1} MB", summary.residual_bytes as f64 / 1_048_576.0);
+                info!("  elapsed: {:.2}s", summary.elapsed_secs);
+                if summary.families_encoded > 0 {
+                    info!(
+                        "  throughput: {:.1} families/s ({:.2} ms/family)",
+                        summary.families_encoded as f64 / summary.elapsed_secs,
+                        summary.elapsed_secs * 1000.0 / summary.families_encoded as f64
+                    );
+                }
+            } else {
+                anyhow::bail!("either --slide or --image must be specified");
+            }
         }
 
         Command::TestGpu => {
@@ -134,9 +201,9 @@ fn run_gpu_tests(device: usize) -> Result<()> {
     let gpu = kernels::GpuContext::new(device)?;
     info!("CUDA initialized in {:.1}ms", t0.elapsed().as_secs_f64() * 1000.0);
 
-    // Test 1: RGB → YCbCr → RGB roundtrip
+    // Test 1: RGB -> YCbCr -> RGB roundtrip
     {
-        info!("--- Test 1: RGB → YCbCr → RGB roundtrip ---");
+        info!("--- Test 1: RGB -> YCbCr -> RGB roundtrip ---");
         // Create a 4x4 RGB image (48 bytes)
         let rgb_host: Vec<u8> = (0..48).collect();
         let rgb_dev = gpu.stream.clone_htod(&rgb_host)
@@ -149,11 +216,11 @@ fn run_gpu_tests(device: usize) -> Result<()> {
         let rgb_result: Vec<u8> = gpu.stream.clone_dtoh(&rgb_out)
             .map_err(|e| anyhow::anyhow!("dtoh failed: {}", e))?;
 
-        // Check roundtrip error (should be ≤2 LSB per channel)
+        // Check roundtrip error (should be <=2 LSB per channel)
         let max_err = rgb_host.iter().zip(rgb_result.iter())
             .map(|(&a, &b)| (a as i32 - b as i32).unsigned_abs())
             .max().unwrap_or(0);
-        info!("  RGB→YCbCr→RGB max roundtrip error: {} (expect ≤2)", max_err);
+        info!("  RGB->YCbCr->RGB max roundtrip error: {} (expect <=2)", max_err);
         assert!(max_err <= 2, "Roundtrip error too high: {}", max_err);
         info!("  PASS");
     }
@@ -161,7 +228,6 @@ fn run_gpu_tests(device: usize) -> Result<()> {
     // Test 2: Bilinear upsample 2x
     {
         info!("--- Test 2: Bilinear upsample 2x ---");
-        // 2x2 image with 3 channels, all ones → should upsample to 4x4 all ones
         let src: Vec<f32> = vec![1.0; 2 * 2 * 3];
         let src_dev = gpu.stream.clone_htod(&src)
             .map_err(|e| anyhow::anyhow!("htod failed: {}", e))?;
@@ -204,7 +270,6 @@ fn run_gpu_tests(device: usize) -> Result<()> {
         info!("  residual: {:?} (128 = no diff)", residual);
         info!("  recon:    {:?}", recon);
 
-        // Reconstructed should match ground truth (within rounding)
         for (i, (&gt, &rc)) in gt_y.iter().zip(recon.iter()).enumerate() {
             let err = (gt as f32 - rc).abs();
             assert!(err <= 1.0, "Pixel {}: gt={} recon={} err={}", i, gt, rc, err);
@@ -215,9 +280,6 @@ fn run_gpu_tests(device: usize) -> Result<()> {
     // Test 4: OptL2 gradient descent (should reduce error)
     {
         info!("--- Test 4: OptL2 gradient descent ---");
-        // Simple 2x2 L2, 4x4 L1 target
-        // L2 all 128.0, L1 target all 200.0
-        // After optimization, L2 should move toward values that predict 200
         let l2_init: Vec<f32> = vec![128.0; 2 * 2 * 3];
         let l1_target: Vec<f32> = vec![200.0; 4 * 4 * 3];
 
@@ -228,7 +290,6 @@ fn run_gpu_tests(device: usize) -> Result<()> {
         let l1_dev = gpu.stream.clone_htod(&l1_target)
             .map_err(|e| anyhow::anyhow!("htod failed: {}", e))?;
 
-        // Run 50 iterations
         for _ in 0..50 {
             gpu.optl2_step(&mut l2_dev, &l2_orig, &l1_dev, 1, 2, 2, 0.01, 255.0)?;
         }
@@ -247,7 +308,6 @@ fn run_gpu_tests(device: usize) -> Result<()> {
     // Test 5: Large-scale performance test
     {
         info!("--- Test 5: Performance benchmark ---");
-        // Simulate 64 families: 64 × 224 × 224 × 3 RGB
         let n = 64;
         let h = 224;
         let w = 224;
@@ -258,15 +318,13 @@ fn run_gpu_tests(device: usize) -> Result<()> {
             .map_err(|e| anyhow::anyhow!("htod failed: {}", e))?;
         gpu.sync()?;
 
-        // Benchmark upsample 2x
         let t = Instant::now();
         let _dst = gpu.upsample_bilinear_2x(&src_dev, n as i32, h as i32, w as i32, c as i32)?;
         gpu.sync()?;
         let upsample_ms = t.elapsed().as_secs_f64() * 1000.0;
-        info!("  Upsample 2x ({} families, {}x{}x{} → {}x{}x{}): {:.2}ms",
+        info!("  Upsample 2x ({} families, {}x{}x{} -> {}x{}x{}): {:.2}ms",
               n, h, w, c, h*2, w*2, c, upsample_ms);
 
-        // Benchmark RGB→YCbCr
         let pixels = n * h * w;
         let rgb_data: Vec<u8> = vec![128u8; pixels * 3];
         let rgb_dev = gpu.stream.clone_htod(&rgb_data)
@@ -277,7 +335,7 @@ fn run_gpu_tests(device: usize) -> Result<()> {
         let (_y, _cb, _cr) = gpu.rgb_to_ycbcr_f32(&rgb_dev, pixels as i32)?;
         gpu.sync()?;
         let ycbcr_ms = t.elapsed().as_secs_f64() * 1000.0;
-        info!("  RGB→YCbCr ({} pixels): {:.2}ms", pixels, ycbcr_ms);
+        info!("  RGB->YCbCr ({} pixels): {:.2}ms", pixels, ycbcr_ms);
 
         info!("  PASS");
     }

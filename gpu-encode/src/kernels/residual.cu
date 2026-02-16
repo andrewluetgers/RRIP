@@ -76,6 +76,32 @@ extern "C" __global__ void reconstruct_y_kernel(
 }
 
 /**
+ * Bulk u8 → f32 conversion.
+ */
+extern "C" __global__ void u8_to_f32_kernel(
+    const unsigned char* __restrict__ src,
+    float* __restrict__ dst,
+    int total
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total) return;
+    dst[idx] = (float)src[idx];
+}
+
+/**
+ * Bulk f32 → u8 conversion (clamp + round).
+ */
+extern "C" __global__ void f32_to_u8_kernel(
+    const float* __restrict__ src,
+    unsigned char* __restrict__ dst,
+    int total
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total) return;
+    dst[idx] = (unsigned char)fmaxf(0.0f, fminf(255.0f, roundf(src[idx])));
+}
+
+/**
  * YCbCr float32 → RGB u8 (BT.601 inverse)
  *
  * R = Y + 1.402 * (Cr - 128)
