@@ -510,10 +510,11 @@ pub fn encode_single_image(
         save_rgb_png(&decompress_dir.join("050_L2_reconstructed.png"), &l2_for_pred_host, l2_w, l2_h)?;
     }
 
-    // Sharpen decoded L2 for prediction (only when not already sharpened before save)
+    // Sharpen decoded L2 for prediction (simulates decode-time: decode → sharpen → upsample)
+    // Always sharpen the JPEG-decoded L2, not the l2resq-reconstructed original
     let l2_for_pred_dev = if !config.save_sharpened {
         if let Some(strength) = config.sharpen {
-            gpu.sharpen_l2(&l2_for_pred_dev, l2_w, l2_h, strength)?
+            gpu.sharpen_l2(&l2_decoded_dev, l2_w, l2_h, strength)?
         } else {
             l2_for_pred_dev
         }

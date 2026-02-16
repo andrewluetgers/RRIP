@@ -429,7 +429,8 @@ impl GpuContext {
     }
 
     /// Apply unsharp mask sharpening to an interleaved RGB u8 buffer.
-    /// Two-pass separable 3×3 Gaussian blur, then sharpen: out = src + strength × (src - blurred).
+    /// Uses same integer/fixed-point math as CPU (server/src/core/sharpen.rs):
+    /// Pass 1: horizontal blur → u16 (no rounding), Pass 2: fixed-point 8.8 sharpen.
     pub fn sharpen_l2(
         &self,
         src: &CudaSlice<u8>,
@@ -440,8 +441,8 @@ impl GpuContext {
         let total = (width * height * 3) as u32;
         let cfg = LaunchConfig::for_num_elems(total);
 
-        // Allocate temp buffer for horizontal blur pass
-        let temp: CudaSlice<u8> = unsafe { self.stream.alloc(total as usize) }
+        // Allocate temp buffer for horizontal blur pass (u16, no intermediate rounding)
+        let temp: CudaSlice<u16> = unsafe { self.stream.alloc(total as usize) }
             .map_err(|e| anyhow!("sharpen temp alloc failed: {}", e))?;
 
         // Allocate output buffer
@@ -450,8 +451,10 @@ impl GpuContext {
 
         let w = width as i32;
         let h = height as i32;
+        // Fixed-point 8.8 strength (matches CPU: (strength * 256.0).round() as i32)
+        let strength_i = (strength * 256.0).round() as i32;
 
-        // Pass 1: horizontal blur
+        // Pass 1: horizontal blur → u16
         let f_hblur = self.mod_sharpen
             .load_function("unsharp_hblur_kernel")
             .map_err(|e| anyhow!("load unsharp_hblur_kernel failed: {}", e))?;
@@ -463,7 +466,7 @@ impl GpuContext {
         unsafe { launch_h.launch(cfg) }
             .map_err(|e| anyhow!("unsharp_hblur launch failed: {}", e))?;
 
-        // Pass 2: vertical blur + sharpen
+        // Pass 2: vertical blur + fixed-point sharpen
         let f_vblur = self.mod_sharpen
             .load_function("unsharp_vblur_sharpen_kernel")
             .map_err(|e| anyhow!("load unsharp_vblur_sharpen_kernel failed: {}", e))?;
@@ -473,7 +476,7 @@ impl GpuContext {
         launch_v.arg(&dst);
         launch_v.arg(&w);
         launch_v.arg(&h);
-        launch_v.arg(&strength);
+        launch_v.arg(&strength_i);
         unsafe { launch_v.launch(cfg) }
             .map_err(|e| anyhow!("unsharp_vblur_sharpen launch failed: {}", e))?;
 
