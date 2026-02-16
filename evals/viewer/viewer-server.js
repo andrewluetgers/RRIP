@@ -360,6 +360,41 @@ async function scanCaptures() {
       continue;
     }
 
+    // --- GPU encode: gpu_{subsamp}_b{N}[_optl2[_d{N}]]_l1q{N}_l0q{N} ---
+    const gpuMatch = dirName.match(/^gpu_(444|420opt|420)_b(\d+)(?:_(optl2))?(?:_d(\d+))?_l1q(\d+)_l0q(\d+)$/);
+    if (gpuMatch) {
+      const subsamp = gpuMatch[1];
+      const baseq = parseInt(gpuMatch[2]);
+      const optl2 = gpuMatch[3];
+      const delta = gpuMatch[4] ? parseInt(gpuMatch[4]) : undefined;
+      const l1q = parseInt(gpuMatch[5]);
+      const l0q = parseInt(gpuMatch[6]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        const optl2Suffix = optl2 ? (delta ? ` optL2 \u00b1${delta}` : ' optL2') : '';
+        captures[`GPU nvjpeg B${baseq} L1=${l1q} L0=${l0q} ${subsamp}${optl2Suffix}`] = {
+          type: 'origami',
+          encoder: 'nvjpeg',
+          q: l0q,
+          j: l0q,
+          baseq,
+          l1q,
+          l0q,
+          subsamp,
+          optl2: !!optl2,
+          delta,
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
     // Fallback: unrecognized directories with content
     const hasImages = fs.existsSync(path.join(dirPath, 'images'));
     const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));

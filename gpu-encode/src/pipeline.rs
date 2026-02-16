@@ -218,6 +218,9 @@ pub fn encode_single_image(
         let l2_decoded_host = download_u8(&gpu, &l2_decoded_dev)?;
         save_rgb_png(&compress_dir.join("001_L2_original.png"), &l2_orig_host, l2_w, l2_h)?;
         save_rgb_png(&decompress_dir.join("050_L2_decode.png"), &l2_decoded_host, l2_w, l2_h)?;
+        // L2 reconstructed (with residual applied if l2resq > 0, otherwise same as decode)
+        let l2_for_pred_host = download_u8(&gpu, &l2_for_pred_dev)?;
+        save_rgb_png(&decompress_dir.join("050_L2_reconstructed.png"), &l2_for_pred_host, l2_w, l2_h)?;
     }
 
     // 7. GPU: upsample L2 → L1 prediction (bilinear 2x, stays on GPU as f32)
@@ -225,6 +228,16 @@ pub fn encode_single_image(
     let l1_pred_f32 = gpu.upsample_bilinear_2x(&l2_pred_f32, 1, l2_h as i32, l2_w as i32, 3)?;
     let l1_pred_w = l2_w * 2;
     let l1_pred_h = l2_h * 2;
+
+    // Debug: L1 mosaic prediction
+    if config.debug_images {
+        let decompress_dir = output_dir.join("decompress");
+        gpu.sync()?;
+        let l1_pred_host = gpu.stream.clone_dtoh(
+            &gpu.f32_to_u8(&l1_pred_f32, (l1_pred_w * l1_pred_h * 3) as i32)?
+        ).map_err(|e| anyhow::anyhow!("dtoh: {}", e))?;
+        save_rgb_png(&decompress_dir.join("051_L1_mosaic_prediction.png"), &l1_pred_host, l1_pred_w, l1_pred_h)?;
+    }
 
     // 8. GPU: rgb_to_ycbcr_f32 on L1 prediction (stays on GPU)
     let l1_pred_u8 = gpu.f32_to_u8(&l1_pred_f32, (l1_pred_w * l1_pred_h * 3) as i32)?;
@@ -376,6 +389,16 @@ pub fn encode_single_image(
     let l0_pred_w = l1_pred_w * 2;
     let l0_pred_h = l1_pred_h * 2;
 
+    // Debug: L0 mosaic prediction
+    if config.debug_images {
+        let decompress_dir = output_dir.join("decompress");
+        gpu.sync()?;
+        let l0_pred_host = gpu.stream.clone_dtoh(
+            &gpu.f32_to_u8(&l0_pred_f32, (l0_pred_w * l0_pred_h * 3) as i32)?
+        ).map_err(|e| anyhow::anyhow!("dtoh: {}", e))?;
+        save_rgb_png(&decompress_dir.join("065_L0_mosaic_prediction.png"), &l0_pred_host, l0_pred_w, l0_pred_h)?;
+    }
+
     // GPU: rgb_to_ycbcr_f32 on L0 prediction
     let l0_pred_u8 = gpu.f32_to_u8(&l0_pred_f32, (l0_pred_w * l0_pred_h * 3) as i32)?;
     let l0_pred_pixels = (l0_pred_w * l0_pred_h) as i32;
@@ -385,12 +408,12 @@ pub fn encode_single_image(
     // Download L0 prediction Y for tile extraction
     gpu.sync()?;
     let l0_pred_y_host = download_f32(&gpu, &l0_pred_y_dev)?;
-    let l0_pred_cb_host = if config.manifest || config.debug_images {
+    let l0_pred_cb_host = if config.debug_images {
         download_f32(&gpu, &_l0_pred_cb_dev)?
     } else {
         Vec::new()
     };
-    let l0_pred_cr_host = if config.manifest || config.debug_images {
+    let l0_pred_cr_host = if config.debug_images {
         download_f32(&gpu, &_l0_pred_cr_dev)?
     } else {
         Vec::new()
@@ -451,6 +474,7 @@ pub fn encode_single_image(
 
             if config.debug_images {
                 let compress_dir = output_dir.join("compress");
+                let decompress_dir = output_dir.join("decompress");
                 let idx = (ty * tiles_x + tx) as u32;
                 let step = 20 + idx;
                 let l0_tile_rgb = extract_rgb_tile(
@@ -464,6 +488,24 @@ pub fn encode_single_image(
                 let centered_host = download_u8(&gpu, &res_dev)?;
                 save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_centered.png", step, tx, ty)),
                     &centered_host, tile_size, tile_size)?;
+
+                // L0 reconstructed: decode residual, reconstruct Y, convert to RGB
+                let (decoded_res_dev, _, _) = jpeg.decode_gray_to_device(&gpu, &res_jpeg)?;
+                let recon_y_dev = gpu.reconstruct_y(&pred_y_dev, &decoded_res_dev, tile_n as i32)?;
+                gpu.sync()?;
+                let recon_y_tile = download_f32(&gpu, &recon_y_dev)?;
+                let pred_cb_tile = extract_f32_tile(
+                    &l0_pred_cb_host, l0_pred_w, l0_pred_h,
+                    tx * tile_size, ty * tile_size, tile_size, tile_size,
+                );
+                let pred_cr_tile = extract_f32_tile(
+                    &l0_pred_cr_host, l0_pred_w, l0_pred_h,
+                    tx * tile_size, ty * tile_size, tile_size, tile_size,
+                );
+                let recon_rgb = rgb_from_ycbcr_f32(&recon_y_tile, &pred_cb_tile, &pred_cr_tile);
+                let recon_step = 70 + idx;
+                save_rgb_png(&decompress_dir.join(format!("{:03}_L0_{}_{}_reconstructed.png", recon_step, tx, ty)),
+                    &recon_rgb, tile_size, tile_size)?;
             }
         }
     }

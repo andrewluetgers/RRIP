@@ -163,10 +163,16 @@ wsi-residual-tool --input /path/to/slide.svs --output /path/to/output --quality 
 
 All evaluation infrastructure lives under `evals/`. See `evals/README.md` for full details.
 
+#### Generating Runs
+
 ```bash
-# Generate an ORIGAMI run
+# Generate an ORIGAMI run (Python — includes full metrics: PSNR, SSIM, VIF, Delta E, LPIPS)
 python evals/scripts/wsi_residual_debug_with_manifest.py \
     --image evals/test-images/L0-1024.jpg --resq 50 --pac
+
+# Generate an ORIGAMI run (Rust encoder — Y-PSNR/Y-MSE only, needs compute_metrics.py for full metrics)
+origami encode --image evals/test-images/L0-1024.jpg --out evals/runs/rs_444_optl2_d20_l1q60_l0q40 \
+    --baseq 95 --l1q 60 --l0q 40 --subsamp 444 --optl2 --max-delta 20 --manifest --debug-images
 
 # Generate a JPEG baseline
 uv run python evals/scripts/jpeg_baseline.py \
@@ -175,10 +181,60 @@ uv run python evals/scripts/jpeg_baseline.py \
 # Batch runs
 bash evals/scripts/run_all_captures.sh
 bash evals/scripts/run_jpegli_captures.sh
+```
 
-# Start the comparison viewer
+#### Computing Visual Metrics
+
+The Rust encoder (`origami encode`) and GPU encoder only produce Y-PSNR and Y-MSE in their manifest.json. Full visual metrics (SSIM, VIF, Delta E, LPIPS) require `--debug-images` and a post-processing step:
+
+```bash
+# Compute full metrics for specific runs (requires compress/ and decompress/ dirs from --debug-images)
+uv run python evals/scripts/compute_metrics.py evals/runs/rs_444_optl2_d20_l1q60_l0q40
+
+# Compute for all rs_* runs
+uv run python evals/scripts/compute_metrics.py
+
+# Compute for GPU runs
+uv run python evals/scripts/compute_metrics.py evals/runs/gpu_444_b90_optl2_d20_l1q60_l0q40
+```
+
+This updates manifest.json in-place, adding `decompression_phase` (per-tile PSNR, SSIM, VIF, Delta E, LPIPS) and `size_comparison` fields. Dependencies: scikit-image, sewar (VIF), lpips + torch (LPIPS).
+
+#### Starting the Viewer
+
+```bash
 cd evals/viewer && pnpm install && pnpm start  # http://localhost:8084
 ```
+
+The viewer auto-discovers runs from `evals/runs/` by directory name patterns.
+
+#### Directory Naming Conventions
+
+The viewer server (`viewer-server.js`) auto-discovers runs based on directory names. Each pattern maps to a display name:
+
+| Pattern | Example | Display Name |
+|---------|---------|-------------|
+| `jpeg_baseline_q{N}` | `jpeg_baseline_q70` | JPEG turbo 70 |
+| `jp2_baseline_q{N}` | `jp2_baseline_q50` | JP2 50 |
+| `jpegxl_jpeg_baseline_q{N}` | `jpegxl_jpeg_baseline_q60` | JPEG jpegxl 60 |
+| `rs_{subsamp}[_optl2]_j{N}` | `rs_444_optl2_j50` | RS ORIGAMI turbo 50 444 optL2 |
+| `rs_{subsamp}[_optl2]_l1q{N}_l0q{N}` | `rs_444_optl2_l1q60_l0q40` | RS ORIGAMI turbo L1=60 L0=40 444 optL2 |
+| `rs_{subsamp}_optl2_d{N}_l1q{N}_l0q{N}` | `rs_444_optl2_d20_l1q60_l0q40` | RS ORIGAMI turbo L1=60 L0=40 444 optL2 ±20 |
+| `rs_{subsamp}_b{N}_optl2_d{N}_l1q{N}_l0q{N}` | `rs_444_b90_optl2_d20_l1q60_l0q40` | RS ORIGAMI turbo B90 L1=60 L0=40 444 optL2 ±20 |
+| `gpu_{subsamp}_b{N}[_optl2[_d{N}]]_l1q{N}_l0q{N}` | `gpu_444_b90_optl2_d20_l1q60_l0q40` | GPU nvjpeg B90 L1=60 L0=40 444 optL2 ±20 |
+| `optl2_debug_j{N}_pac` | `optl2_debug_j50_pac` | OPTL2 turbo 50 |
+| `optl2_debug_l1q{N}_l0q{N}_pac` | `optl2_debug_l1q60_l0q40_pac` | OPTL2 turbo L1=60 L0=40 |
+
+Subsamp values: `444`, `420`, `420opt`. Directories must contain `compress/`, `decompress/`, `images/`, or `manifest.json` to be recognized.
+
+#### Adding a New Run Type to the Viewer
+
+To add a new naming pattern to the viewer:
+
+1. Edit `evals/viewer/viewer-server.js` in the `discoverCaptures()` function
+2. Add a new regex match block **before** the fallback block (line ~398)
+3. Pattern should parse directory name components and create a captures entry with: `type`, `encoder`, `q`, `j`, `name`, and optional `baseq`, `l1q`, `l0q`, `subsamp`, `optl2`, `delta`
+4. Restart the viewer server
 
 ### Performance Testing
 
