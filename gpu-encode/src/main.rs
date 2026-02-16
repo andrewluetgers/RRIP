@@ -104,6 +104,10 @@ enum Command {
         /// Unsharp mask strength for L2 tiles (e.g. 0.5–2.0). Approximates OptL2 at ~500x less cost.
         #[arg(long)]
         sharpen: Option<f32>,
+
+        /// Save the sharpened L2 to disk (default: save un-sharpened, sharpen at decode time)
+        #[arg(long)]
+        save_sharpened: bool,
     },
 
     /// Run GPU kernel smoke tests
@@ -130,7 +134,7 @@ fn main() -> Result<()> {
         Command::Encode {
             slide, image, out, tile, resq, l1q, l0q, baseq, subsamp, encoder: _,
             max_parents, pack, manifest, optl2, debug_images, l2resq, max_delta,
-            batch_size, profile, sharpen,
+            batch_size, profile, sharpen, save_sharpened,
         } => {
             let l1q_resolved = l1q.unwrap_or(resq);
             let l0q_resolved = l0q.unwrap_or(resq);
@@ -152,6 +156,7 @@ fn main() -> Result<()> {
                 device: cli.device,
                 profile,
                 sharpen,
+                save_sharpened,
             };
 
             if let Some(image_path) = image {

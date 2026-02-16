@@ -38,6 +38,7 @@ pub struct EncodeConfig {
     pub device: usize,
     pub profile: bool,
     pub sharpen: Option<f32>,
+    pub save_sharpened: bool,
 }
 
 /// Summary of a single-image encode run.
@@ -447,11 +448,17 @@ pub fn encode_single_image(
         info!("OptL2 complete");
     }
 
+    // Sharpen L2 before saving if --save-sharpened
+    if config.save_sharpened {
+        if let Some(strength) = config.sharpen {
+            l2_u8_dev = gpu.sharpen_l2(&l2_u8_dev, l2_w, l2_h, strength)?;
+        }
+    }
+
     // Create output directory
     fs::create_dir_all(output_dir)?;
 
     // 4. Encode L2 baseline JPEG via nvJPEG (GPU encode → host bytes)
-    // Save the UN-sharpened L2 — sharpening is applied at decode time
     let l2_jpeg = jpeg.encode_rgb(&gpu, &l2_u8_dev, l2_w, l2_h, baseq, &config.subsamp)?;
     let l2_bytes = l2_jpeg.len();
     fs::write(output_dir.join("L2_0_0.jpg"), &l2_jpeg)?;
@@ -503,9 +510,13 @@ pub fn encode_single_image(
         save_rgb_png(&decompress_dir.join("050_L2_reconstructed.png"), &l2_for_pred_host, l2_w, l2_h)?;
     }
 
-    // Sharpen L2 for prediction (applied at decode time, not saved)
-    let l2_for_pred_dev = if let Some(strength) = config.sharpen {
-        gpu.sharpen_l2(&l2_for_pred_dev, l2_w, l2_h, strength)?
+    // Sharpen decoded L2 for prediction (only when not already sharpened before save)
+    let l2_for_pred_dev = if !config.save_sharpened {
+        if let Some(strength) = config.sharpen {
+            gpu.sharpen_l2(&l2_for_pred_dev, l2_w, l2_h, strength)?
+        } else {
+            l2_for_pred_dev
+        }
     } else {
         l2_for_pred_dev
     };
@@ -1083,8 +1094,14 @@ pub fn encode_wsi(
                 if let Some(m) = &mut monitor { m.sample("optl2"); }
             }
 
+            // --- sharpen before save (if --save-sharpened) ---
+            if config.save_sharpened {
+                if let Some(strength) = config.sharpen {
+                    l2_u8 = gpu.sharpen_l2(&l2_u8, l2_w, l2_h, strength)?;
+                }
+            }
+
             // --- l2_encode ---
-            // Save the UN-sharpened L2 — sharpening is applied at decode time
             if profile { gpu.sync()?; }
             let t0 = Instant::now();
             let l2_jpeg = jpeg.encode_rgb(&gpu, &l2_u8, l2_w, l2_h, config.baseq, &config.subsamp)?;
@@ -1104,9 +1121,13 @@ pub fn encode_wsi(
             timers.l2_decode += t0.elapsed();
             if let Some(m) = &mut monitor { m.sample("l2_decode"); }
 
-            // --- sharpen (applied to decoded L2 for prediction, not saved) ---
-            let l2_for_pred = if let Some(strength) = config.sharpen {
-                gpu.sharpen_l2(&l2_decoded, l2_w, l2_h, strength)?
+            // --- sharpen decoded L2 for prediction (only when not already sharpened before save) ---
+            let l2_for_pred = if !config.save_sharpened {
+                if let Some(strength) = config.sharpen {
+                    gpu.sharpen_l2(&l2_decoded, l2_w, l2_h, strength)?
+                } else {
+                    l2_decoded
+                }
             } else {
                 l2_decoded
             };
