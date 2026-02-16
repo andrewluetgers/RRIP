@@ -95,6 +95,7 @@ def retile(input_path: str, output_path: str, new_tile_size: int, quality: int):
 
     # Open output file and start streaming
     tiles_done = 0
+    tiles_empty = 0
     total_jpeg_bytes = 0
 
     with open(str(output_path), "wb") as out:
@@ -162,6 +163,15 @@ def retile(input_path: str, output_path: str, new_tile_size: int, quality: int):
 
                 tile = strip[:th, x_start:x_end]
 
+                # Skip blank tiles — write empty fragment so GPU encoder
+                # detects them as empty via tile_jpeg_bytes.is_empty()
+                if not tile.any():
+                    out.write(struct.pack("<HH", 0xFFFE, 0xE000))
+                    out.write(struct.pack("<I", 0))
+                    tiles_empty += 1
+                    tiles_done += 1
+                    continue
+
                 if tw < new_tile_size or th < new_tile_size:
                     padded = np.zeros((new_tile_size, new_tile_size, 3), dtype=np.uint8)
                     padded[:th, :tw] = tile
@@ -197,9 +207,12 @@ def retile(input_path: str, output_path: str, new_tile_size: int, quality: int):
     out_size_mb = output_path.stat().st_size / 1_048_576
     elapsed = time.time() - t0
 
+    tiles_with_data = tiles_done - tiles_empty
     print(f"\nDone in {elapsed:.1f}s", flush=True)
     print(f"  {total_w}x{total_h} @ {orig_tile_w}x{orig_tile_h} -> "
           f"{new_tile_size}x{new_tile_size} ({tiles_done} tiles, Q{quality})", flush=True)
+    print(f"  Tiles with data: {tiles_with_data}, empty: {tiles_empty} "
+          f"({tiles_empty * 100 / tiles_done:.1f}%)", flush=True)
     print(f"  JPEG data: {frag_mb:.1f} MB -> {total_jpeg_bytes / 1_048_576:.1f} MB", flush=True)
     print(f"  Output file: {out_size_mb:.1f} MB", flush=True)
 
