@@ -1090,7 +1090,10 @@
                 classKey = key.substring(3);
             }
 
-            if (classKey.startsWith('JPEG ') || classKey.startsWith('JP2 ') || key.startsWith('JP2 ')) {
+            if (key.startsWith('GPU ')) {
+                type = 'GPU ORIGAMI Split';
+                codec = 'nvjpeg';
+            } else if (classKey.startsWith('JPEG ') || classKey.startsWith('JP2 ') || key.startsWith('JP2 ')) {
                 type = 'Baseline';
             } else if (classKey.startsWith('OPTL2 ')) {
                 if (classKey.includes('L1=')) {
@@ -1111,7 +1114,7 @@
             }
 
             // Extract codec from key
-            const codecMatch = key.match(/(?:JPEG|ORIGAMI|OPTL2|SINGLE|YCbCr)\s+(turbo|mozjpeg|jpegli|jpegxl|webp|jpeg2000)/i);
+            const codecMatch = key.match(/(?:JPEG|ORIGAMI|OPTL2|SINGLE|YCbCr|GPU)\s+(turbo|mozjpeg|jpegli|jpegxl|webp|jpeg2000|nvjpeg)/i);
             if (codecMatch) {
                 codec = codecMatch[1].toLowerCase();
             } else if (key.startsWith('JP2 ')) {
@@ -1429,7 +1432,7 @@
 
             try {
                 if (!manifestMetaCache[captureKey]) {
-                    const response = await fetch(`/manifest?capture=${captureKey}`);
+                    const response = await fetch(`/manifest?capture=${encodeURIComponent(captureKey)}`);
                     if (response.ok) {
                         manifestMetaCache[captureKey] = await response.json();
                     }
@@ -1453,7 +1456,7 @@
 
             try {
                 const capture = captures[captureKey];
-                const manifestPath = `/manifest?capture=${captureKey}`;
+                const manifestPath = `/manifest?capture=${encodeURIComponent(captureKey)}`;
                 const response = await fetch(manifestPath);
 
                 if (response.ok) {
@@ -1820,7 +1823,7 @@
                 }
 
                 if (imageKey) {
-                    imagePath = `/image/${imageKey}.png?capture=${captureKey}`;
+                    imagePath = `/image/${imageKey}.png?capture=${encodeURIComponent(captureKey)}`;
                 }
 
                 if (imagePath) {
@@ -1839,7 +1842,7 @@
 
             // Special case: Show original RGB in the Original column for reconstructed stage
             if (isOriginal && stage.id === 'reconstructed_rgb') {
-                imagePath = `/image/${tile.id}_original.png?capture=${captureKey}`;
+                imagePath = `/image/${tile.id}_original.png?capture=${encodeURIComponent(captureKey)}`;
             }
             // Special handling for L2 parent types
             else if (stage.type === 'l2_jpeg') {
@@ -1852,11 +1855,11 @@
             else if (stage.type === 'l2_parent') {
                 const parentX = tile.level === 'L2' ? tile.x : Math.floor(tile.x / (tile.level === 'L0' ? 4 : 2));
                 const parentY = tile.level === 'L2' ? tile.y : Math.floor(tile.y / (tile.level === 'L0' ? 4 : 2));
-                imagePath = `/image/L2_${parentX}_${parentY}_${stage.file}.png?capture=${captureKey}`;
+                imagePath = `/image/L2_${parentX}_${parentY}_${stage.file}.png?capture=${encodeURIComponent(captureKey)}`;
             } else if (stage.type === 'image') {
-                imagePath = `/image/${tile.id}_${stage.file}.png?capture=${captureKey}`;
+                imagePath = `/image/${tile.id}_${stage.file}.png?capture=${encodeURIComponent(captureKey)}`;
             } else if (stage.type === 'array') {
-                imagePath = `/array/${tile.id}_${stage.file}.npy?capture=${captureKey}`;
+                imagePath = `/array/${tile.id}_${stage.file}.npy?capture=${encodeURIComponent(captureKey)}`;
             }
 
             if (imagePath) {

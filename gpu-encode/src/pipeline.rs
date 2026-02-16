@@ -369,6 +369,23 @@ pub fn encode_single_image(
                     &l1_tile_rgb, tile_size, tile_size)?;
                 save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_luma.png", step + 1, tx, ty)),
                     &l1_gt_y, tile_size, tile_size)?;
+                // Chroma channels (from prediction, quantized for debug visualization)
+                let pred_cb_u8: Vec<u8> = pred_cb_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
+                let pred_cr_u8: Vec<u8> = pred_cr_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
+                save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cb.png", step + 2, tx, ty)),
+                    &pred_cb_u8, tile_size, tile_size)?;
+                save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cr.png", step + 3, tx, ty)),
+                    &pred_cr_u8, tile_size, tile_size)?;
+                // Prediction RGB (constructed from predicted YCbCr)
+                let pred_rgb_tile = rgb_from_ycbcr_f32(&pred_y_tile, &pred_cb_tile, &pred_cr_tile);
+                save_rgb_png(&compress_dir.join(format!("{:03}_L1_{}_{}_prediction.png", step + 4, tx, ty)),
+                    &pred_rgb_tile, tile_size, tile_size)?;
+                // Raw residual (normalized to [0,255] for visualization)
+                let residual_raw: Vec<f32> = l1_gt_y.iter().zip(pred_y_tile.iter())
+                    .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
+                let raw_normalized = normalize_f32_to_u8(&residual_raw);
+                save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_residual_raw.png", step + 5, tx, ty)),
+                    &raw_normalized, tile_size, tile_size)?;
                 gpu.sync()?;
                 let centered_host = download_u8(&gpu, &res_dev)?;
                 save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_residual_centered.png", step + 7, tx, ty)),
@@ -484,6 +501,31 @@ pub fn encode_single_image(
                     &l0_tile_rgb, tile_size, tile_size)?;
                 save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_luma.png", step, tx, ty)),
                     &l0_gt_y, tile_size, tile_size)?;
+                // Chroma channels (from prediction, quantized for debug visualization)
+                let pred_cb_tile = extract_f32_tile(
+                    &l0_pred_cb_host, l0_pred_w, l0_pred_h,
+                    tx * tile_size, ty * tile_size, tile_size, tile_size,
+                );
+                let pred_cr_tile = extract_f32_tile(
+                    &l0_pred_cr_host, l0_pred_w, l0_pred_h,
+                    tx * tile_size, ty * tile_size, tile_size, tile_size,
+                );
+                let pred_cb_u8: Vec<u8> = pred_cb_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
+                let pred_cr_u8: Vec<u8> = pred_cr_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
+                save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cb.png", step, tx, ty)),
+                    &pred_cb_u8, tile_size, tile_size)?;
+                save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cr.png", step, tx, ty)),
+                    &pred_cr_u8, tile_size, tile_size)?;
+                // Prediction RGB (constructed from predicted YCbCr)
+                let pred_rgb_tile = rgb_from_ycbcr_f32(&pred_y_tile, &pred_cb_tile, &pred_cr_tile);
+                save_rgb_png(&compress_dir.join(format!("{:03}_L0_{}_{}_prediction.png", step, tx, ty)),
+                    &pred_rgb_tile, tile_size, tile_size)?;
+                // Raw residual (normalized to [0,255] for visualization)
+                let residual_raw: Vec<f32> = l0_gt_y.iter().zip(pred_y_tile.iter())
+                    .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
+                let raw_normalized = normalize_f32_to_u8(&residual_raw);
+                save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_raw.png", step, tx, ty)),
+                    &raw_normalized, tile_size, tile_size)?;
                 gpu.sync()?;
                 let centered_host = download_u8(&gpu, &res_dev)?;
                 save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_centered.png", step, tx, ty)),
@@ -494,14 +536,6 @@ pub fn encode_single_image(
                 let recon_y_dev = gpu.reconstruct_y(&pred_y_dev, &decoded_res_dev, tile_n as i32)?;
                 gpu.sync()?;
                 let recon_y_tile = download_f32(&gpu, &recon_y_dev)?;
-                let pred_cb_tile = extract_f32_tile(
-                    &l0_pred_cb_host, l0_pred_w, l0_pred_h,
-                    tx * tile_size, ty * tile_size, tile_size, tile_size,
-                );
-                let pred_cr_tile = extract_f32_tile(
-                    &l0_pred_cr_host, l0_pred_w, l0_pred_h,
-                    tx * tile_size, ty * tile_size, tile_size, tile_size,
-                );
                 let recon_rgb = rgb_from_ycbcr_f32(&recon_y_tile, &pred_cb_tile, &pred_cr_tile);
                 let recon_step = 70 + idx;
                 save_rgb_png(&decompress_dir.join(format!("{:03}_L0_{}_{}_reconstructed.png", recon_step, tx, ty)),
@@ -953,6 +987,18 @@ fn extract_rgb_tile(
         }
     }
     tile
+}
+
+/// Normalize f32 values to [0, 255] u8 range (min→0, max→255) for debug visualization.
+fn normalize_f32_to_u8(data: &[f32]) -> Vec<u8> {
+    if data.is_empty() { return Vec::new(); }
+    let min = data.iter().cloned().fold(f32::INFINITY, f32::min);
+    let max = data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let range = max - min;
+    if range < 1e-6 {
+        return vec![128u8; data.len()];
+    }
+    data.iter().map(|&v| ((v - min) / range * 255.0).round().clamp(0.0, 255.0) as u8).collect()
 }
 
 /// Convert f32 Y, Cb, Cr to interleaved RGB u8 (BT.601 inverse, for debug images).
