@@ -109,6 +109,23 @@ cd server
 cargo build --release --features jpegli
 ```
 
+### Quality Parameters
+
+When the user specifies quality values like "80, 60, 40 with 444 and delta 20", those map to the ORIGAMI quality parameters in order:
+
+| Position | Parameter | Controls | Default |
+|----------|-----------|----------|---------|
+| 1st | `--baseq` | L2 baseline JPEG quality | 95 |
+| 2nd | `--l1q` | L1 residual JPEG quality | 60 |
+| 3rd | `--l0q` | L0 residual JPEG quality | 40 |
+
+Additional encoding parameters:
+- `--subsamp` — Chroma subsampling for L2 JPEG: `444`, `420`, `420opt` (default: 444)
+- `--optl2` — Enable gradient descent optimization on L2 tiles
+- `--max-delta` — Max per-pixel deviation for optL2 (default: 15)
+
+So "80, 60, 40 with 444 and delta 20" means: `--baseq 80 --l1q 60 --l0q 40 --subsamp 444 --optl2 --max-delta 20`
+
 ### Running
 
 ```bash
@@ -352,16 +369,21 @@ ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT>
 
 ### Syncing Code
 
-**Important**: Always exclude `target/`, `target2/`, `node_modules/`, and `data/` — they are massive.
+**IMPORTANT: Do NOT use rsync.** It copies too many files and is slow/fragile. Instead:
+
+1. **Commit and push** changes locally, then **`git pull`** on the pod
+2. For individual files not in git, use **`scp`** for targeted transfers
 
 ```bash
-rsync -avz --progress \
-  --exclude 'target' --exclude 'target2' --exclude 'node_modules' \
-  --exclude '.git' --exclude 'evals/runs' --exclude 'evals/test-images' \
-  --exclude 'data' --exclude '.venv' --exclude '__pycache__' \
-  -e "ssh -i ~/.ssh/id_runpod -p <PORT>" \
-  /Users/andrewluetgers/projects/dev/RRIP/ \
-  root@<IP>:/workspace/RRIP/
+# Preferred: push locally, pull on pod
+git push
+ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT> "cd /workspace/RRIP && git pull"
+
+# For one-off files (e.g. test images, data files):
+scp -i ~/.ssh/id_runpod -P <PORT> local/file.jpg root@<IP>:/workspace/RRIP/path/
+
+# Downloading results from pod:
+scp -i ~/.ssh/id_runpod -P <PORT> root@<IP>:/workspace/RRIP/evals/runs/some_run/timing_report.json ./
 ```
 
 ### Building on Pod
@@ -389,7 +411,7 @@ cargo build --release
 ## Safety Rules
 
 - **Never use `rm -rf` without discussing it with the user first.** Always explain what will be deleted and get explicit confirmation before running any recursive delete.
-- Prefer `git clone` over `rsync` for syncing code to remote machines — rsync copies every file including massive build artifacts.
+- **Never use `rsync` to sync code to/from RunPod.** Use `git push` + `git pull` for code, and `scp` for targeted file transfers. rsync copies too many files and is slow/fragile.
 
 ## Debugging Tips
 
