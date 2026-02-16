@@ -265,6 +265,30 @@ impl GpuContext {
         Ok(dst)
     }
 
+    /// Expand grayscale u8 to interleaved RGB u8 (R=G=B=gray) on GPU.
+    pub fn gray_to_rgbi(
+        &self,
+        gray: &CudaSlice<u8>,
+        total_pixels: i32,
+    ) -> Result<CudaSlice<u8>> {
+        let mut rgb = unsafe { self.stream.alloc::<u8>((total_pixels * 3) as usize) }
+            .map_err(|e| anyhow!("alloc rgb failed: {}", e))?;
+
+        let f = self.mod_residual
+            .load_function("gray_to_rgbi_kernel")
+            .map_err(|e| anyhow!("load function failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(total_pixels as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(gray);
+        launch.arg(&mut rgb);
+        launch.arg(&total_pixels);
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("gray_to_rgbi kernel launch failed: {}", e))?;
+
+        Ok(rgb)
+    }
+
     /// Composite 16 tiles into a 4x4 family canvas.
     ///
     /// tiles: [N * tiles_per_row^2 * tile_h * tile_w * 3] u8 on device

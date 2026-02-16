@@ -445,7 +445,8 @@ impl NvJpegHandle {
 
     /// Encode grayscale u8 device buffer to JPEG, returning compressed bytes on host.
     ///
-    /// Uses nvjpegEncodeYUV with NVJPEG_CSS_GRAY — only channel[0] (Y) is used.
+    /// Expands gray to RGB on GPU (via gray_to_rgbi kernel), then encodes
+    /// with nvjpegEncodeImage + NVJPEG_CSS_GRAY to produce a grayscale JPEG.
     pub fn encode_gray(
         &self,
         gpu: &GpuContext,
@@ -454,10 +455,19 @@ impl NvJpegHandle {
         height: u32,
         quality: u8,
     ) -> Result<Vec<u8>> {
+        // Expand gray → interleaved RGB on GPU (R=G=B=gray)
+        let pixels = (width * height) as i32;
+        let rgb_dev = gpu.gray_to_rgbi(gray_dev, pixels)?;
+
+        // Encode as JPEG with GRAY subsampling (nvJPEG extracts Y from RGB)
         unsafe {
             check_nvjpeg(
                 nvjpegEncoderParamsSetQuality(self.encoder_params, quality as i32, self.stream_ptr),
                 "set quality",
+            )?;
+            check_nvjpeg(
+                nvjpegEncoderParamsSetSamplingFactors(self.encoder_params, NVJPEG_CSS_GRAY, self.stream_ptr),
+                "set gray subsampling",
             )?;
             check_nvjpeg(
                 nvjpegEncoderParamsSetOptimizedHuffman(self.encoder_params, 1, self.stream_ptr),
@@ -465,26 +475,24 @@ impl NvJpegHandle {
             )?;
         }
 
-        // For grayscale, use nvjpegEncodeYUV with NVJPEG_CSS_GRAY.
-        // Only channel[0] (Y plane) is read.
-        let (dev_ptr, _read_guard) = gray_dev.device_ptr(&gpu.stream);
+        let (dev_ptr, _read_guard) = rgb_dev.device_ptr(&gpu.stream);
         let mut nv_image = NvjpegImage::default();
         nv_image.channel[0] = dev_ptr as *mut u8;
-        nv_image.pitch[0] = width as usize;
+        nv_image.pitch[0] = (width * 3) as usize;
 
         unsafe {
             check_nvjpeg(
-                nvjpegEncodeYUV(
+                nvjpegEncodeImage(
                     self.handle,
                     self.encoder_state,
                     self.encoder_params,
                     &nv_image,
-                    NVJPEG_CSS_GRAY,
+                    NVJPEG_INPUT_RGBI,
                     width as i32,
                     height as i32,
                     self.stream_ptr,
                 ),
-                "nvjpegEncodeYUV gray",
+                "nvjpegEncodeImage gray",
             )?;
         }
         drop(_read_guard);

@@ -102,6 +102,40 @@ extern "C" __global__ void f32_to_u8_kernel(
 }
 
 /**
+ * Expand grayscale u8 to interleaved RGB u8 (R=G=B=gray).
+ * Used to feed single-channel data to nvjpegEncodeImage with NVJPEG_CSS_GRAY.
+ */
+extern "C" __global__ void gray_to_rgbi_kernel(
+    const unsigned char* __restrict__ gray,  // [total_pixels]
+    unsigned char* __restrict__ rgb,          // [total_pixels * 3]
+    int total_pixels
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total_pixels) return;
+    unsigned char v = gray[idx];
+    rgb[idx * 3]     = v;
+    rgb[idx * 3 + 1] = v;
+    rgb[idx * 3 + 2] = v;
+}
+
+/**
+ * Expand grayscale u8 to interleaved RGB u8 (R=G=B=gray).
+ * Used to feed single-channel data to nvjpegEncodeImage with NVJPEG_CSS_GRAY.
+ */
+extern "C" __global__ void gray_to_rgbi_kernel(
+    const unsigned char* __restrict__ gray,  // [total_pixels]
+    unsigned char* __restrict__ rgb,          // [total_pixels * 3]
+    int total_pixels
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total_pixels) return;
+    unsigned char v = gray[idx];
+    rgb[idx * 3]     = v;
+    rgb[idx * 3 + 1] = v;
+    rgb[idx * 3 + 2] = v;
+}
+
+/**
  * YCbCr float32 → RGB u8 (BT.601 inverse)
  *
  * R = Y + 1.402 * (Cr - 128)
