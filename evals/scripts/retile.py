@@ -188,8 +188,8 @@ def retile(input_path: str, output_path: str, new_tile_size: int, quality: int):
                       f"{total_jpeg_bytes / 1_048_576:.0f} MB JPEG, "
                       f"{rate:.0f} tiles/s", flush=True)
 
-        # Write sequence delimiter
-        out.write(struct.pack("<HH", 0xFFFE, 0xE00D))
+        # Write sequence delimiter (FFFE,E0DD)
+        out.write(struct.pack("<HH", 0xFFFE, 0xE0DD))
         out.write(struct.pack("<I", 0))
 
     out_size_mb = output_path.stat().st_size / 1_048_576
