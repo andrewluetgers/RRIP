@@ -441,11 +441,11 @@ impl GpuContext {
         let cfg = LaunchConfig::for_num_elems(total);
 
         // Allocate temp buffer for horizontal blur pass
-        let temp: CudaSlice<u8> = self.stream.alloc(total as usize)
+        let temp: CudaSlice<u8> = unsafe { self.stream.alloc(total as usize) }
             .map_err(|e| anyhow!("sharpen temp alloc failed: {}", e))?;
 
         // Allocate output buffer
-        let dst: CudaSlice<u8> = self.stream.alloc(total as usize)
+        let dst: CudaSlice<u8> = unsafe { self.stream.alloc(total as usize) }
             .map_err(|e| anyhow!("sharpen dst alloc failed: {}", e))?;
 
         let w = width as i32;
