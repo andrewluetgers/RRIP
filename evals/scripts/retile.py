@@ -101,8 +101,10 @@ def retile(input_path: str, output_path: str, new_tile_size: int, quality: int):
         # Write DICOM header
         out.write(header_bytes)
 
-        # Write PixelData tag (7FE0,0010) with undefined length
+        # Write PixelData tag (7FE0,0010) with explicit VR and undefined length
         out.write(struct.pack("<HH", 0x7FE0, 0x0010))  # tag
+        out.write(b"OB")                                 # VR = Other Byte
+        out.write(struct.pack("<H", 0))                  # reserved 2 bytes
         out.write(struct.pack("<I", 0xFFFFFFFF))         # undefined length
 
         # Write empty offset table item
