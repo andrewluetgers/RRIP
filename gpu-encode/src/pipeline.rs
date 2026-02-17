@@ -1501,15 +1501,10 @@ fn generate_dzi_pyramid_gpu(
     let decoded_tiles_dev = jpeg.batch_decode_to_device(gpu, &tile_jpeg_bytes, tile_size, tile_size)?;
 
     // --- Step 2: Composite tiles into full L2 image on GPU ---
-    let canvas_size = (l2_width * l2_height * 3) as usize;
-    let mut l2_dev = unsafe { gpu.stream.alloc::<u8>(canvas_size) }
-        .map_err(|e| anyhow::anyhow!("alloc L2 canvas failed: {}", e))?;
-
-    let tiles_per_row = grid_cols.max(grid_rows) as i32;  // Assume square grid for simplicity
-    gpu.composite_tiles(
+    let tiles_per_row = grid_cols.max(grid_rows) as i32;
+    let l2_dev = gpu.composite_tiles(
         &decoded_tiles_dev,
-        &mut l2_dev,
-        1, // N=1 (single family-sized canvas, but treating full L2 as one unit)
+        1, // N=1 batch
         tile_size as i32,
         tile_size as i32,
         l2_width as i32,
@@ -1532,10 +1527,12 @@ fn generate_dzi_pyramid_gpu(
         let current_f32 = gpu.u8_to_f32(&current_dev, (current_w * current_h * 3) as i32)?;
         let downsampled_f32 = gpu.downsample_lanczos3(
             &current_f32,
-            current_w as i32,
+            1, // n=1 batch
             current_h as i32,
-            new_w as i32,
+            current_w as i32,
             new_h as i32,
+            new_w as i32,
+            3, // c=3 (RGB)
         )?;
         let downsampled_u8 = gpu.f32_to_u8(&downsampled_f32, (new_w * new_h * 3) as i32)?;
 
