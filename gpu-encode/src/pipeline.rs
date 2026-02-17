@@ -1540,8 +1540,8 @@ fn generate_dzi_pyramid_gpu(
         let downsampled_u8 = gpu.f32_to_u8(&downsampled_f32, (new_w * new_h * 3) as i32)?;
 
         // Tile the downsampled image
-        let cols = ((new_w + tile_size - 1) / tile_size) as usize;
-        let rows = ((new_h + tile_size - 1) / tile_size) as usize;
+        let cols = (((new_w as usize) + (tile_size as usize) - 1) / (tile_size as usize));
+        let rows = (((new_h as usize) + (tile_size as usize) - 1) / (tile_size as usize));
 
         let level_dir = files_dir.join(format!("{}", level));
         fs::create_dir_all(&level_dir)?;
@@ -1555,10 +1555,10 @@ fn generate_dzi_pyramid_gpu(
         // Extract and encode each tile
         for row in 0..rows {
             for col in 0..cols {
-                let x = (col * tile_size as usize) as u32;
-                let y = (row * tile_size as usize) as u32;
-                let w = tile_size.min(new_w - x);
-                let h = tile_size.min(new_h - y);
+                let x = (col * (tile_size as usize)) as u32;
+                let y = (row * (tile_size as usize)) as u32;
+                let w = tile_size.min(new_w.saturating_sub(x));
+                let h = tile_size.min(new_h.saturating_sub(y));
 
                 // Extract tile region (with black padding if needed)
                 let mut tile_rgb = vec![0u8; (tile_size * tile_size * 3) as usize];
