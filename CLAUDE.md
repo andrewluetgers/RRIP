@@ -374,6 +374,20 @@ ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT>
 1. **Commit and push** changes locally, then **`git pull`** on the pod
 2. For individual files not in git, use **`scp`** for targeted transfers
 
+**CRITICAL: Disk Quota Management**
+
+Git operations on RunPod can fail with "Disk quota exceeded" if the repository contains large generated files. Before pulling code:
+
+```bash
+# Clean up old run data to free space (run data is regenerable)
+ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT> "cd /workspace/RRIP/evals/runs && rm -rf *"
+
+# If git pull still fails, reset the repo to clean state
+ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT> "cd /workspace/RRIP && git reset --hard HEAD && git clean -fd && git pull"
+```
+
+Code sync workflow:
+
 ```bash
 # Preferred: push locally, pull on pod
 git push
