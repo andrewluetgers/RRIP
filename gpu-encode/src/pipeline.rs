@@ -1368,18 +1368,11 @@ pub fn encode_wsi(
     });
     fs::write(output_dir.join("summary.json"), serde_json::to_string_pretty(&summary_json)?)?;
 
-    // Wait for pyramid generation to complete (if running in background)
-    if let Some(handle) = pyramid_handle {
-        info!("Waiting for CPU pyramid generation to complete...");
-        match handle.join() {
-            Ok((result, pyramid_elapsed)) => {
-                result?;
-                info!("CPU pyramid generation complete: {:.2}s", pyramid_elapsed);
-            }
-            Err(e) => {
-                anyhow::bail!("Pyramid generation thread panicked: {:?}", e);
-            }
-        }
+    // Note: Pyramid generation runs in background thread. We do NOT wait here
+    // to allow GPU to immediately start processing the next slide. The pyramid
+    // thread will complete asynchronously while the next encode runs.
+    if pyramid_handle.is_some() {
+        info!("Pyramid generation continues in background (not waiting)");
     }
 
     Ok(EncodeSummary {
