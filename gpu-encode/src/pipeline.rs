@@ -1617,19 +1617,32 @@ fn generate_dzi_pyramid_cpu(
     let l2_height = grid_rows * ts;
     let mut l2_image = vec![0u8; l2_width * l2_height * 3];
 
-    info!("CPU pyramid generation: compositing {}×{} L2 tiles → {}x{} image",
-          grid_cols, grid_rows, l2_width, l2_height);
+    info!("CPU pyramid generation: compositing {}×{} L2 tiles → {}x{} image (using {} CPU cores)",
+          grid_cols, grid_rows, l2_width, l2_height, rayon::current_num_threads());
 
-    for row in 0..grid_rows {
+    use rayon::prelude::*;
+    use std::sync::Mutex;
+
+    let l2_image_mutex = Mutex::new(&mut l2_image);
+
+    // Parallel decode and composite L2 tiles
+    (0..grid_rows).into_par_iter().for_each(|row| {
         for col in 0..grid_cols {
             let tile_path = l2_dir.join(format!("{}_{}.jpg", col, row));
             if !tile_path.exists() {
                 continue;
             }
-            let tile_bytes = fs::read(&tile_path)?;
-            let tile_img = image::load_from_memory(&tile_bytes)?.to_rgb8();
+            let tile_bytes = match fs::read(&tile_path) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            let tile_img = match image::load_from_memory(&tile_bytes) {
+                Ok(img) => img.to_rgb8(),
+                Err(_) => continue,
+            };
 
-            // Copy tile into full image
+            // Copy tile into full image (mutex-protected)
+            let mut l2_img = l2_image_mutex.lock().unwrap();
             for ty in 0..ts.min(tile_img.height() as usize) {
                 for tx in 0..ts.min(tile_img.width() as usize) {
                     let src_idx = (ty * ts + tx) * 3;
@@ -1637,12 +1650,12 @@ fn generate_dzi_pyramid_cpu(
                     let dst_y = row * ts + ty;
                     if dst_x < l2_width && dst_y < l2_height {
                         let dst_idx = (dst_y * l2_width + dst_x) * 3;
-                        l2_image[dst_idx..dst_idx + 3].copy_from_slice(&tile_img.as_raw()[src_idx..src_idx + 3]);
+                        l2_img[dst_idx..dst_idx + 3].copy_from_slice(&tile_img.as_raw()[src_idx..src_idx + 3]);
                     }
                 }
             }
         }
-    }
+    });
 
     let mut current_img = RgbImage::from_raw(l2_width as u32, l2_height as u32, l2_image)
         .context("failed to create L2 RgbImage")?;
@@ -1670,38 +1683,40 @@ fn generate_dzi_pyramid_cpu(
 
         info!("  Level {}: {}x{} → {}×{} tiles", level, new_width, new_height, cols, rows);
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let x = (col * ts) as u32;
-                let y = (row * ts) as u32;
-                let w = tile_size.min(new_width.saturating_sub(x));
-                let h = tile_size.min(new_height.saturating_sub(y));
+        // Parallel tile extraction and encoding
+        let tiles: Vec<(usize, usize)> = (0..rows).flat_map(|r| (0..cols).map(move |c| (r, c))).collect();
 
-                let mut tile = RgbImage::new(tile_size, tile_size);
-                // Copy region from current_img to tile
-                for ty in 0..h {
-                    for tx in 0..w {
-                        let src_pixel = current_img.get_pixel(x + tx, y + ty);
-                        tile.put_pixel(tx, ty, *src_pixel);
-                    }
+        tiles.par_iter().try_for_each(|(row, col)| -> Result<()> {
+            let x = (*col * ts) as u32;
+            let y = (*row * ts) as u32;
+            let w = tile_size.min(new_width.saturating_sub(x));
+            let h = tile_size.min(new_height.saturating_sub(y));
+
+            let mut tile = RgbImage::new(tile_size, tile_size);
+            // Copy region from current_img to tile
+            for ty in 0..h {
+                for tx in 0..w {
+                    let src_pixel = current_img.get_pixel(x + tx, y + ty);
+                    tile.put_pixel(tx, ty, *src_pixel);
                 }
-
-                // Encode tile as JPEG using turbojpeg 0.5 API
-                let mut compressor = Compressor::new()?;
-                compressor.set_quality(quality as i32);
-                compressor.set_subsamp(subsamp_tj);
-                let pixels = tile.as_raw().as_slice();
-                let img = Image {
-                    pixels,
-                    width: tile_size as usize,
-                    pitch: tile_size as usize * 3,
-                    height: tile_size as usize,
-                    format: PixelFormat::RGB,
-                };
-                let jpeg_bytes = compressor.compress_to_vec(img)?;
-                fs::write(level_dir.join(format!("{}_{}.jpg", col, row)), &jpeg_bytes)?;
             }
-        }
+
+            // Encode tile as JPEG using turbojpeg 0.5 API
+            let mut compressor = Compressor::new()?;
+            compressor.set_quality(quality as i32);
+            compressor.set_subsamp(subsamp_tj);
+            let pixels = tile.as_raw().as_slice();
+            let img = Image {
+                pixels,
+                width: tile_size as usize,
+                pitch: tile_size as usize * 3,
+                height: tile_size as usize,
+                format: PixelFormat::RGB,
+            };
+            let jpeg_bytes = compressor.compress_to_vec(img)?;
+            fs::write(level_dir.join(format!("{}_{}.jpg", col, row)), &jpeg_bytes)?;
+            Ok(())
+        })?;
 
         level += 1;
 
