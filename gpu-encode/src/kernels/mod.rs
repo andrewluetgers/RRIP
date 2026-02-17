@@ -453,11 +453,13 @@ impl GpuContext {
             .map_err(|e| anyhow!("load downsample_2x_box_kernel failed: {}", e))?;
 
         let cfg = LaunchConfig::for_num_elems(dst_total as u32);
+        let w = src_width as i32;
+        let h = src_height as i32;
         let mut launch = self.stream.launch_builder(&f);
         launch.arg(src);
         launch.arg(&mut dst);
-        launch.arg(&(src_width as i32));
-        launch.arg(&(src_height as i32));
+        launch.arg(&w);
+        launch.arg(&h);
         unsafe { launch.launch(cfg) }
             .map_err(|e| anyhow!("downsample_2x_box launch failed: {}", e))?;
 
