@@ -352,19 +352,31 @@ echo "GET http://localhost:8080/tiles/slide1/10/5_3.jpg" | vegeta attack -durati
 
 **Important**: RunPod API uses `Authorization: Bearer` header, NOT `api-key` header.
 
+**CRITICAL WORKFLOW**: Always query the API first to get current pod status and connection info. Pod IPs and ports can change, so never assume old connection details are still valid.
+
 ```bash
-# List all pods via RunPod GraphQL API
+# Step 1: Query API for current pod info (IP, port, status)
 curl -s -H "Content-Type: application/json" \
   -H "Authorization: Bearer $RUNPOD_API_KEY" \
   --data '{"query":"{ myself { pods { id name desiredStatus machine { gpuDisplayName } runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort type } gpus { id } } } } }"}' \
-  https://api.runpod.io/graphql
+  https://api.runpod.io/graphql | jq '.'
+
+# Step 2: Extract SSH connection info for origami-b200 pod
+# Look for: runtime.ports[] where privatePort == 22
+# Use: ip (public IP) and publicPort for SSH connection
 ```
 
 ### SSH Access
 
+**Always get current IP/port from API first**, then connect:
+
 ```bash
-# Connect to a pod (get IP and port from API query above)
+# Connect to a pod using IP and port from API query
 ssh -i ~/.ssh/id_runpod root@<IP> -p <PORT>
+
+# Example workflow:
+# 1. Query API → get IP=38.80.152.146, port=31867
+# 2. ssh -i ~/.ssh/id_runpod root@38.80.152.146 -p 31867
 ```
 
 ### Syncing Code
