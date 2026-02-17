@@ -170,12 +170,18 @@ fn main() -> Result<()> {
                 pyramid_sharpen,
             };
 
+            let mut pyramid_handles = Vec::new();
+
             if let Some(image_path) = image {
                 info!("ORIGAMI GPU Encoder (single-image mode)");
                 info!("  image: {}", image_path.display());
                 info!("  out: {}", out.display());
 
                 let summary = pipeline::encode_single_image(&image_path, &out, config)?;
+
+                if let Some(handle) = summary.pyramid_handle {
+                    pyramid_handles.push(handle);
+                }
 
                 info!("Encode complete:");
                 info!("  L1 tiles: {}", summary.l1_tiles);
@@ -189,6 +195,10 @@ fn main() -> Result<()> {
                 info!("  out: {}", out.display());
 
                 let summary = pipeline::encode_wsi(&slide_path, &out, config)?;
+
+                if let Some(handle) = summary.pyramid_handle {
+                    pyramid_handles.push(handle);
+                }
 
                 info!("Encode complete:");
                 info!("  families: {}", summary.families_encoded);
@@ -204,6 +214,25 @@ fn main() -> Result<()> {
                 }
             } else {
                 anyhow::bail!("either --slide or --image must be specified");
+            }
+
+            // Wait for all pyramid generation threads to complete before exiting
+            if !pyramid_handles.is_empty() {
+                info!("Waiting for {} pyramid generation thread(s) to complete...", pyramid_handles.len());
+                for (i, handle) in pyramid_handles.into_iter().enumerate() {
+                    match handle.join() {
+                        Ok(Ok(())) => {
+                            info!("  Pyramid thread {} complete", i + 1);
+                        }
+                        Ok(Err(e)) => {
+                            eprintln!("  Pyramid thread {} failed: {}", i + 1, e);
+                        }
+                        Err(_) => {
+                            eprintln!("  Pyramid thread {} panicked", i + 1);
+                        }
+                    }
+                }
+                info!("All pyramid threads complete");
             }
         }
 

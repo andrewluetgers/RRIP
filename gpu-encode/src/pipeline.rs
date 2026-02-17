@@ -51,6 +51,7 @@ pub struct SingleImageSummary {
     pub l2_bytes: usize,
     pub total_bytes: usize,
     pub elapsed_secs: f64,
+    pub pyramid_handle: Option<std::thread::JoinHandle<Result<()>>>,
 }
 
 /// Summary of a WSI encode run.
@@ -59,6 +60,7 @@ pub struct EncodeSummary {
     pub l2_bytes: usize,
     pub residual_bytes: usize,
     pub elapsed_secs: f64,
+    pub pyramid_handle: Option<std::thread::JoinHandle<Result<()>>>,
 }
 
 /// Per-stage timing accumulators for profiling the WSI pipeline.
@@ -896,6 +898,7 @@ pub fn encode_single_image(
         l2_bytes,
         total_bytes,
         elapsed_secs: elapsed.as_secs_f64(),
+        pyramid_handle: None, // Single-image mode doesn't use pyramids yet
     })
 }
 
@@ -1312,7 +1315,12 @@ pub fn encode_wsi(
                 pyramid_sharpen,
             );
             let elapsed = t0.elapsed().as_secs_f64();
-            (result, elapsed)
+            if let Err(ref e) = result {
+                eprintln!("Pyramid generation failed after {:.2}s: {}", elapsed, e);
+            } else {
+                info!("Pyramid generation complete: {:.2}s", elapsed);
+            }
+            result
         }))
     } else {
         None
@@ -1370,7 +1378,7 @@ pub fn encode_wsi(
 
     // Note: Pyramid generation runs in background thread. We do NOT wait here
     // to allow GPU to immediately start processing the next slide. The pyramid
-    // thread will complete asynchronously while the next encode runs.
+    // thread handle is returned so the caller can wait for all pyramids before exit.
     if pyramid_handle.is_some() {
         info!("Pyramid generation continues in background (not waiting)");
     }
@@ -1380,6 +1388,7 @@ pub fn encode_wsi(
         l2_bytes: total_l2_bytes,
         residual_bytes: total_residual_bytes,
         elapsed_secs: elapsed,
+        pyramid_handle,
     })
 }
 
