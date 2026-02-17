@@ -1291,20 +1291,32 @@ pub fn encode_wsi(
     }
 
     // --- generate_pyramid (L3, L4, ... down to 1 tile) ---
-    if config.generate_pyramid {
-        let t0 = Instant::now();
-        info!("Generating DZI pyramid on CPU ({} cores)...", rayon::current_num_threads());
-        generate_dzi_pyramid_cpu(
-            &files_dir,
-            config.tile_size,
-            grid_cols as usize,
-            grid_rows as usize,
-            config.baseq,
-            &config.subsamp,
-            config.pyramid_sharpen,
-        )?;
-        info!("Generated DZI pyramid (CPU): {:.2}s", t0.elapsed().as_secs_f64());
-    }
+    // Spawn pyramid generation in background thread so GPU can continue with next work
+    let pyramid_handle = if config.generate_pyramid {
+        let files_dir_clone = files_dir.clone();
+        let tile_size = config.tile_size;
+        let baseq = config.baseq;
+        let subsamp = config.subsamp.clone();
+        let pyramid_sharpen = config.pyramid_sharpen;
+
+        info!("Spawning CPU pyramid generation in background ({} cores)...", rayon::current_num_threads());
+        Some(std::thread::spawn(move || {
+            let t0 = Instant::now();
+            let result = generate_dzi_pyramid_cpu(
+                &files_dir_clone,
+                tile_size,
+                grid_cols as usize,
+                grid_rows as usize,
+                baseq,
+                &subsamp,
+                pyramid_sharpen,
+            );
+            let elapsed = t0.elapsed().as_secs_f64();
+            (result, elapsed)
+        }))
+    } else {
+        None
+    };
 
     // --- bundle_write ---
     let t0 = Instant::now();
@@ -1355,6 +1367,20 @@ pub fn encode_wsi(
         "elapsed_secs": elapsed,
     });
     fs::write(output_dir.join("summary.json"), serde_json::to_string_pretty(&summary_json)?)?;
+
+    // Wait for pyramid generation to complete (if running in background)
+    if let Some(handle) = pyramid_handle {
+        info!("Waiting for CPU pyramid generation to complete...");
+        match handle.join() {
+            Ok((result, pyramid_elapsed)) => {
+                result?;
+                info!("CPU pyramid generation complete: {:.2}s", pyramid_elapsed);
+            }
+            Err(e) => {
+                anyhow::bail!("Pyramid generation thread panicked: {:?}", e);
+            }
+        }
+    }
 
     Ok(EncodeSummary {
         families_encoded,
