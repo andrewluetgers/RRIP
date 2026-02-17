@@ -10,6 +10,7 @@ fn main() {
         "src/kernels/composite.cu",
         "src/kernels/residual.cu",
         "src/kernels/upsample.cu",
+        "src/kernels/downsample.cu",
         "src/kernels/sharpen.cu",
     ];
 
