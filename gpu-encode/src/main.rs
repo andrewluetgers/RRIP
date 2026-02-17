@@ -81,10 +81,6 @@ enum Command {
         #[arg(long)]
         generate_pyramid: bool,
 
-        /// Pyramid generation mode: gpu (fast, blocks GPU) or cpu (slower, frees GPU)
-        #[arg(long, default_value = "cpu")]
-        pyramid_mode: String,
-
         /// Unsharp mask strength for pyramid levels (default 0.25, typical 0.1-0.5)
         #[arg(long, default_value_t = 0.25)]
         pyramid_sharpen: f32,
@@ -147,7 +143,7 @@ fn main() -> Result<()> {
             slide, image, out, tile, resq, l1q, l0q, baseq, subsamp, encoder: _,
             max_parents, pack, manifest, optl2, debug_images, l2resq, max_delta,
             batch_size, profile, sharpen, save_sharpened, generate_pyramid,
-            pyramid_mode, pyramid_sharpen,
+            pyramid_sharpen,
         } => {
             let l1q_resolved = l1q.unwrap_or(resq);
             let l0q_resolved = l0q.unwrap_or(resq);
@@ -171,7 +167,6 @@ fn main() -> Result<()> {
                 sharpen,
                 save_sharpened,
                 generate_pyramid,
-                pyramid_mode,
                 pyramid_sharpen,
             };
 

@@ -41,8 +41,7 @@ pub struct EncodeConfig {
     pub sharpen: Option<f32>,
     pub save_sharpened: bool,
     pub generate_pyramid: bool,
-    pub pyramid_mode: String,  // "gpu" or "cpu"
-    pub pyramid_sharpen: f32,  // Unsharp mask strength for pyramid levels
+    pub pyramid_sharpen: f32,  // Unsharp mask strength for pyramid levels (default: 0.25)
 }
 
 /// Summary of a single-image encode run.
@@ -1294,37 +1293,17 @@ pub fn encode_wsi(
     // --- generate_pyramid (L3, L4, ... down to 1 tile) ---
     if config.generate_pyramid {
         let t0 = Instant::now();
-        match config.pyramid_mode.as_str() {
-            "gpu" => {
-                info!("Generating DZI pyramid on GPU...");
-                generate_dzi_pyramid_gpu(
-                    &gpu,
-                    &jpeg,
-                    &files_dir,
-                    config.tile_size,
-                    grid_cols as usize,
-                    grid_rows as usize,
-                    config.baseq,
-                    &config.subsamp,
-                    config.pyramid_sharpen,
-                )?;
-                info!("Generated DZI pyramid (GPU): {:.2}s", t0.elapsed().as_secs_f64());
-            }
-            "cpu" => {
-                info!("Generating DZI pyramid on CPU ({} cores)...", rayon::current_num_threads());
-                generate_dzi_pyramid_cpu(
-                    &files_dir,
-                    config.tile_size,
-                    grid_cols as usize,
-                    grid_rows as usize,
-                    config.baseq,
-                    &config.subsamp,
-                    config.pyramid_sharpen,
-                )?;
-                info!("Generated DZI pyramid (CPU): {:.2}s", t0.elapsed().as_secs_f64());
-            }
-            _ => anyhow::bail!("Invalid pyramid_mode: {}", config.pyramid_mode),
-        }
+        info!("Generating DZI pyramid on CPU ({} cores)...", rayon::current_num_threads());
+        generate_dzi_pyramid_cpu(
+            &files_dir,
+            config.tile_size,
+            grid_cols as usize,
+            grid_rows as usize,
+            config.baseq,
+            &config.subsamp,
+            config.pyramid_sharpen,
+        )?;
+        info!("Generated DZI pyramid (CPU): {:.2}s", t0.elapsed().as_secs_f64());
     }
 
     // --- bundle_write ---
@@ -1483,136 +1462,6 @@ fn rgb_from_ycbcr_f32(y: &[f32], cb: &[f32], cr: &[f32]) -> Vec<u8> {
     rgb
 }
 
-
-/// Generate full DZI pyramid from L2 baseline tiles.
-/// Generate full DZI pyramid from L2 baseline tiles (GPU-accelerated).
-/// 1. Decode L2 tiles and composite on CPU (image crate)
-/// 2. Upload to GPU
-/// 3. Repeatedly: Lanczos3 downsample 2×, tile, nvJPEG encode
-/// GPU pyramid generation: box filter downsample + unsharp mask + nvJPEG encode.
-/// Keeps image on GPU throughout pipeline for maximum performance.
-fn generate_dzi_pyramid_gpu(
-    gpu: &GpuContext,
-    jpeg: &NvJpegHandle,
-    files_dir: &Path,
-    tile_size: u32,
-    grid_cols: usize,
-    grid_rows: usize,
-    quality: u8,
-    subsamp: &str,
-    sharpen_strength: f32,
-) -> Result<()> {
-    let l2_dir = files_dir.join("0");
-    let ts = tile_size as usize;
-    let l2_width = grid_cols * ts;
-    let l2_height = grid_rows * ts;
-
-    info!("GPU pyramid generation: compositing {}×{} L2 tiles → {}x{} image",
-          grid_cols, grid_rows, l2_width, l2_height);
-
-    // --- Step 1: Decode all L2 tiles and composite on CPU (using image crate) ---
-    let mut l2_image = vec![0u8; l2_width * l2_height * 3];
-    for row in 0..grid_rows {
-        for col in 0..grid_cols {
-            let tile_path = l2_dir.join(format!("{}_{}.jpg", col, row));
-            if !tile_path.exists() {
-                continue; // skip empty tiles
-            }
-            let tile_bytes = fs::read(&tile_path)?;
-            let tile_img = image::load_from_memory(&tile_bytes)?.to_rgb8();
-
-            // Copy tile into full image
-            for ty in 0..ts.min(tile_img.height() as usize) {
-                for tx in 0..ts.min(tile_img.width() as usize) {
-                    let src_idx = (ty * ts + tx) * 3;
-                    let dst_x = col * ts + tx;
-                    let dst_y = row * ts + ty;
-                    if dst_x < l2_width && dst_y < l2_height {
-                        let dst_idx = (dst_y * l2_width + dst_x) * 3;
-                        l2_image[dst_idx..dst_idx + 3].copy_from_slice(&tile_img.as_raw()[src_idx..src_idx + 3]);
-                    }
-                }
-            }
-        }
-    }
-
-    // --- Step 2: Upload full L2 image to GPU ---
-    let l2_dev = gpu.stream.clone_htod(&l2_image)
-        .map_err(|e| anyhow::anyhow!("upload L2 failed: {}", e))?;
-
-    // --- Step 3: Iteratively downsample and encode pyramid levels ---
-    let mut current_dev = l2_dev;
-    let mut current_w = l2_width as u32;
-    let mut current_h = l2_height as u32;
-    let mut level = 1; // Start at L3 (one below L2)
-
-    loop {
-        // Downsample by 2× using box filter on GPU (fast 2×2 averaging)
-        let new_w = (current_w / 2).max(1);
-        let new_h = (current_h / 2).max(1);
-
-        let downsampled_dev = gpu.downsample_box_2x(&current_dev, current_w, current_h)?;
-
-        // Apply unsharp mask to recover edge definition
-        let sharpened_dev = gpu.sharpen_l2(&downsampled_dev, new_w, new_h, sharpen_strength)?;
-
-        // Tile the sharpened image
-        let cols = (((new_w as usize) + ts - 1) / ts);
-        let rows = (((new_h as usize) + ts - 1) / ts);
-
-        let level_dir = files_dir.join(format!("{}", level));
-        fs::create_dir_all(&level_dir)?;
-
-        info!("  Level {}: {}x{} → {}×{} tiles", level, new_w, new_h, cols, rows);
-
-        // Download full sharpened image to CPU for tiling
-        let sharpened_host: Vec<u8> = gpu.stream.clone_dtoh(&sharpened_dev)
-            .map_err(|e| anyhow::anyhow!("dtoh failed: {}", e))?;
-
-        // Extract and encode each tile
-        for row in 0..rows {
-            for col in 0..cols {
-                let x = (col as u32) * tile_size;
-                let y = (row as u32) * tile_size;
-                let w = if x < new_w { tile_size.min(new_w - x) } else { 0 };
-                let h = if y < new_h { tile_size.min(new_h - y) } else { 0 };
-
-                // Extract tile region (with black padding if needed)
-                let mut tile_rgb = vec![0u8; (tile_size * tile_size * 3) as usize];
-                for ty in 0..h {
-                    for tx in 0..w {
-                        let src_idx = (((y + ty) as usize * new_w as usize + (x + tx) as usize) * 3);
-                        let dst_idx = ((ty * tile_size + tx) as usize * 3);
-                        if src_idx + 2 < sharpened_host.len() {
-                            tile_rgb[dst_idx..dst_idx + 3].copy_from_slice(&sharpened_host[src_idx..src_idx + 3]);
-                        }
-                    }
-                }
-
-                // Upload tile to GPU and encode with nvJPEG
-                let tile_dev = gpu.stream.clone_htod(&tile_rgb)
-                    .map_err(|e| anyhow::anyhow!("tile upload failed: {}", e))?;
-                let jpeg_bytes = jpeg.encode_rgb(gpu, &tile_dev, tile_size, tile_size, quality, subsamp)?;
-
-                fs::write(level_dir.join(format!("{}_{}.jpg", col, row)), &jpeg_bytes)?;
-            }
-        }
-
-        // Move to next level
-        current_dev = sharpened_dev;
-        current_w = new_w;
-        current_h = new_h;
-        level += 1;
-
-        // Stop when we reach 1 tile
-        if cols == 1 && rows == 1 {
-            break;
-        }
-    }
-
-    info!("Generated {} pyramid levels (L3..L{}) using box+sharpen", level - 1, level);
-    Ok(())
-}
 
 /// Generate full DZI pyramid from L2 baseline tiles (CPU version).
 /// CPU pyramid generation: box filter downsample + unsharp mask + turbojpeg encode.
