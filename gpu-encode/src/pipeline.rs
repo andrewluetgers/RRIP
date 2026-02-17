@@ -1557,8 +1557,8 @@ fn generate_dzi_pyramid_gpu(
             for col in 0..cols {
                 let x = (col as u32) * tile_size;
                 let y = (row as u32) * tile_size;
-                let w = tile_size.min(new_w.saturating_sub(x));
-                let h = tile_size.min(new_h.saturating_sub(y));
+                let w = if x < new_w { tile_size.min(new_w - x) } else { 0 };
+                let h = if y < new_h { tile_size.min(new_h - y) } else { 0 };
 
                 // Extract tile region (with black padding if needed)
                 let mut tile_rgb = vec![0u8; (tile_size * tile_size * 3) as usize];
