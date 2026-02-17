@@ -18,6 +18,7 @@ pub struct GpuContext {
     pub ctx: Arc<CudaContext>,
     pub stream: Arc<CudaStream>,
     mod_upsample: Arc<CudaModule>,
+    mod_downsample: Arc<CudaModule>,
     mod_residual: Arc<CudaModule>,
     mod_composite: Arc<CudaModule>,
     mod_optl2: Arc<CudaModule>,
@@ -38,6 +39,9 @@ impl GpuContext {
         let mod_upsample = ctx
             .load_module(Ptx::from_file(format!("{}/upsample.ptx", ptx_dir)))
             .map_err(|e| anyhow!("Failed to load upsample.ptx: {}", e))?;
+        let mod_downsample = ctx
+            .load_module(Ptx::from_file(format!("{}/downsample.ptx", ptx_dir)))
+            .map_err(|e| anyhow!("Failed to load downsample.ptx: {}", e))?;
         let mod_residual = ctx
             .load_module(Ptx::from_file(format!("{}/residual.ptx", ptx_dir)))
             .map_err(|e| anyhow!("Failed to load residual.ptx: {}", e))?;
@@ -57,6 +61,7 @@ impl GpuContext {
             ctx,
             stream,
             mod_upsample,
+            mod_downsample,
             mod_residual,
             mod_composite,
             mod_optl2,
@@ -424,6 +429,37 @@ impl GpuContext {
         launch_v.arg(&scale_y);
         unsafe { launch_v.launch(cfg_v) }
             .map_err(|e| anyhow!("lanczos3_v launch failed: {}", e))?;
+
+        Ok(dst)
+    }
+
+    /// Box filter 2×2 downsample on RGB u8 interleaved buffer.
+    /// Each output pixel = average of 2×2 block in source.
+    pub fn downsample_box_2x(
+        &self,
+        src: &CudaSlice<u8>,
+        src_width: u32,
+        src_height: u32,
+    ) -> Result<CudaSlice<u8>> {
+        let dst_width = src_width / 2;
+        let dst_height = src_height / 2;
+        let dst_total = (dst_width * dst_height * 3) as usize;
+
+        let mut dst = unsafe { self.stream.alloc::<u8>(dst_total) }
+            .map_err(|e| anyhow!("downsample dst alloc failed: {}", e))?;
+
+        let f = self.mod_downsample
+            .load_function("downsample_2x_box_kernel")
+            .map_err(|e| anyhow!("load downsample_2x_box_kernel failed: {}", e))?;
+
+        let cfg = LaunchConfig::for_num_elems(dst_total as u32);
+        let mut launch = self.stream.launch_builder(&f);
+        launch.arg(src);
+        launch.arg(&mut dst);
+        launch.arg(&(src_width as i32));
+        launch.arg(&(src_height as i32));
+        unsafe { launch.launch(cfg) }
+            .map_err(|e| anyhow!("downsample_2x_box launch failed: {}", e))?;
 
         Ok(dst)
     }
