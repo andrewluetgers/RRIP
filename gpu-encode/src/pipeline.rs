@@ -1649,9 +1649,9 @@ fn generate_dzi_pyramid_cpu(
     let mut level = 1; // Start at L3
 
     let subsamp_tj = match subsamp {
-        "444" => Subsamp::Sub444,
-        "420" => Subsamp::Sub420,
-        _ => Subsamp::Sub444,
+        "444" => Subsamp::None,
+        "420" => Subsamp::Sub2x2,
+        _ => Subsamp::None,
     };
 
     loop {
@@ -1686,8 +1686,10 @@ fn generate_dzi_pyramid_cpu(
                     }
                 }
 
-                // Encode tile as JPEG using turbojpeg
+                // Encode tile as JPEG using turbojpeg 0.5 API
                 let mut compressor = Compressor::new()?;
+                compressor.set_quality(quality as i32);
+                compressor.set_subsamp(subsamp_tj);
                 let img = Image {
                     pixels: tile.as_raw(),
                     width: tile_size as usize,
@@ -1695,7 +1697,7 @@ fn generate_dzi_pyramid_cpu(
                     height: tile_size as usize,
                     format: PixelFormat::RGB,
                 };
-                let jpeg_bytes = compressor.compress_to_owned(img, quality as i32, subsamp_tj)?;
+                let jpeg_bytes = compressor.compress_to_vec(img)?;
                 fs::write(level_dir.join(format!("{}_{}.jpg", col, row)), &jpeg_bytes)?;
             }
         }
