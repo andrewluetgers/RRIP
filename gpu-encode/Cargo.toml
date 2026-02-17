@@ -39,6 +39,9 @@ serde_json = "1.0"
 # Image processing (for Lanczos downsample on CPU, image loading)
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
+# JPEG encoding for pyramid generation (CPU fallback)
+turbojpeg = "1.0"
+
 # WebP encoding for L2 RGB residuals (only CPU operation)
 webp = "0.3"
 
