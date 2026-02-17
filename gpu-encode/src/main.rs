@@ -77,6 +77,10 @@ enum Command {
         #[arg(long)]
         manifest: bool,
 
+        /// Generate full DZI pyramid (L3, L4, ... down to 1 tile) from L2 baseline
+        #[arg(long)]
+        generate_pyramid: bool,
+
         /// Optimize L2 tile for better bilinear predictions (gradient descent)
         #[arg(long)]
         optl2: bool,
@@ -134,7 +138,7 @@ fn main() -> Result<()> {
         Command::Encode {
             slide, image, out, tile, resq, l1q, l0q, baseq, subsamp, encoder: _,
             max_parents, pack, manifest, optl2, debug_images, l2resq, max_delta,
-            batch_size, profile, sharpen, save_sharpened,
+            batch_size, profile, sharpen, save_sharpened, generate_pyramid,
         } => {
             let l1q_resolved = l1q.unwrap_or(resq);
             let l0q_resolved = l0q.unwrap_or(resq);
@@ -157,6 +161,7 @@ fn main() -> Result<()> {
                 profile,
                 sharpen,
                 save_sharpened,
+                generate_pyramid,
             };
 
             if let Some(image_path) = image {
