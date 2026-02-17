@@ -1729,7 +1729,7 @@ fn generate_dzi_pyramid_cpu(
             compressor.set_quality(quality as i32);
             compressor.set_subsamp(subsamp_tj);
             let img = Image {
-                pixels: &tile,
+                pixels: tile.as_slice(),
                 width: ts,
                 pitch: ts * 3,
                 height: ts,
