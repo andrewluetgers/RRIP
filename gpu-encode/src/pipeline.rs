@@ -1555,8 +1555,8 @@ fn generate_dzi_pyramid_gpu(
         // Extract and encode each tile
         for row in 0..rows {
             for col in 0..cols {
-                let x = (col * (tile_size as usize)) as u32;
-                let y = (row * (tile_size as usize)) as u32;
+                let x = (col as u32) * tile_size;
+                let y = (row as u32) * tile_size;
                 let w = tile_size.min(new_w.saturating_sub(x));
                 let h = tile_size.min(new_h.saturating_sub(y));
 
@@ -1564,8 +1564,8 @@ fn generate_dzi_pyramid_gpu(
                 let mut tile_rgb = vec![0u8; (tile_size * tile_size * 3) as usize];
                 for ty in 0..h {
                     for tx in 0..w {
-                        let src_idx = (((y + ty) * new_w + (x + tx)) * 3) as usize;
-                        let dst_idx = ((ty * tile_size + tx) * 3) as usize;
+                        let src_idx = (((y + ty) as usize * new_w as usize + (x + tx) as usize) * 3);
+                        let dst_idx = ((ty * tile_size + tx) as usize * 3);
                         if src_idx + 2 < downsampled_host.len() {
                             tile_rgb[dst_idx..dst_idx + 3].copy_from_slice(&downsampled_host[src_idx..src_idx + 3]);
                         }
