@@ -6,6 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Args;
 use tracing::info;
 
+use crate::core::pack::open_bundle;
 use crate::core::pyramid::{discover_pyramid, parse_tile_coords};
 use crate::core::reconstruct::{
     BufferPool, OutputFormat, ReconstructInput, ReconstructOpts, reconstruct_family, write_family_tiles,
@@ -32,6 +33,10 @@ pub struct DecodeArgs {
     /// Single .pack file to decode
     #[arg(long)]
     pack_file: Option<PathBuf>,
+
+    /// Bundle file (.bundle) containing all residual packs
+    #[arg(long)]
+    bundle: Option<PathBuf>,
 
     /// Output JPEG quality (1-100)
     #[arg(long, default_value_t = 95)]
@@ -70,10 +75,11 @@ pub fn run(args: DecodeArgs) -> Result<()> {
     // Validate: exactly one residual source must be provided
     let source_count = args.residuals.is_some() as u8
         + args.packs.is_some() as u8
-        + args.pack_file.is_some() as u8;
+        + args.pack_file.is_some() as u8
+        + args.bundle.is_some() as u8;
     if source_count != 1 {
         return Err(anyhow!(
-            "Exactly one of --residuals, --packs, or --pack-file must be provided"
+            "Exactly one of --residuals, --packs, --pack-file, or --bundle must be provided"
         ));
     }
 
@@ -84,8 +90,28 @@ pub fn run(args: DecodeArgs) -> Result<()> {
         pyramid.max_level, pyramid.tile_size, pyramid.l0, pyramid.l1, pyramid.l2
     );
 
+    // Open bundle if specified
+    let bundle_file = if let Some(ref bundle_path) = args.bundle {
+        Some(open_bundle(bundle_path)?)
+    } else {
+        None
+    };
+
     // Discover parents based on source type
-    let (parents, residuals_dir, pack_dir) = if let Some(ref pack_file) = args.pack_file {
+    let (parents, residuals_dir, pack_dir) = if let Some(ref bundle) = bundle_file {
+        // Bundle file: enumerate all non-empty families from index
+        let mut parents = Vec::new();
+        for row in 0..bundle.grid_rows() {
+            for col in 0..bundle.grid_cols() {
+                // Check if family has data by trying to get its pack
+                if bundle.get_pack(col, row).is_ok() {
+                    parents.push((col as u32, row as u32));
+                }
+            }
+        }
+        parents.sort();
+        (parents, None, None)
+    } else if let Some(ref pack_file) = args.pack_file {
         // Single pack file: parse coordinates from filename
         let fname = pack_file
             .file_name()
@@ -171,7 +197,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
             files_dir: &pyramid.files_dir,
             residuals_dir: residuals_dir.as_deref(),
             pack_dir: pack_dir.as_deref(),
-            bundle: None,
+            bundle: bundle_file.as_ref(),
             tile_size: pyramid.tile_size,
             l0: pyramid.l0,
             l1: pyramid.l1,
