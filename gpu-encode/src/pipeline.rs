@@ -1517,8 +1517,8 @@ fn generate_dzi_pyramid_gpu(
 
     // --- Step 3: Iteratively downsample and encode pyramid levels ---
     let mut current_dev = l2_dev;
-    let mut current_w = l2_width;
-    let mut current_h = l2_height;
+    let mut current_w = l2_width as u32;
+    let mut current_h = l2_height as u32;
     let mut level = 1; // Start at L3 (one below L2)
 
     loop {
