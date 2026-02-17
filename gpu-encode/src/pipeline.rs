@@ -1292,7 +1292,7 @@ pub fn encode_wsi(
     // --- generate_pyramid (L3, L4, ... down to 1 tile) ---
     if config.generate_pyramid {
         let t0 = Instant::now();
-        generate_dzi_pyramid(
+        generate_dzi_pyramid_gpu(
             &gpu,
             &jpeg,
             &files_dir,
@@ -1302,7 +1302,7 @@ pub fn encode_wsi(
             config.baseq,
             &config.subsamp,
         )?;
-        info!("Generated DZI pyramid: {:.2}s", t0.elapsed().as_secs_f64());
+        info!("Generated DZI pyramid (GPU): {:.2}s", t0.elapsed().as_secs_f64());
     }
 
     // --- bundle_write ---
@@ -1463,13 +1463,11 @@ fn rgb_from_ycbcr_f32(y: &[f32], cb: &[f32], cr: &[f32]) -> Vec<u8> {
 
 
 /// Generate full DZI pyramid from L2 baseline tiles.
-/// Reads all L2 tiles from baseline_pyramid_files/0/, composites into full L2,
-/// then repeatedly downsamples by 2× and tiles until reaching 1 tile.
 /// Generate full DZI pyramid from L2 baseline tiles (GPU-accelerated).
 /// 1. Batch-decode all L2 JPEG tiles on GPU using nvJPEG
 /// 2. Composite into full L2 image on GPU
 /// 3. Repeatedly: Lanczos3 downsample 2×, tile, nvJPEG encode
-fn generate_dzi_pyramid(
+fn generate_dzi_pyramid_gpu(
     gpu: &GpuContext,
     jpeg: &NvJpegHandle,
     files_dir: &Path,
@@ -1587,6 +1585,120 @@ fn generate_dzi_pyramid(
         current_dev = downsampled_u8;
         current_w = new_w;
         current_h = new_h;
+        level += 1;
+
+        // Stop when we reach 1 tile
+        if cols == 1 && rows == 1 {
+            break;
+        }
+    }
+
+    info!("Generated {} pyramid levels (L3..L{})", level - 1, level);
+    Ok(())
+}
+
+/// Generate full DZI pyramid from L2 baseline tiles (CPU version).
+/// Reads all L2 tiles from baseline_pyramid_files/0/, composites into full L2,
+/// then repeatedly downsamples by 2× with Lanczos3 and tiles until reaching 1 tile.
+fn generate_dzi_pyramid_cpu(
+    files_dir: &Path,
+    tile_size: u32,
+    grid_cols: usize,
+    grid_rows: usize,
+    quality: u8,
+    subsamp: &str,
+) -> Result<()> {
+    use turbojpeg::{Compressor, Image, PixelFormat, Subsamp};
+
+    let ts = tile_size as usize;
+    let l2_dir = files_dir.join("0");
+
+    // Read all L2 tiles and composite into full L2 image
+    let l2_width = grid_cols * ts;
+    let l2_height = grid_rows * ts;
+    let mut l2_image = vec![0u8; l2_width * l2_height * 3];
+
+    info!("CPU pyramid generation: compositing {}×{} L2 tiles → {}x{} image", grid_cols, grid_rows, l2_width, l2_height);
+    for row in 0..grid_rows {
+        for col in 0..grid_cols {
+            let tile_path = l2_dir.join(format!("{}_{}.jpg", col, row));
+            if !tile_path.exists() {
+                continue; // skip empty tiles
+            }
+            let tile_bytes = fs::read(&tile_path)?;
+            let tile_img = image::load_from_memory(&tile_bytes)?.to_rgb8();
+
+            // Copy tile into full image
+            for ty in 0..ts.min(tile_img.height() as usize) {
+                for tx in 0..ts.min(tile_img.width() as usize) {
+                    let src_idx = (ty * ts + tx) * 3;
+                    let dst_x = col * ts + tx;
+                    let dst_y = row * ts + ty;
+                    if dst_x < l2_width && dst_y < l2_height {
+                        let dst_idx = (dst_y * l2_width + dst_x) * 3;
+                        l2_image[dst_idx..dst_idx + 3].copy_from_slice(&tile_img.as_raw()[src_idx..src_idx + 3]);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut current_img = RgbImage::from_raw(l2_width as u32, l2_height as u32, l2_image)
+        .context("failed to create L2 RgbImage")?;
+    let mut level = 1; // Start at L3 (one below L2)
+
+    let subsamp_tj = match subsamp {
+        "444" => Subsamp::Sub444,
+        "420" => Subsamp::Sub420,
+        _ => Subsamp::Sub444,
+    };
+
+    loop {
+        // Downsample by 2× with Lanczos3
+        let new_width = (current_img.width() / 2).max(1);
+        let new_height = (current_img.height() / 2).max(1);
+
+        current_img = imageops::resize(&current_img, new_width, new_height, imageops::FilterType::Lanczos3);
+
+        // Tile the downsampled image
+        let cols = ((new_width + tile_size - 1) / tile_size) as usize;
+        let rows = ((new_height + tile_size - 1) / tile_size) as usize;
+
+        let level_dir = files_dir.join(format!("{}", level));
+        fs::create_dir_all(&level_dir)?;
+
+        info!("  Level {}: {}x{} → {}×{} tiles", level, new_width, new_height, cols, rows);
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = (col * tile_size as usize) as u32;
+                let y = (row * tile_size as usize) as u32;
+                let w = tile_size.min(new_width - x);
+                let h = tile_size.min(new_height - y);
+
+                let mut tile = RgbImage::new(tile_size, tile_size);
+                // Copy region from current_img to tile
+                for ty in 0..h {
+                    for tx in 0..w {
+                        let src_pixel = current_img.get_pixel(x + tx, y + ty);
+                        tile.put_pixel(tx, ty, *src_pixel);
+                    }
+                }
+
+                // Encode tile as JPEG using turbojpeg
+                let mut compressor = Compressor::new()?;
+                let img = Image {
+                    pixels: tile.as_raw(),
+                    width: tile_size as usize,
+                    pitch: tile_size as usize * 3,
+                    height: tile_size as usize,
+                    format: PixelFormat::RGB,
+                };
+                let jpeg_bytes = compressor.compress_to_owned(img, quality as i32, subsamp_tj)?;
+                fs::write(level_dir.join(format!("{}_{}.jpg", col, row)), &jpeg_bytes)?;
+            }
+        }
+
         level += 1;
 
         // Stop when we reach 1 tile
