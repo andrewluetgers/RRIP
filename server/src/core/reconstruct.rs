@@ -195,6 +195,8 @@ pub struct ReconstructOpts {
     pub timing: bool,
     pub grayscale_only: bool,
     pub output_format: OutputFormat,
+    /// Optional sharpen strength to apply to L2 before upsampling (decode-time sharpening).
+    pub sharpen: Option<f32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -418,8 +420,19 @@ pub fn reconstruct_family(
         0
     };
 
-    // --- Parallel chroma upsample ---
+    // --- Optionally sharpen L2 before upsample (decode-time sharpening) ---
     let parallel_chroma_start = Instant::now();
+    let l2_img = if let Some(strength) = opts.sharpen {
+        use crate::core::sharpen::unsharp_mask_rgb;
+        let w = l2_img.width();
+        let h = l2_img.height();
+        let sharpened = unsharp_mask_rgb(l2_img.as_raw(), w, h, strength);
+        RgbImage::from_raw(w, h, sharpened).expect("sharpen produced wrong size")
+    } else {
+        l2_img
+    };
+
+    // --- Parallel chroma upsample ---
     let (l2_y, l2_cb, l2_cr) = ycbcr_planes(&l2_img);
     let l2_width = l2_img.width();
     let l2_height = l2_img.height();
@@ -863,6 +876,7 @@ mod tests {
             timing: true,
             grayscale_only: false,
             output_format: OutputFormat::Jpeg,
+            sharpen: None,
         };
         let pool = BufferPool::new(32);
 
@@ -932,6 +946,7 @@ mod tests {
             timing: false,
             grayscale_only: false,
             output_format: OutputFormat::Jpeg,
+            sharpen: None,
         };
         let pool = BufferPool::new(32);
 
@@ -967,6 +982,7 @@ mod tests {
             timing: false,
             grayscale_only: false,
             output_format: OutputFormat::Jpeg,
+            sharpen: None,
         };
 
         // Reconstruct from loose residuals
@@ -1044,6 +1060,7 @@ mod tests {
             timing: false,
             grayscale_only: true,
             output_format: OutputFormat::Jpeg,
+            sharpen: None,
         };
         let pool = BufferPool::new(32);
 
@@ -1118,6 +1135,7 @@ mod tests {
             timing: false,
             grayscale_only: false,
             output_format: OutputFormat::Jpeg,
+            sharpen: None,
         };
         let pool = BufferPool::new(32);
 

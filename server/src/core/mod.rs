@@ -7,5 +7,6 @@ pub mod pyramid;
 pub mod reconstruct;
 pub mod optimize_chroma;
 pub mod optimize_l2;
+pub mod sharpen;
 
 pub mod libjpeg_ffi;

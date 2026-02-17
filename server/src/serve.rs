@@ -68,6 +68,9 @@ pub struct ServeArgs {
     /// Output format for reconstructed tiles: jpeg or webp
     #[arg(long, default_value = "jpeg")]
     output_format: String,
+    /// Unsharp mask strength to apply to L2 tiles before upsampling (decode-time sharpening)
+    #[arg(long)]
+    sharpen: Option<f32>,
 }
 
 #[derive(Clone)]
@@ -88,6 +91,7 @@ struct AppState {
     grayscale_only: bool,
     cache_dir: Option<PathBuf>,
     output_format: OutputFormat,
+    sharpen: Option<f32>,
 }
 
 #[derive(serde::Deserialize)]
@@ -317,6 +321,7 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         grayscale_only: args.grayscale_only,
         cache_dir: args.cache_dir.map(PathBuf::from),
         output_format,
+        sharpen: args.sharpen,
     };
 
     let metrics = state.metrics.clone();
@@ -585,6 +590,7 @@ async fn serve_tile(
     let grayscale_only = state.grayscale_only;
     let output_format = state.output_format;
     let cache_dir = state.cache_dir.clone();
+    let sharpen = state.sharpen;
     let permit = inflight_limit
         .acquire_owned()
         .await
@@ -602,7 +608,7 @@ async fn serve_tile(
         };
         let result = generate_family_server(
             &slide, x2, y2, quality, timing, grayscale_only, output_format,
-            &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
+            sharpen, &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
         );
         match result {
             Ok(result) => {
@@ -687,6 +693,7 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
     let quality = state.tile_quality;
     let grayscale_only = state.grayscale_only;
     let output_format = state.output_format;
+    let sharpen = state.sharpen;
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
@@ -703,7 +710,7 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
         let _ = task::spawn_blocking(move || {
             let result = generate_family_server(
                 &slide, x2, y2, quality, false, grayscale_only, output_format,
-                &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
+                sharpen, &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
             );
             if let Ok(result) = result {
                 for (k, v) in result.tiles.iter() {
@@ -1364,6 +1371,7 @@ fn generate_family_server(
     timing: bool,
     grayscale_only: bool,
     output_format: OutputFormat,
+    sharpen: Option<f32>,
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
@@ -1384,6 +1392,7 @@ fn generate_family_server(
         timing,
         grayscale_only,
         output_format,
+        sharpen,
     };
 
     let core_result = reconstruct_family(&input, x2, y2, &opts, buffer_pool)?;

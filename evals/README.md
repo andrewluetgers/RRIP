@@ -270,6 +270,41 @@ The comparison viewer uses directory names to classify runs. Follow these patter
 
 If the directory name doesn't match any known pattern, the viewer will show it as-is with limited metadata.
 
+### Generating WSI Runs (CPU Ingest)
+
+For encoding whole-slide images (DICOM, SVS, etc.) using the CPU pipeline:
+
+```bash
+# Usage: ./evals/scripts/run_wsi_encode_cpu.sh <slide_path> <baseq> <l1q> <l0q> [options...]
+# The first 3 quality args map to: baseq (L2), l1q (L1 residuals), l0q (L0 residuals)
+
+# Encode 3DHISTECH-1 DICOM with b80, l1q60, l0q40, 444, optl2, delta 20
+./evals/scripts/run_wsi_encode_cpu.sh data/3DHISTECH-1-extract/000005.dcm 80 60 40
+
+# Custom delta (default is 20)
+./evals/scripts/run_wsi_encode_cpu.sh data/3DHISTECH-1-extract/000005.dcm 80 60 40 --max-delta 15
+
+# Without optl2
+./evals/scripts/run_wsi_encode_cpu.sh data/3DHISTECH-1-extract/000005.dcm 80 60 40 --no-optl2
+
+# 4:2:0 subsampling
+./evals/scripts/run_wsi_encode_cpu.sh data/3DHISTECH-1-extract/000005.dcm 80 60 40 --subsamp 420
+
+# Limit to 10 families (for quick testing)
+./evals/scripts/run_wsi_encode_cpu.sh data/3DHISTECH-1-extract/000005.dcm 80 60 40 --max-parents 10
+```
+
+Output goes to `evals/runs/cpu_ingest_<slide>_b<baseq>_l1q<l1q>_l0q<l0q>_<subsamp>[_optl2_d<delta>]/` with a `stats.json` containing tile size distributions.
+
+**Prerequisites:** The origami binary must be built with openslide support:
+```bash
+cd server
+TURBOJPEG_SOURCE=pkg-config CMAKE_POLICY_VERSION_MINIMUM=3.5 CARGO_TARGET_DIR=target2 \
+    cargo build --release --features openslide
+```
+
+**Reference timing:** 3DHISTECH-1 (57344x60416, 3304 families) encodes in ~6.4 minutes on an Apple Silicon Mac with `b80 l1q60 l0q40 444 optl2 d20`.
+
 ### Generating Runs (Python — Legacy)
 
 ```bash

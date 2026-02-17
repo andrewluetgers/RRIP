@@ -333,6 +333,9 @@
         .column-header {
             position: relative;
             padding-right: 20px;
+            max-width: 180px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .subsamp-label {
@@ -1219,7 +1222,7 @@
 
             activeColumns.forEach(col => {
                 const escapedCol = col.replace(/'/g, "\\'");
-                html += `<th class="column-header">
+                html += `<th class="column-header" title="${col}">
                     ${col}
                     <div class="subsamp-label" id="subsamp_${colId(col)}"></div>
                     <button class="remove-column" onclick="removeColumn('${escapedCol}')">&times;</button>

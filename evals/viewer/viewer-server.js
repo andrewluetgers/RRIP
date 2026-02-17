@@ -327,21 +327,24 @@ async function scanCaptures() {
       continue;
     }
 
-    // --- Custom baseq: rs_{subsamp}_b{N}_optl2_d{N}_l1q{N}_l0q{N} ---
-    const baseqMatch = dirName.match(/^rs_(444|420opt|420)_b(\d+)_optl2_d(\d+)_l1q(\d+)_l0q(\d+)$/);
+    // --- Custom baseq: rs_{subsamp}_b{N}[_optl2[_d{N}]]_l1q{N}_l0q{N} ---
+    const baseqMatch = dirName.match(/^rs_(444|420opt|420)_b(\d+)(?:_(optl2))?(?:_d(\d+))?_l1q(\d+)_l0q(\d+)$/);
     if (baseqMatch) {
       const subsamp = baseqMatch[1];
       const baseq = parseInt(baseqMatch[2]);
-      const delta = parseInt(baseqMatch[3]);
-      const l1q = parseInt(baseqMatch[4]);
-      const l0q = parseInt(baseqMatch[5]);
+      const optl2 = !!baseqMatch[3];
+      const delta = baseqMatch[4] ? parseInt(baseqMatch[4]) : null;
+      const l1q = parseInt(baseqMatch[5]);
+      const l0q = parseInt(baseqMatch[6]);
 
       const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
       const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
       const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
 
       if (hasCompress || hasDecompress || hasManifest) {
-        captures[`RS ORIGAMI turbo B${baseq} L1=${l1q} L0=${l0q} ${subsamp} optL2 \u00b1${delta}`] = {
+        let label = `RS ORIGAMI turbo B${baseq} L1=${l1q} L0=${l0q} ${subsamp}`;
+        if (optl2) label += delta ? ` optL2 \u00b1${delta}` : ' optL2';
+        captures[label] = {
           type: 'origami',
           encoder: 'libjpeg-turbo',
           q: l0q,
@@ -350,7 +353,7 @@ async function scanCaptures() {
           l1q,
           l0q,
           subsamp,
-          optl2: true,
+          optl2,
           delta,
           name: dirName,
           has_compress: hasCompress,
@@ -360,15 +363,84 @@ async function scanCaptures() {
       continue;
     }
 
-    // --- GPU encode: gpu_{subsamp}_b{N}[_optl2[_d{N}]]_l1q{N}_l0q{N} ---
-    const gpuMatch = dirName.match(/^gpu_(444|420opt|420)_b(\d+)(?:_(optl2))?(?:_d(\d+))?_l1q(\d+)_l0q(\d+)$/);
+    // --- Sharpen: rs_{subsamp}_b{N}_sharp{N}_l1q{N}_l0q{N} ---
+    const sharpMatch = dirName.match(/^rs_(444|420opt|420)_b(\d+)_sharp(\d+)_l1q(\d+)_l0q(\d+)$/);
+    if (sharpMatch) {
+      const subsamp = sharpMatch[1];
+      const baseq = parseInt(sharpMatch[2]);
+      const sharp = parseInt(sharpMatch[3]);
+      const l1q = parseInt(sharpMatch[4]);
+      const l0q = parseInt(sharpMatch[5]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        // sharp value is strength*10 (e.g. sharp10 = 1.0)
+        const strengthStr = (sharp / 10).toFixed(1);
+        captures[`RS ORIGAMI turbo B${baseq} L1=${l1q} L0=${l0q} ${subsamp} sharp${strengthStr}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: l0q,
+          j: l0q,
+          baseq,
+          l1q,
+          l0q,
+          subsamp,
+          sharpen: parseFloat(strengthStr),
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- Sharpen-decode: rs_{subsamp}_b{N}_sdec{NN}_l1q{N}_l0q{N} ---
+    const sdecMatch = dirName.match(/^rs_(444|420opt|420)_b(\d+)_sdec(\d+)_l1q(\d+)_l0q(\d+)$/);
+    if (sdecMatch) {
+      const subsamp = sdecMatch[1];
+      const baseq = parseInt(sdecMatch[2]);
+      const sharp = parseInt(sdecMatch[3]);
+      const l1q = parseInt(sdecMatch[4]);
+      const l0q = parseInt(sdecMatch[5]);
+
+      const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
+      const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
+      const hasManifest = fs.existsSync(path.join(dirPath, 'manifest.json'));
+
+      if (hasCompress || hasDecompress || hasManifest) {
+        const strengthStr = (sharp / 10).toFixed(1);
+        captures[`RS ORIGAMI turbo B${baseq} L1=${l1q} L0=${l0q} ${subsamp} s=${strengthStr}`] = {
+          type: 'origami',
+          encoder: 'libjpeg-turbo',
+          q: l0q,
+          j: l0q,
+          baseq,
+          l1q,
+          l0q,
+          subsamp,
+          sharpen: parseFloat(strengthStr),
+          name: dirName,
+          has_compress: hasCompress,
+          has_decompress: hasDecompress
+        };
+      }
+      continue;
+    }
+
+    // --- GPU encode: gpu_{subsamp}_b{N}[_optl2[_d{N}]][_s{F}[_saved]]_l1q{N}_l0q{N} ---
+    const gpuMatch = dirName.match(/^gpu_(444|420opt|420)_b(\d+)(?:_(optl2))?(?:_d(\d+))?(?:_s([\d.]+))?(?:_(saved))?_l1q(\d+)_l0q(\d+)$/);
     if (gpuMatch) {
       const subsamp = gpuMatch[1];
       const baseq = parseInt(gpuMatch[2]);
       const optl2 = gpuMatch[3];
       const delta = gpuMatch[4] ? parseInt(gpuMatch[4]) : undefined;
-      const l1q = parseInt(gpuMatch[5]);
-      const l0q = parseInt(gpuMatch[6]);
+      const sharpen = gpuMatch[5] ? parseFloat(gpuMatch[5]) : undefined;
+      const saveSharpen = gpuMatch[6];
+      const l1q = parseInt(gpuMatch[7]);
+      const l0q = parseInt(gpuMatch[8]);
 
       const hasCompress = fs.existsSync(path.join(dirPath, 'compress'));
       const hasDecompress = fs.existsSync(path.join(dirPath, 'decompress'));
@@ -376,7 +448,8 @@ async function scanCaptures() {
 
       if (hasCompress || hasDecompress || hasManifest) {
         const optl2Suffix = optl2 ? (delta ? ` optL2 \u00b1${delta}` : ' optL2') : '';
-        captures[`GPU nvjpeg B${baseq} L1=${l1q} L0=${l0q} ${subsamp}${optl2Suffix}`] = {
+        const sharpenSuffix = sharpen ? ` s=${sharpen}${saveSharpen ? ' saved' : ''}` : '';
+        captures[`GPU nvjpeg B${baseq} L1=${l1q} L0=${l0q} ${subsamp}${optl2Suffix}${sharpenSuffix}`] = {
           type: 'origami',
           encoder: 'nvjpeg',
           q: l0q,

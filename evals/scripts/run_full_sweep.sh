@@ -29,7 +29,7 @@ for Q in "${QUALITIES[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  444 j${Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --resq "$Q" --subsamp 444 --l2resq 0 \
+        --resq "$Q" --subsamp 444 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -43,7 +43,7 @@ for Q in "${QUALITIES[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  444+optL2 j${Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --resq "$Q" --subsamp 444 --optl2 --l2resq 0 \
+        --resq "$Q" --subsamp 444 --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -57,7 +57,7 @@ for Q in "${QUALITIES[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  420+optL2 j${Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --resq "$Q" --subsamp 420 --optl2 --l2resq 0 \
+        --resq "$Q" --subsamp 420 --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -71,7 +71,7 @@ for Q in "${QUALITIES[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  420opt+optL2 j${Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --resq "$Q" --subsamp 420opt --optl2 --l2resq 0 \
+        --resq "$Q" --subsamp 420opt --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -97,7 +97,7 @@ for S in "${SPLITS[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  444 l1q${L1Q} l0q${L0Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --l1q "$L1Q" --l0q "$L0Q" --subsamp 444 --l2resq 0 \
+        --l1q "$L1Q" --l0q "$L0Q" --subsamp 444 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -110,7 +110,7 @@ for S in "${SPLITS[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  444+optL2 l1q${L1Q} l0q${L0Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --l1q "$L1Q" --l0q "$L0Q" --subsamp 444 --optl2 --l2resq 0 \
+        --l1q "$L1Q" --l0q "$L0Q" --subsamp 444 --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -123,7 +123,7 @@ for S in "${SPLITS[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  420+optL2 l1q${L1Q} l0q${L0Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --l1q "$L1Q" --l0q "$L0Q" --subsamp 420 --optl2 --l2resq 0 \
+        --l1q "$L1Q" --l0q "$L0Q" --subsamp 420 --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 
@@ -136,7 +136,7 @@ for S in "${SPLITS[@]}"; do
     [ -d "$DIR" ] && rm -rf "$DIR"
     echo "  420opt+optL2 l1q${L1Q} l0q${L0Q}..."
     $BIN encode --image "$IMG" --out "$DIR" \
-        --l1q "$L1Q" --l0q "$L0Q" --subsamp 420opt --optl2 --l2resq 0 \
+        --l1q "$L1Q" --l0q "$L0Q" --subsamp 420opt --optl2 \
         --manifest --debug-images 2>&1 | tail -1
 done
 

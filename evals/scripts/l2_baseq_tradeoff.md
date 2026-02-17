@@ -61,17 +61,11 @@ Q98->Q99    18,998       0.0962           1975       42,252          0.423
    (0.215 vs 0.423 Delta E reduction) at only 32% of the byte cost (13.4KB vs
    42.3KB). Cost per 0.01 Delta E is 668 bytes vs 1975 at Q99.
 
-5. **Lossless L2 residual is not worth it.** A separate lossless WebP residual
-   achieves near-perfect L2 reconstruction (Delta E 1.93) but costs 86KB — more
-   than doubling L2 storage for only 0.06 Delta E improvement over Q99.
-
 ## Recommendation
 
 - **Default: `--baseq 97`** for production use with OptL2. Best ROI.
 - **`--baseq 95`** for minimum file size when L2 quality is less critical.
 - **`--baseq 99`** when maximum quality is needed regardless of size.
-- **L2 lossless residual (`--l2resq`)**: available but rarely justified. Only
-  useful when exact L2 pixel values matter for downstream processing.
 
 ## Interaction with OptL2
 
@@ -90,7 +84,7 @@ for q in 95 96 97 98 99; do
   origami encode \
     --image evals/test-images/L0-1024.jpg \
     --out evals/runs/rs_debug_j40_bq${q}_pac \
-    --resq 40 --baseq $q --subsamp 444 --l2resq 0 \
+    --resq 40 --baseq $q --subsamp 444 \
     --manifest --debug-images
 done
 

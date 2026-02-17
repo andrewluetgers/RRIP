@@ -128,13 +128,21 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub debug_images: bool,
 
-    /// JPEG quality for L2 RGB residual (1-100, 0 = skip L2 residual)
-    #[arg(long, default_value_t = 95)]
-    pub l2resq: u8,
-
     /// Maximum per-pixel deviation for OptL2 gradient descent (default: 15)
     #[arg(long, default_value_t = 15)]
     pub max_delta: u8,
+
+    /// Unsharp mask strength applied to L2 for better bilinear upsample predictions.
+    /// By default, stores the unsharpened L2 (fewer bytes) and the decoder must apply
+    /// the same sharpen at decode time. Use --save-sharpened to store the sharpened L2.
+    #[arg(long)]
+    pub sharpen: Option<f32>,
+
+    /// When used with --sharpen, store the sharpened L2 in the output JPEG.
+    /// Without this flag, the unsharpened L2 is stored (smaller) and the decoder
+    /// must apply the sharpen kernel before upsampling.
+    #[arg(long)]
+    pub save_sharpened: bool,
 }
 
 /// Return the file extension for the given encoder name.
@@ -565,15 +573,34 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         resized.into_raw()
     };
 
-    // Optionally optimize L2 for better predictions
+    // Optionally sharpen L2 to counteract bilinear upsample blur.
+    // --sharpen creates a sharpened version for predictions.
+    // --save-sharpened controls whether the stored L2 JPEG contains sharpened pixels.
+    let l2_sharpened = if let Some(strength) = args.sharpen {
+        use crate::core::sharpen::unsharp_mask_rgb;
+        info!("Applying unsharp mask (strength={:.2}) to L2...", strength);
+        Some(unsharp_mask_rgb(&l2_rgb, l2_w, l2_h, strength))
+    } else {
+        None
+    };
+
+    // Determine what to encode: sharpened if --save-sharpened, otherwise original
+    let l2_to_encode = if args.save_sharpened {
+        l2_sharpened.as_ref().unwrap_or(&l2_rgb).clone()
+    } else {
+        l2_rgb.clone()
+    };
+
+    // Optionally optimize L2 for better predictions (operates on the version being stored)
+    let mut l2_to_encode = l2_to_encode;
     if args.optl2 {
         use crate::core::optimize_l2::optimize_l2_for_prediction;
         info!("Running OptL2 gradient descent optimization...");
-        l2_rgb = optimize_l2_for_prediction(&l2_rgb, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3);
+        l2_to_encode = optimize_l2_for_prediction(&l2_to_encode, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3);
     }
 
     // Encode L2 baseline
-    let l2_jpeg = encoder.encode_rgb_with_subsamp(&l2_rgb, l2_w, l2_h, baseq, subsamp)?;
+    let l2_jpeg = encoder.encode_rgb_with_subsamp(&l2_to_encode, l2_w, l2_h, baseq, subsamp)?;
     let l2_bytes = l2_jpeg.len();
     let l2_out_path = args.out.join(format!("L2_0_0{}", ext));
     fs::write(&l2_out_path, &l2_jpeg)?;
@@ -582,30 +609,19 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     // Decode L2 back (lossy round-trip) to get actual L2 that decoder will see
     let (l2_decoded_rgb, _, _) = crate::turbojpeg_optimized::decode_rgb_turbo(&l2_jpeg)?;
 
-    // Compute and encode 3-channel L2 RGB residual for lossless L2 reconstruction
-    let l2_res_bytes;
-    let l2_for_prediction = if args.l2resq > 0 {
-        // L2 residual: centered difference between original and JPEG-decoded L2
-        let n = (l2_w * l2_h * 3) as usize;
-        let mut l2_residual = vec![0u8; n];
-        for i in 0..n {
-            l2_residual[i] = (l2_rgb[i] as i16 - l2_decoded_rgb[i] as i16 + 128).clamp(0, 255) as u8;
-        }
-
-        // Encode L2 residual as lossless WebP (much smaller than PNG for sparse residual data)
-        let l2_res_path = args.out.join("L2_0_0_residual.webp");
-        let webp_encoder = webp::Encoder::from_rgb(&l2_residual, l2_w, l2_h);
-        let webp_mem = webp_encoder.encode_lossless();
-        fs::write(&l2_res_path, &*webp_mem)?;
-        l2_res_bytes = webp_mem.len();
-        info!("L2 residual (WebP lossless): {} bytes", l2_res_bytes);
-
-        // Lossless residual means perfect reconstruction: L2_recon = L2_original
-        l2_rgb.clone()
+    // If --sharpen without --save-sharpened: sharpen the decoded L2 for predictions.
+    // This simulates what the decode server will do (sharpen after JPEG decode, before upsample).
+    let l2_decoded_for_pred = if l2_sharpened.is_some() && !args.save_sharpened {
+        use crate::core::sharpen::unsharp_mask_rgb;
+        let strength = args.sharpen.unwrap();
+        info!("Sharpen-decode: applying unsharp mask (strength={:.2}) to decoded L2 for predictions...", strength);
+        unsharp_mask_rgb(&l2_decoded_rgb, l2_w, l2_h, strength)
     } else {
-        l2_res_bytes = 0;
         l2_decoded_rgb.clone()
     };
+
+    // L2 for prediction: the decoded (lossy) L2, possibly sharpened at decode time
+    let l2_for_prediction = l2_decoded_for_pred;
 
     // Setup debug image directories
     let compress_dir = args.out.join("compress");
@@ -615,18 +631,16 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         fs::create_dir_all(&compress_dir)?;
         fs::create_dir_all(&decompress_dir)?;
         let (l2_y, l2_cb, l2_cr) = ycbcr_planes_from_rgb(&l2_decoded_rgb, l2_w, l2_h);
-        // L2 original (pre-encode)
-        save_rgb_png(&compress_dir.join("001_L2_original.png"), &l2_rgb, l2_w, l2_h)?;
+        // L2 original (pre-encode, may be sharpened if --save-sharpened)
+        save_rgb_png(&compress_dir.join("001_L2_original.png"), &l2_to_encode, l2_w, l2_h)?;
         // L2 luma, Cb, Cr channels (from decoded round-trip)
         save_gray_png(&compress_dir.join("002_L2_luma.png"), &l2_y, l2_w, l2_h)?;
         save_gray_png(&compress_dir.join("003_L2_chroma_cb.png"), &l2_cb, l2_w, l2_h)?;
         save_gray_png(&compress_dir.join("004_L2_chroma_cr.png"), &l2_cr, l2_w, l2_h)?;
-        // L2 decoded (post JPEG round-trip)
+        // L2 decoded (post JPEG round-trip, before any decode-time sharpen)
         save_rgb_png(&decompress_dir.join("050_L2_decode.png"), &l2_decoded_rgb, l2_w, l2_h)?;
-        // L2 reconstructed (after applying L2 residual)
-        if args.l2resq > 0 {
-            save_rgb_png(&decompress_dir.join("050_L2_reconstructed.png"), &l2_for_prediction, l2_w, l2_h)?;
-        }
+        // L2 used for prediction (may be sharpened if --sharpen without --save-sharpened)
+        save_rgb_png(&decompress_dir.join("050_L2_for_prediction.png"), &l2_for_prediction, l2_w, l2_h)?;
     }
 
     // Upsample L2 → L1 prediction in RGB space using residual-reconstructed L2
@@ -653,7 +667,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     // Float Y mosaic for L0 prediction (avoids u8 quantization in recon Y)
     let mut l1_recon_y_f32 = vec![0.0f32; (l1_w * l1_h) as usize];
     let mut l1_recon_rgb = vec![0u8; (l1_w * l1_h * 3) as usize];
-    let mut total_bytes = l2_bytes + l2_res_bytes;
+    let mut total_bytes = l2_bytes;
     let mut manifest_tiles: Vec<serde_json::Value> = Vec::new();
 
     for (idx, l1_tile) in l1_tiles.iter().enumerate() {
@@ -815,6 +829,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         let resized = imageops::resize(&l1_img, src_w, src_h, imageops::FilterType::Triangle);
         resized.into_raw()
     };
+
     // Use float YCbCr for L0 prediction (matches Python pipeline, avoids u8 quantization)
     let (l0_pred_y_f32, l0_pred_cb_f32, l0_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l0_pred_rgb, src_w, src_h);
 
@@ -973,11 +988,11 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         "baseq": baseq,
         "l1q": l1q,
         "l0q": l0q,
-        "l2resq": args.l2resq,
         "optl2": args.optl2,
+        "sharpen": args.sharpen,
+        "save_sharpened": args.save_sharpened,
         "tile_size": tile_size,
         "l2_bytes": l2_bytes,
-        "l2_res_bytes": l2_res_bytes,
         "l2_w": l2_w,
         "l2_h": l2_h,
         "l1_tiles": l1_tiles.len(),
@@ -1002,11 +1017,10 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
             "baseq": baseq,
             "l1q": l1q,
             "l0q": l0q,
-            "l2resq": args.l2resq,
             "optl2": args.optl2,
+            "sharpen": args.sharpen,
             "tile_size": tile_size,
             "l2_bytes": l2_bytes,
-            "l2_res_bytes": l2_res_bytes,
             "l2_w": l2_w,
             "l2_h": l2_h,
             "total_bytes": total_bytes,

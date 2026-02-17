@@ -77,6 +77,11 @@ pub struct IngestArgs {
     /// Maximum per-pixel deviation for OptL2 gradient descent (default: 15)
     #[arg(long, default_value_t = 15)]
     pub max_delta: u8,
+
+    /// Unsharp mask strength applied to L2 before JPEG encoding (e.g. 0.5, 1.0, 1.5).
+    /// Fast alternative to --optl2 for counteracting bilinear upsample blur.
+    #[arg(long)]
+    pub sharpen: Option<f32>,
 }
 
 /// Read a 1024x1024 region from the slide at the given pixel coordinates.
@@ -302,6 +307,7 @@ fn process_family(
     subsamp: ChromaSubsampling,
     optl2: bool,
     max_delta: u8,
+    sharpen: Option<f32>,
     save_png: bool,
     do_pack: bool,
 ) -> Result<FamilyResult> {
@@ -334,7 +340,13 @@ fn process_family(
         resized.into_raw()
     };
 
-    // 3. Optionally optimize L2 for better bilinear predictions
+    // 3a. Optionally sharpen L2 to counteract bilinear upsample blur
+    if let Some(strength) = sharpen {
+        use crate::core::sharpen::unsharp_mask_rgb;
+        l2_rgb = unsharp_mask_rgb(&l2_rgb, l2_w, l2_h, strength);
+    }
+
+    // 3b. Optionally optimize L2 for better bilinear predictions
     if optl2 {
         use crate::core::optimize_l2::optimize_l2_for_prediction;
         l2_rgb = optimize_l2_for_prediction(&l2_rgb, &l1_rgb, l2_w, l2_h, l1_w, l1_h, max_delta, 100, 0.3);
@@ -1004,7 +1016,7 @@ pub fn run(args: IngestArgs) -> Result<()> {
                 tile_size,
                 encoder.as_ref(),
                 args.baseq, args.l1q, args.l0q,
-                subsamp, args.optl2, args.max_delta,
+                subsamp, args.optl2, args.max_delta, args.sharpen,
                 save_png, do_pack,
             );
             let idx = processed.fetch_add(1, Ordering::Relaxed) + 1;
@@ -1170,6 +1182,8 @@ pub fn run(args: IngestArgs) -> Result<()> {
             "l1q": args.l1q,
             "l0q": args.l0q,
             "optl2": args.optl2,
+            "sharpen": args.sharpen,
+            "max_delta": args.max_delta,
             "tile_size": tile_size,
             "families": families_to_process,
             "grid_cols": grid_cols,

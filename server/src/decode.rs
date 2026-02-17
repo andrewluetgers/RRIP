@@ -182,6 +182,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
             timing: args.timing,
             grayscale_only: args.grayscale,
             output_format,
+            sharpen: None,
         };
 
         let result = reconstruct_family(&input, x2, y2, &opts, &buffer_pool)?;
@@ -679,8 +680,10 @@ mod tests {
             manifest: false,
             optl2: false,
             debug_images: false,
-            l2resq: 0,
+
             max_delta: 15,
+            sharpen: None,
+            save_sharpened: false,
         };
         crate::encode::run(encode_args).unwrap();
 
@@ -1088,8 +1091,10 @@ mod tests {
             manifest: false,
             optl2: false,
             debug_images: false,
-            l2resq: 0,
+
             max_delta: 15,
+            sharpen: None,
+            save_sharpened: false,
         };
         crate::encode::run(encode_args).unwrap();
         let encode_ms = encode_start.elapsed().as_millis();
