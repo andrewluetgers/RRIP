@@ -1690,8 +1690,9 @@ fn generate_dzi_pyramid_cpu(
                 let mut compressor = Compressor::new()?;
                 compressor.set_quality(quality as i32);
                 compressor.set_subsamp(subsamp_tj);
+                let pixels = tile.as_raw().as_slice();
                 let img = Image {
-                    pixels: tile.as_raw(),
+                    pixels,
                     width: tile_size as usize,
                     pitch: tile_size as usize * 3,
                     height: tile_size as usize,
