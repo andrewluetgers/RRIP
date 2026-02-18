@@ -104,7 +104,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
         for row in 0..bundle.grid_rows() {
             for col in 0..bundle.grid_cols() {
                 // Check if family has data by trying to get its pack
-                if bundle.get_pack(col, row).is_ok() {
+                if bundle.get_pack(col as u32, row as u32).is_ok() {
                     parents.push((col as u32, row as u32));
                 }
             }
