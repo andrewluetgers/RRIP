@@ -48,5 +48,8 @@ webp = "0.3"
 # GPU monitoring via NVML (for --profile resource utilization)
 nvml-wrapper = "0.12"
 
+# Timestamps for manifest generation
+chrono = "0.4"
+
 [build-dependencies]
 cc = "1.0"

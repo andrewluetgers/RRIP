@@ -1,0 +1,78 @@
+{
+  "bundle_path": "evals/runs/wsi_for_family_eval/residual_packs/residuals.bundle",
+  "grid": "262x362",
+  "total_families": 94844,
+  "non_empty_families": 6448,
+  "empty_families": 88396,
+  "statistics": {
+    "min": 447,
+    "p50": 41933,
+    "p95": 98824,
+    "p99": 118637,
+    "max": 138563,
+    "mean": 40926,
+    "median": 41933
+  },
+  "representatives": [
+    {
+      "percentile": 5,
+      "x2": 152,
+      "y2": 13,
+      "size": 2975
+    },
+    {
+      "percentile": 15,
+      "x2": 4,
+      "y2": 9,
+      "size": 5232
+    },
+    {
+      "percentile": 25,
+      "x2": 219,
+      "y2": 21,
+      "size": 7481
+    },
+    {
+      "percentile": 35,
+      "x2": 126,
+      "y2": 0,
+      "size": 12236
+    },
+    {
+      "percentile": 45,
+      "x2": 260,
+      "y2": 5,
+      "size": 38901
+    },
+    {
+      "percentile": 50,
+      "x2": 116,
+      "y2": 11,
+      "size": 41931
+    },
+    {
+      "percentile": 60,
+      "x2": 94,
+      "y2": 4,
+      "size": 50817
+    },
+    {
+      "percentile": 75,
+      "x2": 112,
+      "y2": 17,
+      "size": 61944
+    },
+    {
+      "percentile": 90,
+      "x2": 56,
+      "y2": 9,
+      "size": 89221
+    },
+    {
+      "percentile": 99,
+      "x2": 26,
+      "y2": 6,
+      "size": 118778
+    }
+  ]
+}

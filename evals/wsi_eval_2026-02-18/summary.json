@@ -1,0 +1,17 @@
+{
+  "mode": "gpu-encode",
+  "dicom": "/workspace/data/3DHISTECH-2-256/4_1",
+  "tile_size": 256,
+  "baseq": 80,
+  "l1q": 70,
+  "l0q": 60,
+  "optl2": true,
+  "sharpen": null,
+  "families": 94844,
+  "families_empty": 88396,
+  "grid_cols": 262,
+  "grid_rows": 362,
+  "l2_bytes": 99105060,
+  "residual_bytes": 282907967,
+  "elapsed_secs": 118.342330915
+}

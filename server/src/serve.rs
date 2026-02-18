@@ -1295,21 +1295,31 @@ fn discover_slides(
                 let lbl = if mode == "ingest-jpeg-only" {
                     let q = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("JPEG Q{}", q)
-                } else {
+                } else if summary.get("baseq").is_some() {
                     let baseq = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
                     let l1q = summary.get("l1q").and_then(|v| v.as_u64()).unwrap_or(0);
                     let l0q = summary.get("l0q").and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("Origami {}/{}/{}", baseq, l1q, l0q)
+                } else if summary.get("residual_jpeg_q_L").is_some() {
+                    // Legacy Python pipeline format
+                    let q = summary.get("residual_jpeg_q_L").and_then(|v| v.as_u64()).unwrap_or(0);
+                    format!("Origami Q{}", q)
+                } else {
+                    slide_id.clone()
                 };
                 let size = if mode == "ingest-jpeg-only" {
-                    // JPEG-only: total_bytes covers everything
                     let total = summary.get("total_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
                     total as f64 / 1_048_576.0
-                } else {
-                    // Origami: l2_bytes + residual_bytes (pack files)
+                } else if summary.get("l2_bytes").is_some() {
                     let l2 = summary.get("l2_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
                     let res = summary.get("residual_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
                     (l2 + res) as f64 / 1_048_576.0
+                } else if summary.get("proposed_bytes").is_some() {
+                    // Legacy Python pipeline format
+                    let total = summary.get("proposed_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                    total as f64 / 1_048_576.0
+                } else {
+                    0.0
                 };
                 (lbl, size)
             } else {
