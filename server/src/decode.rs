@@ -99,13 +99,18 @@ pub fn run(args: DecodeArgs) -> Result<()> {
 
     // Discover parents based on source type
     let (parents, residuals_dir, pack_dir) = if let Some(ref bundle) = bundle_file {
-        // Bundle file: enumerate all non-empty families from index
+        // Bundle file: enumerate all non-empty families from index that also have baseline tiles
         let mut parents = Vec::new();
+        let pyramid_files_dir = args.pyramid.join("baseline_pyramid_files").join(format!("{}", pyramid.l2));
         for row in 0..bundle.grid_rows() {
             for col in 0..bundle.grid_cols() {
                 // Check if family has data by trying to get its pack
                 if bundle.get_pack(col as u32, row as u32).is_ok() {
-                    parents.push((col as u32, row as u32));
+                    // Also check if baseline tile exists
+                    let baseline_path = pyramid_files_dir.join(format!("{}_{}.jpg", col, row));
+                    if baseline_path.exists() {
+                        parents.push((col as u32, row as u32));
+                    }
                 }
             }
         }
