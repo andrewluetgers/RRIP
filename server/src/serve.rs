@@ -178,6 +178,8 @@ struct Slide {
     label: String,
     /// Total disk size in MB for all served content
     disk_size_mb: f64,
+    /// JPEG-only slide (no residual packs — serve all levels from filesystem)
+    jpeg_only: bool,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -694,6 +696,22 @@ async fn serve_tile(
     let start = Instant::now();
     let (x, y) = parse_tile_name(&tile).ok_or(StatusCode::BAD_REQUEST)?;
     let slide = state.slides.get(&slide_id).ok_or(StatusCode::NOT_FOUND)?;
+
+    // JPEG-only slides have no residual packs — serve all levels from filesystem
+    if slide.jpeg_only {
+        let path = baseline_tile_path(slide, level, x, y);
+        let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+        state
+            .metrics
+            .lock()
+            .unwrap()
+            .record_tile("baseline", start.elapsed().as_millis());
+        info!(
+            "tile baseline(jpeg-only) slide_id={} level={} x={} y={} ms={}",
+            slide_id, level, x, y, start.elapsed().as_millis()
+        );
+        return Ok(jpeg_response(bytes));
+    }
 
     if level <= slide.l2 {
         // For L2 tiles, try loading from pack (bundle or individual .pack file)
@@ -1693,10 +1711,11 @@ fn discover_slides(
 
         // Compute label and disk size from summary.json
         let summary_path = slide_root.join("summary.json");
-        let (label, disk_size_mb) = if let Ok(data) = fs::read_to_string(&summary_path) {
+        let (label, disk_size_mb, jpeg_only) = if let Ok(data) = fs::read_to_string(&summary_path) {
             if let Ok(summary) = serde_json::from_str::<serde_json::Value>(&data) {
                 let mode = summary.get("mode").and_then(|v| v.as_str()).unwrap_or("");
-                let lbl = if mode == "ingest-jpeg-only" {
+                let is_jpeg_only = mode == "ingest-jpeg-only";
+                let lbl = if is_jpeg_only {
                     let q = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("JPEG Q{}", q)
                 } else if summary.get("baseq").is_some() {
@@ -1727,12 +1746,12 @@ fn discover_slides(
                 } else {
                     0.0
                 };
-                (lbl, size)
+                (lbl, size, is_jpeg_only)
             } else {
-                (slide_id.clone(), 0.0)
+                (slide_id.clone(), 0.0, false)
             }
         } else {
-            (slide_id.clone(), 0.0)
+            (slide_id.clone(), 0.0, false)
         };
 
         // Try to open a bundle file (preferred over individual .pack files)
@@ -1766,6 +1785,7 @@ fn discover_slides(
             l2,
             label,
             disk_size_mb,
+            jpeg_only,
         };
         slides.insert(slide_id, slide);
     }
