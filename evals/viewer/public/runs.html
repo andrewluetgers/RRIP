@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORIGAMI — Run Management</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #333;
+            background: #f5f5f5;
+        }
+        a { color: #17a2b8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Nav Bar */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #1a1a2e;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            height: 48px;
+            gap: 24px;
+        }
+        .navbar .brand {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        .navbar nav {
+            display: flex;
+            gap: 16px;
+            margin-left: auto;
+        }
+        .navbar nav a {
+            color: #8ecae6;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .navbar nav a:hover { color: #fff; text-decoration: none; }
+        .navbar nav a.active { color: #fff; font-weight: 600; }
+
+        /* Content */
+        .content {
+            margin: 24px;
+            padding: 0;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .page-header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-primary {
+            background: #17a2b8;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #138496; }
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+        .btn-danger:hover { background: #c82333; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #dee2e6;
+            color: #555;
+        }
+        .btn-outline:hover { background: #e9ecef; }
+
+        /* Runs Table */
+        .runs-table-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead th {
+            background: #f8f9fa;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6c757d;
+            border-bottom: 3px solid #bcc3cb;
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 2px solid #d5d9dd;
+            vertical-align: middle;
+        }
+        tbody tr:hover { background: #f8f9fa; }
+        .mono { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+
+        /* Status indicators */
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-complete .status-dot { background: #28a745; }
+        .status-running .status-dot { background: #ffc107; animation: pulse 1s infinite; }
+        .status-failed .status-dot { background: #dc3545; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: #6c757d;
+        }
+        .empty-state p { margin-bottom: 16px; font-size: 16px; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 480px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 20px 24px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6c757d;
+            padding: 4px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body { padding: 20px 24px; }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 4px;
+        }
+        .form-group input[type="number"],
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #17a2b8;
+            box-shadow: 0 0 0 2px rgba(23,162,184,0.2);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-size: 14px;
+        }
+
+        .name-preview {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+        }
+        .name-preview .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .name-preview .value {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 14px;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+
+        .form-error {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Size formatting */
+        .size-cell {
+            white-space: nowrap;
+        }
+
+        /* Metric distribution cells */
+        .metric-dist-cell {
+            position: relative;
+            min-width: 120px;
+            height: 36px;
+            padding: 0 !important;
+            overflow: hidden;
+        }
+        .dist-bars {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+            gap: 1px;
+        }
+        .dist-bars .bar {
+            flex: 1;
+            background: rgba(23, 162, 184, 0.06);
+            border-top: 1px solid rgba(23, 162, 184, 0.45);
+        }
+        .dist-bars .bar.avg-bin {
+            background: rgba(23, 162, 184, 0.16);
+            border-top: 1px solid rgba(23, 162, 184, 0.7);
+        }
+        .dist-bars.warm .bar {
+            background: rgba(220, 53, 69, 0.06);
+            border-top: 1px solid rgba(220, 53, 69, 0.45);
+        }
+        .dist-bars.warm .bar.avg-bin {
+            background: rgba(220, 53, 69, 0.16);
+            border-top: 1px solid rgba(220, 53, 69, 0.7);
+        }
+        .dist-labels {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+        .dist-avg {
+            font-weight: 700;
+            font-size: 13px;
+            color: #1a1a2e;
+        }
+        .dist-min, .dist-max {
+            position: absolute;
+            font-size: 9px;
+            color: #999;
+            bottom: 2px;
+        }
+        .dist-min { left: 4px; }
+        .dist-max { right: 4px; }
+
+        @media (max-width: 768px) {
+            .navbar nav { gap: 10px; }
+            .navbar nav a { font-size: 12px; }
+            .content { padding: 0 12px; }
+            .form-row, .form-row-3 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <a class="brand" href="/">ORIGAMI</a>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/pipeline.html">Pipeline</a>
+        <a href="/comparison.html">Comparison</a>
+        <a href="/runs.html" class="active">Runs</a>
+    </nav>
+</div>
+
+<div class="content">
+    <div class="page-header">
+        <h1>Encode Runs</h1>
+        <button class="btn btn-primary" onclick="openModal()">+ New Run</button>
+    </div>
+
+    <div class="runs-table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>BaseQ</th>
+                    <th>L1Q</th>
+                    <th>L0Q</th>
+                    <th>OptL2</th>
+                    <th>L2 Sharp</th>
+                    <th>L1 Sharp</th>
+                    <th>L0 Sharp</th>
+                    <th>L1 Scale</th>
+                    <th>L0 Scale</th>
+                    <th>Size</th>
+                    <th>PSNR</th>
+                    <th>SSIM</th>
+                    <th>MS-SSIM</th>
+                    <th>&Delta;E</th>
+                    <th>LPIPS</th>
+                    <th>Block</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="runs-body">
+                <tr>
+                    <td colspan="19" class="empty-state">
+                        <p>Loading runs...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- New Run Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>New Encode Run</h2>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="f-image">Test Image</label>
+                <select id="f-image">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="f-baseq">L2 Base Q</label>
+                    <input type="number" id="f-baseq" value="90" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label for="f-l0q">L0 Residual Q</label>
+                    <input type="number" id="f-l0q" value="70" min="1" max="100">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f-optl2" checked>
+                        <label for="f-optl2">OptL2 (gradient descent optimization)</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="f-maxdelta">Max Delta (±)</label>
+                    <input type="number" id="f-maxdelta" value="20" min="1" max="255" step="1">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="f-sharpen">L2 Sharpen</label>
+                    <input type="number" id="f-sharpen" value="" min="0" max="5" step="0.1" placeholder="None">
+                </div>
+                <div class="form-group">
+                    <label for="f-l0sharpen">L0 Residual Sharpen</label>
+                    <input type="number" id="f-l0sharpen" value="" min="0" max="5" step="0.1" placeholder="None">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="f-l0scale">L0 Scale (%)</label>
+                    <input type="number" id="f-l0scale" value="100" min="1" max="100" placeholder="100">
+                </div>
+            </div>
+
+            <div class="name-preview">
+                <div class="label">Run Directory Name</div>
+                <div class="value" id="name-preview">v2_b90_l0q70_optl2</div>
+            </div>
+
+            <div class="form-error" id="form-error"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" id="btn-start" onclick="startEncode()">Start Encode</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let pollTimer = null;
+
+    // ─── Name generation (mirrors server-side generateRunName) ───
+    function generateRunName() {
+        const baseq = parseInt(document.getElementById('f-baseq').value) || 90;
+        const l0q = parseInt(document.getElementById('f-l0q').value) || 70;
+        const optl2 = document.getElementById('f-optl2').checked;
+        const sh = parseFloat(document.getElementById('f-sharpen').value) || 0;
+        const l0s = parseInt(document.getElementById('f-l0scale').value) || 100;
+        const l0sh = parseFloat(document.getElementById('f-l0sharpen').value) || 0;
+        const maxDelta = parseInt(document.getElementById('f-maxdelta').value) || 20;
+
+        let name = `v2_b${baseq}_l0q${l0q}`;
+        if (optl2) name += '_optl2';
+        if (optl2 && maxDelta !== 20) name += `_d${maxDelta}`;
+        if (sh > 0) name += `_sh${Math.round(sh * 10)}`;
+        if (l0s < 100) name += `_l0s${l0s}`;
+        if (l0sh > 0) name += `_l0sh${Math.round(l0sh * 10)}`;
+        return name;
+    }
+
+    function updatePreview() {
+        document.getElementById('name-preview').textContent = generateRunName();
+    }
+
+    // Attach change listeners to all form fields
+    ['f-baseq', 'f-l0q', 'f-optl2', 'f-maxdelta', 'f-sharpen', 'f-l0sharpen', 'f-l0scale'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePreview);
+        document.getElementById(id).addEventListener('change', updatePreview);
+    });
+
+    // ─── Format helpers ───
+    function formatBytes(bytes) {
+        if (bytes == null) return '-';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    // ─── Load test images ───
+    async function loadTestImages() {
+        try {
+            const resp = await fetch('/api/test-images');
+            const images = await resp.json();
+            const sel = document.getElementById('f-image');
+            sel.innerHTML = '';
+            if (images.length === 0) {
+                sel.innerHTML = '<option value="">No images found in evals/test-images/</option>';
+                return;
+            }
+            for (const img of images) {
+                const opt = document.createElement('option');
+                opt.value = img;
+                opt.textContent = img;
+                sel.appendChild(opt);
+            }
+        } catch (e) {
+            console.error('Failed to load test images:', e);
+        }
+    }
+
+    // ─── Load runs ───
+    async function loadRuns() {
+        try {
+            const resp = await fetch('/api/runs');
+            const runs = await resp.json();
+            renderRuns(runs);
+
+            // Poll if any encode is running
+            const anyRunning = runs.some(r => r.status === 'running');
+            if (anyRunning && !pollTimer) {
+                pollTimer = setInterval(loadRuns, 3000);
+            } else if (!anyRunning && pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        } catch (e) {
+            console.error('Failed to load runs:', e);
+        }
+    }
+
+    // ─── Metric distribution renderer ───
+    const METRIC_CONFIG = [
+        { key: 'psnr',       decimals: 2, unit: ' dB', lowerIsBetter: false },
+        { key: 'ssim',       decimals: 4, unit: '',     lowerIsBetter: false },
+        { key: 'ms_ssim',    decimals: 4, unit: '',     lowerIsBetter: false },
+        { key: 'delta_e',    decimals: 2, unit: '',     lowerIsBetter: true  },
+        { key: 'lpips',      decimals: 4, unit: '',     lowerIsBetter: true  },
+        { key: 'blockiness', decimals: 1, unit: '',     lowerIsBetter: true  },
+    ];
+
+    function renderMetricCell(dist, cfg) {
+        if (!dist) return '<td class="metric-dist-cell"><span style="display:flex;align-items:center;justify-content:center;height:100%;color:#999">-</span></td>';
+
+        const { min, max, avg, values } = dist;
+        const { decimals, unit, lowerIsBetter } = cfg;
+        const NUM_BINS = 16;
+
+        // If all values are the same, show just the avg
+        if (min === max) {
+            return `<td class="metric-dist-cell">
+                <div class="dist-labels"><span class="dist-avg">${avg.toFixed(decimals)}${unit}</span></div>
+            </td>`;
+        }
+
+        // Bin the values
+        const range = max - min;
+        const binSize = range / NUM_BINS;
+        const bins = new Array(NUM_BINS).fill(0);
+        for (const v of values) {
+            let idx = Math.floor((v - min) / binSize);
+            if (idx >= NUM_BINS) idx = NUM_BINS - 1;
+            bins[idx]++;
+        }
+        const maxBin = Math.max(...bins);
+        const avgBinIdx = Math.min(Math.floor((avg - min) / binSize), NUM_BINS - 1);
+
+        const warmClass = lowerIsBetter ? ' warm' : '';
+        let barsHtml = `<div class="dist-bars${warmClass}">`;
+        for (let i = 0; i < NUM_BINS; i++) {
+            const pct = maxBin > 0 ? Math.max((bins[i] / maxBin) * 100, bins[i] > 0 ? 4 : 0) : 0;
+            const cls = i === avgBinIdx ? ' avg-bin' : '';
+            barsHtml += `<div class="bar${cls}" style="height:${pct}%"></div>`;
+        }
+        barsHtml += '</div>';
+
+        return `<td class="metric-dist-cell">
+            ${barsHtml}
+            <div class="dist-labels">
+                <span class="dist-min">${min.toFixed(decimals)}</span>
+                <span class="dist-avg">${avg.toFixed(decimals)}${unit}</span>
+                <span class="dist-max">${max.toFixed(decimals)}</span>
+            </div>
+        </td>`;
+    }
+
+    function renderRuns(runs) {
+        const tbody = document.getElementById('runs-body');
+        if (runs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="19" class="empty-state">
+                <p>No runs yet.</p>
+                <button class="btn btn-primary" onclick="openModal()">Create your first run</button>
+            </td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = runs.map(run => {
+            const statusClass = `status-${run.status}`;
+            const statusLabel = run.status === 'running' ? 'Running' : 'Complete';
+            const optl2Label = run.optl2 ? 'Yes' : '-';
+            const shLabel = run.sharpen ? run.sharpen.toFixed(1) : '-';
+            const l1shLabel = run.l1_sharpen ? run.l1_sharpen.toFixed(1) : '-';
+            const l0shLabel = run.l0_sharpen ? run.l0_sharpen.toFixed(1) : '-';
+            const l1sLabel = (run.l1_scale && run.l1_scale < 100) ? run.l1_scale + '%' : '-';
+            const l0sLabel = (run.l0_scale && run.l0_scale < 100) ? run.l0_scale + '%' : '-';
+            const sizeLabel = formatBytes(run.total_bytes);
+
+            const m = run.metrics || {};
+            const metricCells = METRIC_CONFIG.map(cfg => renderMetricCell(m[cfg.key], cfg)).join('');
+
+            const viewLink = (run.has_compress || run.has_decompress || run.has_images)
+                ? `<a href="/comparison.html" class="btn btn-sm btn-outline">View</a>`
+                : '';
+            const archiveBtn = run.status !== 'running'
+                ? `<button class="btn btn-sm btn-danger" onclick="archiveRun('${run.dirName}')">Archive</button>`
+                : '';
+
+            return `<tr>
+                <td class="mono">${run.dirName}</td>
+                <td>${run.baseq || '-'}</td>
+                <td>${run.l1q || '-'}</td><!-- legacy v1 -->
+                <td>${run.l0q || '-'}</td>
+                <td>${optl2Label}</td>
+                <td>${shLabel}</td>
+                <td>${l1shLabel}</td>
+                <td>${l0shLabel}</td>
+                <td>${l1sLabel}</td>
+                <td>${l0sLabel}</td>
+                <td class="size-cell">${sizeLabel}</td>
+                ${metricCells}
+                <td class="${statusClass}"><span class="status-dot"></span>${statusLabel}</td>
+                <td>${viewLink} ${archiveBtn}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ─── Modal ───
+    window.openModal = function() {
+        document.getElementById('modal-overlay').classList.add('open');
+        document.getElementById('form-error').style.display = 'none';
+        updatePreview();
+    };
+
+    window.closeModal = function() {
+        document.getElementById('modal-overlay').classList.remove('open');
+    };
+
+    // ─── Start encode ───
+    window.startEncode = async function() {
+        const image = document.getElementById('f-image').value;
+        if (!image) {
+            showError('Please select a test image.');
+            return;
+        }
+
+        const sh = parseFloat(document.getElementById('f-sharpen').value);
+        const l0sh = parseFloat(document.getElementById('f-l0sharpen').value);
+        const params = {
+            image,
+            baseq: parseInt(document.getElementById('f-baseq').value) || 90,
+            l0q: parseInt(document.getElementById('f-l0q').value) || 70,
+            optl2: document.getElementById('f-optl2').checked,
+            max_delta: parseInt(document.getElementById('f-maxdelta').value) || 20,
+            sharpen: sh > 0 ? sh : null,
+            l0_scale: parseInt(document.getElementById('f-l0scale').value) || 100,
+            l0_sharpen: l0sh > 0 ? l0sh : null,
+        };
+
+        const btn = document.getElementById('btn-start');
+        btn.disabled = true;
+        btn.textContent = 'Starting...';
+
+        try {
+            const resp = await fetch('/api/runs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params),
+            });
+            const result = await resp.json();
+
+            if (!resp.ok) {
+                showError(result.error || 'Failed to start encode');
+                return;
+            }
+
+            closeModal();
+            // Start polling immediately — run may not have content yet
+            if (!pollTimer) {
+                pollTimer = setInterval(loadRuns, 3000);
+            }
+            // Short delay so the dir exists before we scan
+            setTimeout(loadRuns, 500);
+        } catch (e) {
+            showError('Network error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Start Encode';
+        }
+    };
+
+    // ─── Archive ───
+    window.archiveRun = async function(name) {
+        if (!confirm(`Archive run "${name}"? It will be moved to _archive/.`)) return;
+
+        try {
+            const resp = await fetch(`/api/runs/${encodeURIComponent(name)}/archive`, {
+                method: 'POST',
+            });
+            const result = await resp.json();
+            if (!resp.ok) {
+                alert(result.error || 'Failed to archive');
+                return;
+            }
+            loadRuns();
+        } catch (e) {
+            alert('Network error: ' + e.message);
+        }
+    };
+
+    function showError(msg) {
+        const el = document.getElementById('form-error');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+
+    // ─── Init ───
+    loadTestImages();
+    loadRuns();
+})();
+</script>
+
+</body>
+</html>

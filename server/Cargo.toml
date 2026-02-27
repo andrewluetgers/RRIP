@@ -18,12 +18,12 @@ axum = "0.7"
 bytes = "1.6"
 clap = { version = "4.5", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-moka = { version = "0.12", features = ["sync"] }
+rocksdb = { version = "0.22", default-features = false }
 rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread"] }
-tower-http = { version = "0.5", features = ["trace", "cors"] }
+tower-http = { version = "0.5", features = ["trace", "cors", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 turbojpeg = "0.5"
@@ -36,10 +36,15 @@ lz4_flex = "0.11"
 libc = "0.2"
 jpegxl-rs = { version = "0.11", optional = true, features = ["vendored"] }
 webp = "0.3"
+fast_image_resize = "6"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rcgen = "0.13"
+rustls = "0.23"
+rustls-pki-types = "1"
 openslide-rs = { version = "2.0", optional = true }
 
 [features]
-default = []
+default = ["jpegxl"]
 mozjpeg = []   # Links pre-built mozjpeg via build.rs (see scripts/build_mozjpeg.sh)
 jpegli = []    # Links pre-built jpegli via build.rs (see scripts/build_jpegli.sh)
 jpegxl = ["jpegxl-rs"]  # Statically builds and links libjxl via vendored feature
@@ -48,6 +53,10 @@ openslide = ["dep:openslide-rs"]  # WSI ingest via OpenSlide (requires system Op
 [[bin]]
 name = "test_pack_compression"
 path = "src/simple_pack_compression_test.rs"
+
+[[bin]]
+name = "bench_jxl_vs_jpeg"
+path = "src/bench_jxl_vs_jpeg.rs"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }

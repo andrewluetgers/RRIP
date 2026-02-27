@@ -359,8 +359,10 @@
         <a href="#viewer">Viewer</a>
         <a href="#how-it-works">How It Works</a>
         <a href="#results">Results</a>
-        <a href="/pipeline.html">Pipeline</a>
-        <a href="/comparison.html">Comparison</a>
+        <a href="https://localhost:8084/pipeline.html">Pipeline</a>
+        <a href="https://localhost:8084/comparison.html">Comparison</a>
+        <a href="https://localhost:8084/runs.html">Runs</a>
+        <a href="/compare" target="_blank">WSI Compare</a>
         <a href="#docs">Docs</a>
     </nav>
 </div>
@@ -454,7 +456,7 @@
     </div>
 
     <div class="section-link">
-        <a href="/pipeline.html">Explore the full pipeline walkthrough &rarr;</a>
+        <a href="https://localhost:8084/pipeline.html">Explore the full pipeline walkthrough &rarr;</a>
     </div>
 </div>
 
@@ -489,7 +491,7 @@
     </div>
 
     <div class="section-link" style="margin-top: 24px;">
-        <a href="/comparison.html">Open the full comparison viewer &rarr;</a>
+        <a href="https://localhost:8084/comparison.html">Open the full comparison viewer &rarr;</a>
     </div>
 </div>
 
@@ -513,15 +515,20 @@
             <p>Key metrics and the business case for ORIGAMI.</p>
             <span>Read summary &rarr;</span>
         </a>
-        <a class="resource-card" href="/pipeline.html">
+        <a class="resource-card" href="https://localhost:8084/pipeline.html">
             <h3>Pipeline Walkthrough</h3>
             <p>Step-by-step encode pipeline with debug images from real runs.</p>
             <span>Explore pipeline &rarr;</span>
         </a>
-        <a class="resource-card" href="/comparison.html">
+        <a class="resource-card" href="https://localhost:8084/comparison.html">
             <h3>Comparison Viewer</h3>
             <p>Interactive A/B quality analysis across encoders and configs.</p>
             <span>Open viewer &rarr;</span>
+        </a>
+        <a class="resource-card" href="/compare" target="_blank">
+            <h3>WSI Compare</h3>
+            <p>Full whole-slide 4-up comparison: ORIGAMI 90/80 vs 80/70 vs JPEG 90 vs JPEG 95.</p>
+            <span>Open tile server &rarr;</span>
         </a>
         <a class="resource-card" href="/docs/encode_time_optimizations.md">
             <h3>Encode Optimizations</h3>
@@ -568,9 +575,9 @@
 
     // Deep Zoom 2-up viewer with slide pickers
     (function() {
-        var DZI_SERVER = 'http://localhost:3007';
+        var DZI_SERVER = '';
         var DEFAULT_LEFT = 'jpeg90';
-        var DEFAULT_RIGHT = 'origami_b80_60_40';
+        var DEFAULT_RIGHT = 'v2_b90_l0q80';
 
         var slides = [];
         var viewers = { left: null, right: null };

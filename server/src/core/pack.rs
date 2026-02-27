@@ -17,6 +17,16 @@ pub struct PackFile {
 }
 
 impl PackFile {
+    /// Get the L2 baseline JPEG bytes from the pack.
+    pub fn get_l2(&self) -> Option<&[u8]> {
+        self.get_residual(2, 0)
+    }
+
+    /// Get the fused L0 residual (single grayscale JPEG mosaic) from the pack.
+    pub fn get_fused_l0(&self) -> Option<&[u8]> {
+        self.get_residual(0, 0)
+    }
+
     pub fn get_residual(&self, level_kind: u8, idx_in_parent: u8) -> Option<&[u8]> {
         let entry = self
             .index
@@ -48,20 +58,20 @@ pub struct PackWriteEntry {
     pub jpeg_data: Vec<u8>,
 }
 
-/// Write a pack file with LZ4 compression. Uses "ORIG" magic, version 1.
+/// Write a pack file with LZ4 compression. Uses "ORIG" magic, version 2.
 ///
-/// Binary format (before LZ4 compression):
+/// V2 pack format (before LZ4 compression):
 /// - Header (24 bytes):
 ///   [0..4]   magic "ORIG"
-///   [4..6]   version (u16 LE) = 1
+///   [4..6]   version (u16 LE) = 2
 ///   [6..8]   reserved (zeroes)
-///   [8..12]  entry count (u32 LE)
+///   [8..12]  entry count (u32 LE) — typically 2 (L2 + fused L0)
 ///   [12..16] index_offset (u32 LE)
 ///   [16..20] data_offset (u32 LE)
 ///   [20..24] reserved (zeroes)
 /// - Index (16 bytes per entry):
-///   [0]      level_kind (1=L1, 0=L0)
-///   [1]      idx_in_parent
+///   [0]      level_kind (2=L2 baseline, 0=fused L0 residual)
+///   [1]      idx_in_parent (always 0)
 ///   [2..4]   reserved
 ///   [4..8]   offset relative to data_offset (u32 LE)
 ///   [8..12]  length (u32 LE)
@@ -81,7 +91,7 @@ pub fn write_pack(pack_dir: &Path, x2: u32, y2: u32, entries: &[PackWriteEntry])
 
     // Write header
     buf[0..4].copy_from_slice(b"ORIG");
-    buf[4..6].copy_from_slice(&1u16.to_le_bytes()); // version
+    buf[4..6].copy_from_slice(&2u16.to_le_bytes()); // version 2
     // [6..8] reserved
     buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
     buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
@@ -334,7 +344,7 @@ pub fn compress_pack_entries(entries: &[PackWriteEntry]) -> Vec<u8> {
 
     let mut buf = vec![0u8; total_size];
     buf[0..4].copy_from_slice(b"ORIG");
-    buf[4..6].copy_from_slice(&1u16.to_le_bytes());
+    buf[4..6].copy_from_slice(&2u16.to_le_bytes()); // version 2
     buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
     buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
     buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
@@ -357,6 +367,7 @@ pub fn compress_pack_entries(entries: &[PackWriteEntry]) -> Vec<u8> {
 
 /// Parse decompressed pack data into a PackFile.
 /// Shared between open_pack and BundleFile::get_pack.
+/// Accepts both v1 and v2 pack formats.
 fn parse_pack_data(data: Vec<u8>) -> Result<PackFile> {
     if data.len() < 24 {
         return Err(anyhow!("pack too small"));
@@ -365,8 +376,8 @@ fn parse_pack_data(data: Vec<u8>) -> Result<PackFile> {
         return Err(anyhow!("pack magic mismatch"));
     }
     let version = u16::from_le_bytes([data[4], data[5]]);
-    if version != 1 {
-        return Err(anyhow!("pack version mismatch"));
+    if version != 1 && version != 2 {
+        return Err(anyhow!("pack version {} not supported (expected 1 or 2)", version));
     }
     let count = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
     let index_offset = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
@@ -408,31 +419,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pack_roundtrip() {
-        let dir = std::env::temp_dir().join("origami_test_packs");
+    fn test_pack_v2_roundtrip() {
+        let dir = std::env::temp_dir().join("origami_test_packs_v2");
         let entries = vec![
             PackWriteEntry {
-                level_kind: 1,
+                level_kind: 2,
                 idx_in_parent: 0,
-                jpeg_data: vec![0xFF, 0xD8, 0xFF, 0xD9], // minimal JPEG
+                jpeg_data: vec![0xFF, 0xD8, 0xFF, 0xD9], // L2 baseline
             },
             PackWriteEntry {
                 level_kind: 0,
-                idx_in_parent: 3,
-                jpeg_data: vec![1, 2, 3, 4, 5],
+                idx_in_parent: 0,
+                jpeg_data: vec![1, 2, 3, 4, 5], // fused L0 residual
             },
         ];
 
         write_pack(&dir, 5, 7, &entries).unwrap();
         let pack = open_pack(&dir, 5, 7).unwrap();
 
-        let r1 = pack.get_residual(1, 0).unwrap();
-        assert_eq!(r1, &[0xFF, 0xD8, 0xFF, 0xD9]);
+        let l2 = pack.get_l2().unwrap();
+        assert_eq!(l2, &[0xFF, 0xD8, 0xFF, 0xD9]);
 
-        let r2 = pack.get_residual(0, 3).unwrap();
-        assert_eq!(r2, &[1, 2, 3, 4, 5]);
+        let l0 = pack.get_fused_l0().unwrap();
+        assert_eq!(l0, &[1, 2, 3, 4, 5]);
 
-        assert!(pack.get_residual(0, 0).is_none());
+        // No L1 entries
+        assert!(pack.get_residual(1, 0).is_none());
 
         // Cleanup
         let _ = fs::remove_dir_all(&dir);
@@ -440,17 +452,18 @@ mod tests {
 
     #[test]
     fn test_bundle_roundtrip() {
-        let dir = std::env::temp_dir().join("origami_test_bundle");
+        let dir = std::env::temp_dir().join("origami_test_bundle_v2");
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        // Create two families worth of pack entries
+        // Create two families worth of v2 pack entries
         let entries_0_0 = vec![
-            PackWriteEntry { level_kind: 1, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 1, 2] },
-            PackWriteEntry { level_kind: 0, idx_in_parent: 3, jpeg_data: vec![10, 20, 30] },
+            PackWriteEntry { level_kind: 2, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 1, 2] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![10, 20, 30] },
         ];
         let entries_1_0 = vec![
-            PackWriteEntry { level_kind: 1, idx_in_parent: 1, jpeg_data: vec![0xFF, 0xD8, 3, 4, 5] },
+            PackWriteEntry { level_kind: 2, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 3, 4, 5] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![40, 50] },
         ];
 
         let lz4_0 = compress_pack_entries(&entries_0_0);
@@ -470,15 +483,17 @@ mod tests {
 
         // Read family (0,0)
         let pack_0 = bundle.get_pack(0, 0).unwrap();
-        let r = pack_0.get_residual(1, 0).unwrap();
-        assert_eq!(r, &[0xFF, 0xD8, 1, 2]);
-        let r = pack_0.get_residual(0, 3).unwrap();
-        assert_eq!(r, &[10, 20, 30]);
+        let l2 = pack_0.get_l2().unwrap();
+        assert_eq!(l2, &[0xFF, 0xD8, 1, 2]);
+        let l0 = pack_0.get_fused_l0().unwrap();
+        assert_eq!(l0, &[10, 20, 30]);
 
         // Read family (1,0)
         let pack_1 = bundle.get_pack(1, 0).unwrap();
-        let r = pack_1.get_residual(1, 1).unwrap();
-        assert_eq!(r, &[0xFF, 0xD8, 3, 4, 5]);
+        let l2 = pack_1.get_l2().unwrap();
+        assert_eq!(l2, &[0xFF, 0xD8, 3, 4, 5]);
+        let l0 = pack_1.get_fused_l0().unwrap();
+        assert_eq!(l0, &[40, 50]);
 
         // Out of range should error
         assert!(bundle.get_pack(2, 0).is_err());
@@ -490,12 +505,12 @@ mod tests {
     #[test]
     fn test_compress_pack_entries_matches_write_pack() {
         // Verify compress_pack_entries produces the same LZ4 bytes as write_pack
-        let dir = std::env::temp_dir().join("origami_test_compress_match");
+        let dir = std::env::temp_dir().join("origami_test_compress_match_v2");
         let _ = fs::remove_dir_all(&dir);
 
         let entries = vec![
-            PackWriteEntry { level_kind: 1, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 0xFF, 0xD9] },
-            PackWriteEntry { level_kind: 0, idx_in_parent: 5, jpeg_data: vec![1, 2, 3] },
+            PackWriteEntry { level_kind: 2, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 0xFF, 0xD9] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![1, 2, 3] },
         ];
 
         // write_pack writes to disk

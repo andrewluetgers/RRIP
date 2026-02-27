@@ -1,0 +1,10 @@
+{
+  "name": "origami",
+  "private": true,
+  "scripts": {
+    "start": "(cd evals/viewer && node viewer-server.js) & cd server && RUST_LOG=warn CARGO_TARGET_DIR=target2 ./target2/release/origami serve --slides-root ../data/dzi --port 3007 --pack-dir residual_packs --cache-dir /tmp/origami-cache --tls --viewer-dir ../evals/viewer/public --runs-dir ../evals/runs",
+    "start:verbose": "cd server && CARGO_TARGET_DIR=target2 ./target2/release/origami serve --slides-root ../data/dzi --port 3007 --pack-dir residual_packs --cache-dir /tmp/origami-cache --tls --viewer-dir ../evals/viewer/public --runs-dir ../evals/runs",
+    "clear-cache": "rm -rf /tmp/origami-cache && echo 'tile cache cleared'",
+    "bench": "bash evals/scripts/bench_filter_comparison.sh --slides-root data/dzi --port 3007"
+  }
+}

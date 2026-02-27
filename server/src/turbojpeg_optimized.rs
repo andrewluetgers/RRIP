@@ -152,6 +152,7 @@ pub fn encode_jpeg_turbo_420(pixels: &[u8], width: u32, height: u32, quality: u8
 pub fn encode_jpeg_turbo_420opt(pixels: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u8>> {
     use crate::core::color::ycbcr_planes_from_rgb;
     use crate::core::optimize_chroma::optimize_chroma_for_upsample;
+    use crate::core::ResampleFilter;
 
     let w = width as usize;
     let h = height as usize;
@@ -166,8 +167,9 @@ pub fn encode_jpeg_turbo_420opt(pixels: &[u8], width: u32, height: u32, quality:
     let mut cr_half = downsample_2x_channel(&cr_full, w, h);
 
     // 3. Optimize each half-res chroma plane via gradient descent
-    cb_half = optimize_chroma_for_upsample(&cb_half, &cb_full, half_w, half_h, 8.0, 50, 0.25);
-    cr_half = optimize_chroma_for_upsample(&cr_half, &cr_full, half_w, half_h, 8.0, 50, 0.25);
+    // Uses Bicubic (CatmullRom) to match the server's default upsample filter.
+    cb_half = optimize_chroma_for_upsample(&cb_half, &cb_full, half_w, half_h, 8.0, 50, 0.25, ResampleFilter::Bicubic);
+    cr_half = optimize_chroma_for_upsample(&cr_half, &cr_full, half_w, half_h, 8.0, 50, 0.25, ResampleFilter::Bicubic);
 
     // 4. Encode via tjCompressFromYUVPlanes
     encode_yuv_planes_420(&y_plane, &cb_half, &cr_half, width, height, quality)

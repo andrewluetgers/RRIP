@@ -3,6 +3,7 @@ use crate::turbojpeg_optimized::apply_residual_fast;
 use anyhow::{anyhow, Result};
 
 /// Apply a centered residual to a Y prediction plane and produce RGB output.
+/// Used by legacy v1 pipeline and ingest module.
 ///
 /// Extracts a tile_size x tile_size region from the prediction planes at (x0, y0),
 /// applies the residual (which is centered around 128), and writes interleaved RGB

@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use parking_lot::Mutex as PLMutex;
+
 use anyhow::{anyhow, Context, Result};
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::{header, HeaderValue, StatusCode};
@@ -25,19 +27,63 @@ use crate::core::pyramid::{parse_tile_size, max_level_from_files};
 use crate::core::reconstruct::{
     BufferPool, OutputFormat, ReconstructInput, ReconstructOpts, reconstruct_family,
 };
+use crate::core::ResampleFilter;
+
+// ---------------------------------------------------------------------------
+// RocksDB tile cache
+// ---------------------------------------------------------------------------
+
+struct TileCache {
+    db: rocksdb::DB,
+}
+
+impl TileCache {
+    fn open(path: &Path, block_cache_mb: usize) -> Result<Self> {
+        let mut block_opts = rocksdb::BlockBasedOptions::default();
+        let cache = rocksdb::Cache::new_lru_cache(block_cache_mb * 1024 * 1024);
+        block_opts.set_block_cache(&cache);
+        // JPEG/WebP bytes are already compressed — skip RocksDB compression
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+        opts.set_block_based_table_factory(&block_opts);
+        opts.set_compression_type(rocksdb::DBCompressionType::None);
+        // WAL disabled — cache data is regenerable
+        let mut write_opts = rocksdb::WriteOptions::default();
+        write_opts.disable_wal(true);
+        let db = rocksdb::DB::open(&opts, path)
+            .with_context(|| format!("opening RocksDB at {}", path.display()))?;
+        Ok(Self { db })
+    }
+
+    fn get(&self, key: &TileKey) -> Option<Vec<u8>> {
+        let k = format!("tile:{}:{}:{}:{}", key.slide_id, key.level, key.x, key.y);
+        self.db.get(k.as_bytes()).ok().flatten()
+    }
+
+    fn put_family(&self, tiles: &HashMap<TileKey, Bytes>) {
+        let mut batch = rocksdb::WriteBatch::default();
+        for (key, data) in tiles {
+            let k = format!("tile:{}:{}:{}:{}", key.slide_id, key.level, key.x, key.y);
+            batch.put(k.as_bytes(), data.as_ref());
+        }
+        let mut write_opts = rocksdb::WriteOptions::default();
+        write_opts.disable_wal(true);
+        if let Err(e) = self.db.write_opt(batch, &write_opts) {
+            tracing::warn!("RocksDB WriteBatch failed: {}", e);
+        }
+    }
+}
 
 #[derive(Args, Debug)]
 pub struct ServeArgs {
     #[arg(long, default_value = "data")]
     slides_root: PathBuf,
-    #[arg(long, default_value = "residuals_q32")]
-    residuals_dir: String,
+    #[arg(long, default_value = "residual_packs", hide = true)]
+    residuals_dir: String, // legacy, unused in v2 pipeline
     #[arg(long, default_value = "residual_packs")]
     pack_dir: String,
     #[arg(long, default_value_t = 95)]
     tile_quality: u8,
-    #[arg(long, default_value_t = 2048)]
-    cache_entries: usize,
     #[arg(long, default_value_t = 8080)]
     port: u16,
     #[arg(long, default_value_t = false)]
@@ -62,21 +108,36 @@ pub struct ServeArgs {
     prewarm_on_l2: bool,
     #[arg(long, default_value_t = false)]
     grayscale_only: bool,
-    /// Cache directory for saving reconstructed tiles to disk
+    /// RocksDB directory for tile cache (persistent across restarts)
     #[arg(long)]
     cache_dir: Option<String>,
+    /// RocksDB block cache size in MB (in-memory hot tiles)
+    #[arg(long, default_value_t = 256)]
+    cache_block_mb: usize,
     /// Output format for reconstructed tiles: jpeg or webp
     #[arg(long, default_value = "jpeg")]
     output_format: String,
     /// Unsharp mask strength to apply to L2 tiles before upsampling (decode-time sharpening)
     #[arg(long)]
     sharpen: Option<f32>,
+    /// Upsample filter for predictions: bilinear, bicubic, lanczos3 (default: lanczos3)
+    #[arg(long, default_value = "lanczos3")]
+    upsample_filter: String,
+    /// Enable HTTPS with auto-generated self-signed cert (enables HTTP/2 multiplexing)
+    #[arg(long, default_value_t = false)]
+    tls: bool,
+    /// Serve evals viewer static files from this directory (e.g. evals/viewer/public)
+    #[arg(long)]
+    viewer_dir: Option<PathBuf>,
+    /// Serve evals run images from this directory (e.g. evals/runs)
+    #[arg(long)]
+    runs_dir: Option<PathBuf>,
 }
 
 #[derive(Clone)]
 struct AppState {
     slides: Arc<HashMap<String, Slide>>,
-    cache: Arc<moka::sync::Cache<TileKey, Bytes>>,
+    tile_cache: Option<Arc<TileCache>>,
     tile_quality: u8,
     timing_breakdown: bool,
     writer: Option<mpsc::Sender<WriteJob>>,
@@ -89,9 +150,10 @@ struct AppState {
     inflight_limit: Arc<Semaphore>,
     prewarm_on_l2: bool,
     grayscale_only: bool,
-    cache_dir: Option<PathBuf>,
     output_format: OutputFormat,
     sharpen: Option<f32>,
+    upsample_filter: ResampleFilter,
+    singleflight: Arc<InflightMap>,
 }
 
 #[derive(serde::Deserialize)]
@@ -104,7 +166,6 @@ struct Slide {
     slide_id: String,
     dzi_path: PathBuf,
     files_dir: PathBuf,
-    residuals_dir: PathBuf,
     pack_dir: PathBuf,
     /// mmapped bundle file (preferred over pack_dir for residual serving)
     bundle: Option<Arc<BundleFile>>,
@@ -137,6 +198,17 @@ struct ServerFamilyResult {
     tiles: HashMap<TileKey, Bytes>,
     stats: Option<crate::core::reconstruct::FamilyStats>,
 }
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+struct FamilyKey {
+    slide_id: String,
+    x2: u32,
+    y2: u32,
+}
+
+/// Singleflight map: each in-flight family has a watch channel.
+/// Leader creates the channel and sends the result; waiters subscribe and await.
+type InflightMap = PLMutex<HashMap<FamilyKey, tokio::sync::watch::Receiver<Option<bool>>>>;
 
 struct InflightFamilies {
     current: AtomicUsize,
@@ -184,6 +256,7 @@ struct Metrics {
     tile_cache_hit: u64,
     tile_generated: u64,
     tile_fallback: u64,
+    tile_singleflight_hit: u64,
     tile_residual_view: u64,
     tile_ms_sum: u128,
     tile_ms_max: u128,
@@ -204,6 +277,7 @@ impl Metrics {
             "cache_hit" => self.tile_cache_hit += 1,
             "generated" => self.tile_generated += 1,
             "fallback" => self.tile_fallback += 1,
+            "singleflight_hit" => self.tile_singleflight_hit += 1,
             "residual_view" => self.tile_residual_view += 1,
             _ => {}
         }
@@ -286,28 +360,26 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         None
     };
 
-    if let Some(ref cache_dir_str) = args.cache_dir {
+    let tile_cache = if let Some(ref cache_dir_str) = args.cache_dir {
         let cache_path = PathBuf::from(cache_dir_str);
-        if let Err(err) = fs::create_dir_all(&cache_path) {
-            info!(
-                "Failed to create cache directory {}: {}",
-                cache_path.display(),
-                err
-            );
-        } else {
-            info!("Cache directory enabled: {}", cache_path.display());
+        match TileCache::open(&cache_path, args.cache_block_mb) {
+            Ok(tc) => {
+                info!("RocksDB tile cache opened: {} (block_cache={}MB)", cache_path.display(), args.cache_block_mb);
+                Some(Arc::new(tc))
+            }
+            Err(e) => {
+                info!("Failed to open RocksDB tile cache at {}: {} — running without cache", cache_path.display(), e);
+                None
+            }
         }
-    }
-
-    let cache = moka::sync::Cache::builder()
-        .max_capacity(args.cache_entries as u64)
-        .time_to_idle(Duration::from_secs(300))
-        .build();
+    } else {
+        None
+    };
     let inflight = Arc::new(InflightFamilies::new());
     let inflight_limit = Arc::new(Semaphore::new(args.max_inflight_families));
     let state = AppState {
         slides: slides.clone(),
-        cache: Arc::new(cache),
+        tile_cache,
         tile_quality: args.tile_quality,
         timing_breakdown: args.timing_breakdown,
         writer,
@@ -319,9 +391,11 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         inflight_limit,
         prewarm_on_l2: args.prewarm_on_l2,
         grayscale_only: args.grayscale_only,
-        cache_dir: args.cache_dir.map(PathBuf::from),
         output_format,
         sharpen: args.sharpen,
+        upsample_filter: args.upsample_filter.parse::<ResampleFilter>()
+            .unwrap_or(ResampleFilter::Lanczos3),
+        singleflight: Arc::new(PLMutex::new(HashMap::new())),
     };
 
     let metrics = state.metrics.clone();
@@ -360,12 +434,13 @@ async fn async_main(args: ServeArgs) -> Result<()> {
                 };
                 let rss_mb = rss_kb / 1024;
                 info!(
-                    "metrics tiles_total={} baseline={} cache_hit={} generated={} fallback={} residual_view={} tile_avg_ms={} tile_max_ms={} families={} family_avg_ms={} family_max_ms={} pool_total={} pool_avail={} pool_in_use_max={} inflight_current={} inflight_max={} rss_kb={} rss_mb={} cpu_pct={:.1}",
+                    "metrics tiles_total={} baseline={} cache_hit={} generated={} fallback={} singleflight_hit={} residual_view={} tile_avg_ms={} tile_max_ms={} families={} family_avg_ms={} family_max_ms={} pool_total={} pool_avail={} pool_in_use_max={} inflight_current={} inflight_max={} rss_kb={} rss_mb={} cpu_pct={:.1}",
                     snapshot.tile_total,
                     snapshot.tile_baseline,
                     snapshot.tile_cache_hit,
                     snapshot.tile_generated,
                     snapshot.tile_fallback,
+                    snapshot.tile_singleflight_hit,
                     snapshot.tile_residual_view,
                     tile_avg,
                     snapshot.tile_ms_max,
@@ -395,35 +470,130 @@ async fn async_main(args: ServeArgs) -> Result<()> {
             get(get_residual_tile),
         )
         .route("/viewer/:slide_id", get(viewer))
+        .route("/compare", get(compare_dynamic))
         .route("/compare/:left/:right", get(compare_viewer))
-        .route("/compare4/:a/:b/:c/:d", get(compare4_viewer))
-        .route("/compare", get(compare_picker))
+        .route("/compare/:a/:b/:c/:d", get(compare4_viewer))
         .route("/slides.json", get(list_slides))
         .with_state(state)
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http());
 
-    let addr = format!("0.0.0.0:{}", args.port);
+    // Optionally serve evals viewer static files and run images
+    let app = if let Some(ref viewer_dir) = args.viewer_dir {
+        use tower_http::services::ServeDir;
+        let mut app = app;
+        if let Some(ref runs_dir) = args.runs_dir {
+            info!("serving run images from {}", runs_dir.display());
+            app = app.nest_service("/run-image", ServeDir::new(runs_dir));
+        }
+        info!("serving viewer from {}", viewer_dir.display());
+        app.fallback_service(ServeDir::new(viewer_dir))
+    } else {
+        app
+    };
+
+    let bind_addr = format!("0.0.0.0:{}", args.port);
+    let scheme = if args.tls { "https" } else { "http" };
+    let display_addr = format!("localhost:{}", args.port);
     info!(
-        "listening on http://{} (rayon_threads={}, tokio_workers={}, tokio_blocking_threads={}, hw_threads={})",
-        addr,
+        "listening on {} (rayon_threads={}, tokio_workers={}, tokio_blocking_threads={}, hw_threads={})",
+        bind_addr,
         rayon::current_num_threads(),
         args.tokio_workers,
         args.tokio_blocking_threads,
         std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0)
     );
-    for slide in slides.values() {
-        info!("viewer url: http://{}/viewer/{}", addr, slide.slide_id);
+    println!("\n  ORIGAMI tile server: {}://{}\n", scheme, display_addr);
+
+    if args.tls {
+        // Generate self-signed cert for HTTP/2
+        let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
+            .map_err(|e| anyhow!("cert generation failed: {}", e))?;
+        let cert_pem = cert.cert.pem();
+        let key_pem = cert.key_pair.serialize_pem();
+
+        let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem(
+            cert_pem.into_bytes(),
+            key_pem.into_bytes(),
+        ).await.map_err(|e| anyhow!("TLS config failed: {}", e))?;
+
+        info!("HTTPS/2 enabled with self-signed cert (accept browser warning)");
+        axum_server::bind_rustls(bind_addr.parse()?, rustls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+        axum::serve(listener, app).await?;
     }
-    info!("compare url: http://{}/compare/<left>/<right>", addr);
-    info!("dzi url: http://{}/dzi/<slide_id>.dzi", addr);
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, app).await?;
     Ok(())
 }
 
 async fn healthz() -> impl IntoResponse {
     "ok"
+}
+
+async fn homepage(State(state): State<AppState>) -> Html<String> {
+    let mut slide_ids: Vec<&str> = state.slides.keys().map(|s| s.as_str()).collect();
+    slide_ids.sort();
+
+    let slides_html: String = slide_ids.iter().map(|id| {
+        let slide = &state.slides[*id];
+        let size = if slide.disk_size_mb > 0.0 {
+            format!(" ({:.0} MB)", slide.disk_size_mb)
+        } else {
+            String::new()
+        };
+        format!(r#"<li><a href="/viewer/{id}">{label}{size}</a></li>"#,
+            id = id, label = slide.label, size = size)
+    }).collect::<Vec<_>>().join("\n        ");
+
+    let html = format!(r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>ORIGAMI Tile Server</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #111; color: #eee; }}
+    a {{ color: #6bf; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+    h1 {{ margin-bottom: 8px; }}
+    .subtitle {{ color: #888; margin-bottom: 24px; }}
+    ul {{ list-style: none; padding: 0; }}
+    li {{ padding: 6px 0; }}
+    li a {{ font-size: 16px; }}
+    section {{ margin-bottom: 32px; }}
+    h2 {{ font-size: 18px; color: #aaa; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 6px; }}
+    .compare-link {{ display: inline-block; padding: 8px 16px; background: #234; border-radius: 6px; margin: 4px 0; }}
+    video {{ max-width: 100%; border-radius: 8px; margin: 12px 0; }}
+  </style>
+</head>
+<body>
+  <h1>ORIGAMI</h1>
+  <p class="subtitle">Residual-Pyramid Image Processor &mdash; {count} slides loaded</p>
+
+  <section>
+    <h2>Compare</h2>
+    <a class="compare-link" href="/compare">
+      Side-by-side WSI viewer
+    </a>
+    <br/>
+    <a class="compare-link" href="https://localhost:8084/comparison.html">
+      Eval comparison viewer
+    </a>
+  </section>
+
+  <section>
+    <h2>Individual Viewers</h2>
+    <ul>
+        {slides}
+    </ul>
+  </section>
+</body>
+</html>"##,
+        count = slide_ids.len(),
+        slides = slides_html,
+    );
+    Html(html)
 }
 
 async fn get_dzi(
@@ -476,8 +646,29 @@ async fn get_residual_tile(
     let slide = state.slides.get(&slide_id).ok_or(StatusCode::NOT_FOUND)?;
 
     if level <= slide.l2 {
-        let bytes =
-            fs::read(baseline_tile_path(slide, level, x, y)).map_err(|_| StatusCode::NOT_FOUND)?;
+        // For L2 tiles, try loading from bundle first
+        if level == slide.l2 {
+            if let Some(ref bundle) = slide.bundle {
+                if let Ok(pack) = bundle.get_pack(x, y) {
+                    if let Some(l2_bytes) = pack.get_residual(2, 0) {
+                        let jpeg = ensure_l2_jpeg(l2_bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                        state
+                            .metrics
+                            .lock()
+                            .unwrap()
+                            .record_tile("residual_view", 0);
+                        info!(
+                            "tile residual_view baseline(bundle) slide_id={} level={} x={} y={}",
+                            slide_id, level, x, y
+                        );
+                        return Ok(jpeg_response(jpeg));
+                    }
+                }
+            }
+        }
+        // Fallback to filesystem
+        let path = baseline_tile_path(slide, level, x, y);
+        let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
         state
             .metrics
             .lock()
@@ -490,37 +681,8 @@ async fn get_residual_tile(
         return Ok(jpeg_response(bytes));
     }
 
-    let (x2, y2) = if level == slide.l1 {
-        (x >> 1, y >> 1)
-    } else if level == slide.l0 {
-        (x >> 2, y >> 2)
-    } else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    let residual_path = residual_tile_path(slide, level, x2, y2, x, y);
-    let bytes = fs::read(&residual_path).map_err(|_| StatusCode::NOT_FOUND)?;
-    state
-        .metrics
-        .lock()
-        .unwrap()
-        .record_tile("residual_view", 0);
-    info!(
-        "tile residual_view residual slide_id={} level={} x={} y={} path={}",
-        slide_id,
-        level,
-        x,
-        y,
-        residual_path.display()
-    );
-    let content_type = match residual_path.extension().and_then(|e| e.to_str()) {
-        Some("webp") => "image/webp",
-        Some("jxl") => "image/jxl",
-        _ => "image/jpeg",
-    };
-    let mut resp = Response::new(bytes.into());
-    resp.headers_mut()
-        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
-    Ok(resp)
+    // V2 pipeline: no per-tile loose residuals, only fused L0 in packs
+    Err(StatusCode::NOT_FOUND)
 }
 
 async fn serve_tile(
@@ -534,8 +696,35 @@ async fn serve_tile(
     let slide = state.slides.get(&slide_id).ok_or(StatusCode::NOT_FOUND)?;
 
     if level <= slide.l2 {
-        let bytes =
-            fs::read(baseline_tile_path(slide, level, x, y)).map_err(|_| StatusCode::NOT_FOUND)?;
+        // For L2 tiles, try loading from pack (bundle or individual .pack file)
+        if level == slide.l2 {
+            let pack = if let Some(ref bundle) = slide.bundle {
+                bundle.get_pack(x, y).ok()
+            } else {
+                crate::core::pack::open_pack(&slide.pack_dir, x, y).ok()
+            };
+            if let Some(pack) = pack {
+                if let Some(l2_bytes) = pack.get_l2() {
+                    let jpeg = ensure_l2_jpeg(l2_bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    if state.prewarm_on_l2 {
+                        spawn_family_prewarm(state.clone(), slide.clone(), x, y);
+                    }
+                    state
+                        .metrics
+                        .lock()
+                        .unwrap()
+                        .record_tile("baseline", start.elapsed().as_millis());
+                    info!(
+                        "tile baseline(pack) slide_id={} level={} x={} y={} ms={}",
+                        slide_id, level, x, y, start.elapsed().as_millis()
+                    );
+                    return Ok(jpeg_response(jpeg));
+                }
+            }
+        }
+        // Fallback to filesystem (for levels below L2, e.g. thumbnail pyramid)
+        let path = baseline_tile_path(slide, level, x, y);
+        let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
         if level == slide.l2 && state.prewarm_on_l2 {
             spawn_family_prewarm(state.clone(), slide.clone(), x, y);
         }
@@ -561,25 +750,93 @@ async fn serve_tile(
         x,
         y,
     };
-    if let Some(bytes) = state.cache.get(&key) {
-        state
-            .metrics
-            .lock()
-            .unwrap()
-            .record_tile("cache_hit", start.elapsed().as_millis());
-        info!(
-            "tile cache_hit slide_id={} level={} x={} y={} ms={}",
-            slide_id,
-            level,
-            x,
-            y,
-            start.elapsed().as_millis()
-        );
-        return Ok(tile_response(bytes.to_vec(), state.output_format));
+    if let Some(ref tc) = state.tile_cache {
+        if let Some(bytes) = tc.get(&key) {
+            state
+                .metrics
+                .lock()
+                .unwrap()
+                .record_tile("cache_hit", start.elapsed().as_millis());
+            info!(
+                "tile cache_hit slide_id={} level={} x={} y={} ms={}",
+                slide_id,
+                level,
+                x,
+                y,
+                start.elapsed().as_millis()
+            );
+            return Ok(tile_response(bytes, state.output_format));
+        }
     }
 
     let slide = slide.clone();
-    let cache = state.cache.clone();
+    let (x2, y2) = if level == slide.l1 {
+        (x >> 1, y >> 1)
+    } else if level == slide.l0 {
+        (x >> 2, y >> 2)
+    } else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let family_key = FamilyKey {
+        slide_id: slide_id.clone(),
+        x2,
+        y2,
+    };
+
+    // Singleflight: check-then-register under a single lock acquisition.
+    // We either become a waiter (existing entry) or the leader (insert new entry).
+    let (watch_tx, waiter_rx) = {
+        let mut map = state.singleflight.lock();
+        if let Some(rx) = map.get(&family_key) {
+            // Another task is already decoding this family — become a waiter
+            (None, Some(rx.clone()))
+        } else {
+            // We are the leader — create watch channel and register
+            let (tx, rx) = tokio::sync::watch::channel(None);
+            map.insert(family_key.clone(), rx);
+            (Some(Arc::new(tx)), None)
+        }
+    };
+    // Lock is dropped here — safe to await below
+
+    if let Some(mut rx) = waiter_rx {
+        // Wait for the leader to finish
+        let _ = rx.changed().await;
+        let success = rx.borrow().unwrap_or(false);
+        if success {
+            if let Some(ref tc) = state.tile_cache {
+                if let Some(bytes) = tc.get(&key) {
+                    state
+                        .metrics
+                        .lock()
+                        .unwrap()
+                        .record_tile("singleflight_hit", start.elapsed().as_millis());
+                    info!(
+                        "tile singleflight_hit slide_id={} level={} x={} y={} ms={}",
+                        slide_id, level, x, y, start.elapsed().as_millis()
+                    );
+                    return Ok(tile_response(bytes, state.output_format));
+                }
+            }
+        }
+        // Leader failed or tile not in cache — fall through to own decode as a new leader
+    }
+
+    // At this point we are the leader (or a waiter that fell through).
+    // If we fell through, we need to register ourselves.
+    let watch_tx = match watch_tx {
+        Some(tx) => tx,
+        None => {
+            // Waiter fell through — register as new leader
+            let (tx, rx) = tokio::sync::watch::channel(None);
+            let tx = Arc::new(tx);
+            state.singleflight.lock().insert(family_key.clone(), rx);
+            tx
+        }
+    };
+
+    let tile_cache = state.tile_cache.clone();
     let quality = state.tile_quality;
     let timing = state.timing_breakdown;
     let writer = state.writer.clone();
@@ -589,8 +846,12 @@ async fn serve_tile(
     let inflight_limit = state.inflight_limit.clone();
     let grayscale_only = state.grayscale_only;
     let output_format = state.output_format;
-    let cache_dir = state.cache_dir.clone();
     let sharpen = state.sharpen;
+    let upsample_filter = state.upsample_filter;
+    let singleflight = state.singleflight.clone();
+    let family_key_cleanup = family_key.clone();
+    let watch_tx_clone = watch_tx.clone();
+
     let permit = inflight_limit
         .acquire_owned()
         .await
@@ -599,33 +860,25 @@ async fn serve_tile(
         let _permit = permit;
         let _inflight = inflight.enter();
         let gen_start = Instant::now();
-        let (x2, y2) = if level == slide.l1 {
-            (x >> 1, y >> 1)
-        } else if level == slide.l0 {
-            (x >> 2, y >> 2)
-        } else {
-            return Err(anyhow!("unsupported level {}", level));
-        };
         let result = generate_family_server(
             &slide, x2, y2, quality, timing, grayscale_only, output_format,
-            sharpen, &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
+            sharpen, upsample_filter, &writer, &write_root, &buffer_pool,
         );
         match result {
             Ok(result) => {
                 let family = result.tiles;
-                for (k, v) in family.iter() {
-                    cache.insert(k.clone(), v.clone());
+                if let Some(ref tc) = tile_cache {
+                    tc.put_family(&family);
                 }
                 let family_ms = gen_start.elapsed().as_millis();
                 if let Some(stats) = result.stats {
                     info!(
-                        "family_breakdown [PARALLEL_CHROMA] slide_id={} x2={} y2={} l2_decode_ms={} parallel_chroma_ms={} l1_residual_ms={} l1_encode_ms={} l0_resize_ms={} l0_residual_ms={} l0_encode_ms={} total_ms={} l1_residuals={} l0_residuals={} l1_parallel_max={} l0_parallel_max={}",
+                        "family_breakdown slide_id={} x2={} y2={} l2_decode={}ms upsample={}ms l0_res={}ms l0_enc={}ms l1_ds={}ms l1_enc={}ms total={}ms l0_par={}",
                         slide.slide_id, x2, y2,
-                        stats.l2_decode_ms, stats.l1_resize_ms,
-                        stats.l1_residual_ms, stats.l1_encode_ms,
-                        stats.l0_resize_ms, stats.l0_residual_ms, stats.l0_encode_ms,
-                        stats.total_ms, stats.residuals_l1, stats.residuals_l0,
-                        stats.l1_parallel_max, stats.l0_parallel_max
+                        stats.l2_decode_ms, stats.upsample_ms,
+                        stats.l0_residual_ms, stats.l0_encode_ms,
+                        stats.l1_downsample_ms, stats.l1_encode_ms,
+                        stats.total_ms, stats.l0_parallel_max
                     );
                 }
                 info!(
@@ -636,6 +889,10 @@ async fn serve_tile(
                     family.len(),
                     family_ms
                 );
+                // Signal success to waiters
+                let _ = watch_tx_clone.send(Some(true));
+                singleflight.lock().remove(&family_key_cleanup);
+
                 let tile = family
                     .get(&TileKey {
                         slide_id: slide.slide_id.clone(),
@@ -652,14 +909,25 @@ async fn serve_tile(
                     "family_error slide_id={} x2={} y2={} err={}",
                     slide.slide_id, x2, y2, err
                 );
-                let bytes = fs::read(baseline_tile_path(&slide, level, x, y))?;
+                // Signal failure to waiters
+                let _ = watch_tx_clone.send(Some(false));
+                singleflight.lock().remove(&family_key_cleanup);
+
+                let path = baseline_tile_path(&slide, level, x, y);
+                let bytes = read_baseline_as_jpeg(&path)?;
                 Ok((Bytes::from(bytes), None, true))
             }
         }
     })
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        // Task panicked — clean up singleflight entry and notify waiters
+        let _ = watch_tx.send(Some(false));
+        state.singleflight.lock().remove(&family_key);
+        info!("family_panic slide_id={} x2={} y2={} err={}", slide_id, x2, y2, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .map_err(|_: anyhow::Error| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if let Some(family_ms) = bytes.1 {
         state.metrics.lock().unwrap().record_family(family_ms);
@@ -689,34 +957,77 @@ async fn serve_tile(
 }
 
 fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
-    let cache = state.cache.clone();
+    let family_key = FamilyKey {
+        slide_id: slide.slide_id.clone(),
+        x2,
+        y2,
+    };
+
+    // Check if this family is already in-flight — if so, skip prewarm
+    {
+        let map = state.singleflight.lock();
+        if map.contains_key(&family_key) {
+            return;
+        }
+    }
+
+    // Register in singleflight so explicit tile requests can wait on us
+    let (watch_tx, watch_rx) = tokio::sync::watch::channel(None);
+    let watch_tx = Arc::new(watch_tx);
+    {
+        let mut map = state.singleflight.lock();
+        // Double-check after acquiring lock
+        if map.contains_key(&family_key) {
+            return;
+        }
+        map.insert(family_key.clone(), watch_rx);
+    }
+
+    let tile_cache = state.tile_cache.clone();
     let quality = state.tile_quality;
     let grayscale_only = state.grayscale_only;
     let output_format = state.output_format;
     let sharpen = state.sharpen;
+    let upsample_filter = state.upsample_filter;
     let writer = state.writer.clone();
     let write_root = state.write_generated_dir.clone();
     let buffer_pool = state.buffer_pool.clone();
-    let cache_dir = state.cache_dir.clone();
     let inflight = state.inflight.clone();
     let inflight_limit = state.inflight_limit.clone();
+    let singleflight = state.singleflight.clone();
+    let family_key_cleanup = family_key;
+
     tokio::spawn(async move {
         let permit = match inflight_limit.acquire_owned().await {
             Ok(p) => p,
-            Err(_) => return,
+            Err(_) => {
+                let _ = watch_tx.send(Some(false));
+                singleflight.lock().remove(&family_key_cleanup);
+                return;
+            }
         };
         let _inflight = inflight.enter();
         let _permit = permit;
+        let singleflight2 = singleflight.clone();
+        let family_key2 = family_key_cleanup.clone();
+        let watch_tx2 = watch_tx.clone();
         let _ = task::spawn_blocking(move || {
             let result = generate_family_server(
                 &slide, x2, y2, quality, false, grayscale_only, output_format,
-                sharpen, &writer, &write_root, &buffer_pool, cache_dir.as_deref(),
+                sharpen, upsample_filter, &writer, &write_root, &buffer_pool,
             );
-            if let Ok(result) = result {
-                for (k, v) in result.tiles.iter() {
-                    cache.insert(k.clone(), v.clone());
+            match result {
+                Ok(result) => {
+                    if let Some(ref tc) = tile_cache {
+                        tc.put_family(&result.tiles);
+                    }
+                    let _ = watch_tx2.send(Some(true));
+                }
+                Err(_) => {
+                    let _ = watch_tx2.send(Some(false));
                 }
             }
+            singleflight2.lock().remove(&family_key2);
         })
         .await;
     });
@@ -995,79 +1306,66 @@ async fn compare4_viewer(
     Ok(Html(html))
 }
 
-async fn list_slides(
+async fn compare_dynamic(
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Html<String> {
+    // Build JSON array of available slides for the dropdowns
     let mut slides: Vec<serde_json::Value> = state.slides.iter().map(|(id, s)| {
         serde_json::json!({
             "id": id,
-            "label": s.label,
-            "disk_size_mb": s.disk_size_mb,
+            "label": format!("{} ({:.0} MB)", s.label, s.disk_size_mb),
         })
     }).collect();
     slides.sort_by(|a, b| a["label"].as_str().unwrap_or("").cmp(b["label"].as_str().unwrap_or("")));
-    axum::Json(slides)
-}
+    let slides_json = serde_json::to_string(&slides).unwrap_or_else(|_| "[]".to_string());
 
-async fn compare_picker(
-    State(state): State<AppState>,
-) -> Html<String> {
-    // Build sorted slide list for initial rendering
-    let mut slide_ids: Vec<&str> = state.slides.keys().map(|s| s.as_str()).collect();
-    slide_ids.sort();
-
-    let html = r##"<!doctype html>
+    let html = format!(
+        r##"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Compare Slides</title>
+  <title>ORIGAMI Compare</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #111; color: #eee; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; gap: 2px; background: #333; }
-    .panel { position: relative; background: #111; overflow: hidden; }
-    .panel .viewer { width: 100%; height: 100%; }
-    .panel-header { position: absolute; top: 8px; left: 8px; z-index: 100; display: flex; align-items: center; gap: 6px; }
-    .panel-header select {
-      background: rgba(0,0,0,0.85); color: #fff; border: 1px solid #555;
-      padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;
-      cursor: pointer; max-width: 300px;
-    }
-    .panel-header select:hover { border-color: #888; }
-    .size-label {
-      background: rgba(0,0,0,0.75); color: #aaa; padding: 4px 8px;
-      border-radius: 4px; font-size: 11px; pointer-events: none;
-    }
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #111; color: #eee; }}
+    .container {{ display: flex; height: 100%; }}
+    .panel {{ flex: 1; position: relative; border-right: 2px solid #333; }}
+    .panel:last-child {{ border-right: none; }}
+    .panel .viewer {{ width: 100%; height: 100%; }}
+    .picker {{ position: absolute; top: 10px; left: 10px; z-index: 100; }}
+    .picker select {{
+      background: rgba(0,0,0,0.75); color: #fff; border: 1px solid #555;
+      padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; outline: none;
+    }}
+    .picker select:hover {{ border-color: #888; }}
+    .picker select option {{ background: #222; }}
   </style>
 </head>
 <body>
-  <div class="grid">
+  <div class="container">
     <div class="panel">
-      <div class="panel-header"><select id="sel-0"></select><span id="size-0" class="size-label"></span></div>
+      <div class="picker"><select id="sel-0"></select></div>
       <div id="osd-0" class="viewer"></div>
     </div>
     <div class="panel">
-      <div class="panel-header"><select id="sel-1"></select><span id="size-1" class="size-label"></span></div>
+      <div class="picker"><select id="sel-1"></select></div>
       <div id="osd-1" class="viewer"></div>
     </div>
     <div class="panel">
-      <div class="panel-header"><select id="sel-2"></select><span id="size-2" class="size-label"></span></div>
+      <div class="picker"><select id="sel-2"></select></div>
       <div id="osd-2" class="viewer"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-header"><select id="sel-3"></select><span id="size-3" class="size-label"></span></div>
-      <div id="osd-3" class="viewer"></div>
     </div>
   </div>
   <script>
-    var slides = [];
-    var viewers = [null, null, null, null];
-    var syncing = false;
+    var slides = {slides_json};
+    var viewers = [null, null, null];
+    var currentIds = [null, null, null];
 
-    var osdOpts = {
+    var osdOpts = {{
       prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
       showNavigator: false,
       animationTime: 0.6,
@@ -1082,113 +1380,112 @@ async fn compare_picker(
       zoomPerClick: 2.0,
       minZoomImageRatio: 0.5,
       maxZoomLevel: 40,
-      gestureSettingsMouse: { flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
-        dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true },
-      gestureSettingsTouch: { flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
-        dragToPan: true, scrollToZoom: false, clickToZoom: false, dblClickToZoom: true, pinchToZoom: true },
-    };
+      gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
+      gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
+        dragToPan: true, scrollToZoom: false, clickToZoom: false, dblClickToZoom: true, pinchToZoom: true }},
+    }};
 
-    function syncFrom(src) {
+    // Populate dropdowns
+    for (var i = 0; i < 3; i++) {{
+      var sel = document.getElementById('sel-' + i);
+      slides.forEach(function(s) {{
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.label;
+        sel.appendChild(opt);
+      }});
+    }}
+
+    // Pick defaults: try to assign different slides to each panel
+    var defaults = slides.map(function(s) {{ return s.id; }});
+    for (var i = 0; i < 3; i++) {{
+      var sel = document.getElementById('sel-' + i);
+      if (defaults[i]) sel.value = defaults[i];
+    }}
+
+    function createViewer(idx) {{
+      var id = document.getElementById('sel-' + idx).value;
+      if (currentIds[idx] === id && viewers[idx]) return;
+
+      // Save viewport state from an existing viewer
+      var savedCenter = null, savedZoom = null;
+      for (var j = 0; j < 3; j++) {{
+        if (viewers[j]) {{
+          savedCenter = viewers[j].viewport.getCenter(false);
+          savedZoom = viewers[j].viewport.getZoom(false);
+          break;
+        }}
+      }}
+
+      if (viewers[idx]) viewers[idx].destroy();
+      currentIds[idx] = id;
+      var v = OpenSeadragon(Object.assign({{
+        id: 'osd-' + idx,
+        showNavigator: idx === 0,
+        tileSources: '/dzi/' + id + '.dzi',
+      }}, osdOpts));
+
+      if (savedCenter && savedZoom) {{
+        v.addOnceHandler('open', function() {{
+          v.viewport.panTo(savedCenter, true);
+          v.viewport.zoomTo(savedZoom, null, true);
+        }});
+      }}
+
+      v.addHandler('zoom', function() {{ syncFrom(v); }});
+      v.addHandler('pan',  function() {{ syncFrom(v); }});
+      viewers[idx] = v;
+    }}
+
+    var syncing = false;
+    function syncFrom(src) {{
       if (syncing) return;
       syncing = true;
       var center = src.viewport.getCenter(false);
       var zoom = src.viewport.getZoom(false);
-      for (var i = 0; i < viewers.length; i++) {
-        if (viewers[i] && viewers[i] !== src) {
+      for (var i = 0; i < 3; i++) {{
+        if (viewers[i] && viewers[i] !== src) {{
           viewers[i].viewport.panTo(center, false);
           viewers[i].viewport.zoomTo(zoom, null, false);
-        }
-      }
+        }}
+      }}
       syncing = false;
-    }
+    }}
 
-    function createViewer(idx, slideId) {
-      if (viewers[idx]) {
-        viewers[idx].destroy();
-      }
-      var v = OpenSeadragon(Object.assign({
-        id: "osd-" + idx,
-        showNavigator: idx === 0,
-        tileSources: "/dzi/" + slideId + ".dzi"
-      }, osdOpts));
-      v.addHandler('zoom', function() { syncFrom(v); });
-      v.addHandler('pan',  function() { syncFrom(v); });
-      viewers[idx] = v;
+    // Wire up dropdown changes
+    for (var i = 0; i < 3; i++) {{
+      (function(idx) {{
+        document.getElementById('sel-' + idx).addEventListener('change', function() {{
+          createViewer(idx);
+        }});
+      }})(i);
+    }}
 
-      // Sync new viewer to existing position
-      for (var i = 0; i < viewers.length; i++) {
-        if (i !== idx && viewers[i]) {
-          v.addOnceHandler('open', function() {
-            var ref = null;
-            for (var j = 0; j < viewers.length; j++) {
-              if (j !== idx && viewers[j]) { ref = viewers[j]; break; }
-            }
-            if (ref) {
-              syncing = true;
-              v.viewport.panTo(ref.viewport.getCenter(false), true);
-              v.viewport.zoomTo(ref.viewport.getZoom(false), null, true);
-              syncing = false;
-            }
-          });
-          break;
-        }
-      }
-
-      // Update size label
-      var slide = slides.find(function(s) { return s.id === slideId; });
-      document.getElementById("size-" + idx).textContent =
-        slide ? slide.disk_size_mb.toFixed(0) + " MB" : "";
-    }
-
-    function populateSelectors() {
-      for (var idx = 0; idx < 4; idx++) {
-        var sel = document.getElementById("sel-" + idx);
-        sel.innerHTML = "";
-        for (var j = 0; j < slides.length; j++) {
-          var opt = document.createElement("option");
-          opt.value = slides[j].id;
-          opt.textContent = slides[j].label;
-          sel.appendChild(opt);
-        }
-      }
-    }
-
-    function onSelectChange(idx) {
-      var sel = document.getElementById("sel-" + idx);
-      createViewer(idx, sel.value);
-      // Save to URL hash
-      var ids = [];
-      for (var i = 0; i < 4; i++) {
-        ids.push(document.getElementById("sel-" + i).value);
-      }
-      window.location.hash = ids.join("/");
-    }
-
-    // Load slides and initialize
-    fetch("/slides.json").then(function(r) { return r.json(); }).then(function(data) {
-      slides = data;
-      populateSelectors();
-
-      // Parse initial selection from URL hash or use first 4 slides
-      var hash = window.location.hash.replace("#", "");
-      var initial = hash ? hash.split("/") : [];
-      for (var i = 0; i < 4; i++) {
-        var sel = document.getElementById("sel-" + i);
-        if (initial[i] && slides.find(function(s) { return s.id === initial[i]; })) {
-          sel.value = initial[i];
-        } else if (slides[i]) {
-          sel.value = slides[Math.min(i, slides.length - 1)].id;
-        }
-        sel.onchange = (function(idx) { return function() { onSelectChange(idx); }; })(i);
-        createViewer(i, sel.value);
-      }
-    });
+    // Initialize all three viewers
+    for (var i = 0; i < 3; i++) createViewer(i);
   </script>
 </body>
-</html>"##.to_string();
+</html>"##,
+        slides_json = slides_json,
+    );
 
-    info!("compare picker viewer requested");
+    info!("compare_dynamic viewer requested");
     Html(html)
+}
+
+async fn list_slides(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let mut slides: Vec<serde_json::Value> = state.slides.iter().map(|(id, s)| {
+        serde_json::json!({
+            "id": id,
+            "label": s.label,
+            "disk_size_mb": s.disk_size_mb,
+        })
+    }).collect();
+    slides.sort_by(|a, b| a["label"].as_str().unwrap_or("").cmp(b["label"].as_str().unwrap_or("")));
+    axum::Json(slides)
 }
 
 fn parse_tile_name(name: &str) -> Option<(u32, u32)> {
@@ -1214,26 +1511,133 @@ fn jpeg_response(bytes: Vec<u8>) -> Response {
 }
 
 fn baseline_tile_path(slide: &Slide, level: u32, x: u32, y: u32) -> PathBuf {
+    // Check for JXL first (L2 may be stored as JXL for space savings)
+    let jxl = slide.files_dir.join(level.to_string()).join(format!("{}_{}.jxl", x, y));
+    if jxl.exists() {
+        return jxl;
+    }
     slide
         .files_dir
         .join(level.to_string())
         .join(format!("{}_{}.jpg", x, y))
 }
 
-fn residual_tile_path(slide: &Slide, level: u32, x2: u32, y2: u32, x: u32, y: u32) -> PathBuf {
-    let subdir = if level == slide.l1 { "L1" } else { "L0" };
-    let parent = slide
-        .residuals_dir
-        .join(subdir)
-        .join(format!("{}_{}", x2, y2));
-    for ext in &[".jpg", ".webp", ".jxl"] {
-        let p = parent.join(format!("{}_{}{}", x, y, ext));
-        if p.exists() {
-            return p;
+/// Ensure L2 bytes from a pack are servable as JPEG.
+/// If the bytes are already JPEG (0xFF 0xD8 magic), return as-is.
+/// If JXL, reconstruct or transcode to JPEG.
+fn ensure_l2_jpeg(data: &[u8]) -> anyhow::Result<Vec<u8>> {
+    // JPEG magic: 0xFF 0xD8
+    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+        return Ok(data.to_vec());
+    }
+    // JXL magic
+    let is_jxl = (data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A)
+        || (data.len() >= 12
+            && data[..12]
+                == [0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A]);
+    if is_jxl {
+        return ensure_l2_jxl_to_jpeg(data);
+    }
+    anyhow::bail!("L2 pack data has unknown format (not JPEG or JXL)")
+}
+
+#[cfg(feature = "jpegxl")]
+fn ensure_l2_jxl_to_jpeg(data: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let decoder = jpegxl_rs::decode::decoder_builder()
+        .build()
+        .map_err(|e| anyhow::anyhow!("JXL decoder build failed: {e:?}"))?;
+    let (_meta, result) = decoder.reconstruct(data)
+        .map_err(|e| anyhow::anyhow!("JXL reconstruct failed: {e:?}"))?;
+    match result {
+        jpegxl_rs::decode::Data::Jpeg(jpeg_bytes) => Ok(jpeg_bytes),
+        jpegxl_rs::decode::Data::Pixels(pixels) => {
+            let raw = match pixels {
+                jpegxl_rs::decode::Pixels::Uint8(v) => v,
+                _ => anyhow::bail!("JXL L2 decoded to non-u8 pixel type"),
+            };
+            let w = _meta.width as usize;
+            let h = _meta.height as usize;
+            let mut compressor = turbojpeg::Compressor::new()
+                .map_err(|e| anyhow::anyhow!("turbojpeg compressor failed: {e}"))?;
+            compressor.set_quality(95);
+            compressor.set_subsamp(turbojpeg::Subsamp::None);
+            let image = turbojpeg::Image {
+                pixels: raw.as_slice(),
+                width: w,
+                pitch: w * 3,
+                height: h,
+                format: turbojpeg::PixelFormat::RGB,
+            };
+            let jpeg = compressor.compress_to_vec(image)
+                .map_err(|e| anyhow::anyhow!("JPEG re-encode failed: {e}"))?;
+            Ok(jpeg)
         }
     }
-    parent.join(format!("{}_{}.jpg", x, y))
 }
+
+#[cfg(not(feature = "jpegxl"))]
+fn ensure_l2_jxl_to_jpeg(_data: &[u8]) -> anyhow::Result<Vec<u8>> {
+    anyhow::bail!("L2 in bundle is JXL but built without --features jpegxl");
+}
+
+/// Read a baseline tile and return JPEG bytes.
+/// If the file is `.jxl`, reconstruct the original JPEG (lossless transcode)
+/// or decode to pixels and re-encode as JPEG (lossy JXL).
+fn read_baseline_as_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if ext == "jxl" {
+        read_jxl_as_jpeg(path)
+    } else {
+        Ok(fs::read(path)?)
+    }
+}
+
+#[cfg(feature = "jpegxl")]
+fn read_jxl_as_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let data = fs::read(path)?;
+    let decoder = jpegxl_rs::decode::decoder_builder()
+        .build()
+        .map_err(|e| anyhow::anyhow!("JXL decoder build failed: {e:?}"))?;
+    let (_meta, result) = decoder.reconstruct(&data)
+        .map_err(|e| anyhow::anyhow!("JXL reconstruct failed: {e:?}"))?;
+
+    match result {
+        jpegxl_rs::decode::Data::Jpeg(jpeg_bytes) => {
+            // Lossless path: bit-identical original JPEG
+            Ok(jpeg_bytes)
+        }
+        jpegxl_rs::decode::Data::Pixels(pixels) => {
+            // Lossy path: decode to RGB, re-encode as JPEG
+            let raw = match pixels {
+                jpegxl_rs::decode::Pixels::Uint8(v) => v,
+                _ => anyhow::bail!("JXL L2 decoded to non-u8 pixel type"),
+            };
+            let w = _meta.width as usize;
+            let h = _meta.height as usize;
+            let mut compressor = turbojpeg::Compressor::new()
+                .map_err(|e| anyhow::anyhow!("turbojpeg compressor failed: {e}"))?;
+            compressor.set_quality(95);
+            compressor.set_subsamp(turbojpeg::Subsamp::None);
+            let image = turbojpeg::Image {
+                pixels: raw.as_slice(),
+                width: w,
+                pitch: w * 3,
+                height: h,
+                format: turbojpeg::PixelFormat::RGB,
+            };
+            let jpeg = compressor.compress_to_vec(image)
+                .map_err(|e| anyhow::anyhow!("JPEG re-encode failed: {e}"))?;
+            Ok(jpeg)
+        }
+    }
+}
+
+#[cfg(not(feature = "jpegxl"))]
+fn read_jxl_as_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
+    anyhow::bail!("JXL baseline tile at {} but built without --features jpegxl", path.display());
+}
+
+// residual_tile_path removed in v2 pipeline (no per-tile loose residuals)
 
 fn enqueue_generated(
     writer: &Option<mpsc::Sender<WriteJob>>,
@@ -1265,7 +1669,7 @@ fn key_to_string(key: &TileKey) -> String {
 
 fn discover_slides(
     root: &Path,
-    residuals_dir: &str,
+    _residuals_dir: &str, // unused in v2 pipeline
     pack_dir: &str,
 ) -> Result<HashMap<String, Slide>> {
     let mut slides = HashMap::new();
@@ -1296,10 +1700,12 @@ fn discover_slides(
                     let q = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("JPEG Q{}", q)
                 } else if summary.get("baseq").is_some() {
-                    let baseq = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let l1q = summary.get("l1q").and_then(|v| v.as_u64()).unwrap_or(0);
+                    // baseq may be a number or a string (v2 pipeline)
+                    let baseq = summary.get("baseq")
+                        .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+                        .unwrap_or(0);
                     let l0q = summary.get("l0q").and_then(|v| v.as_u64()).unwrap_or(0);
-                    format!("Origami {}/{}/{}", baseq, l1q, l0q)
+                    format!("Origami {}/{}", baseq, l0q)
                 } else if summary.get("residual_jpeg_q_L").is_some() {
                     // Legacy Python pipeline format
                     let q = summary.get("residual_jpeg_q_L").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1307,8 +1713,8 @@ fn discover_slides(
                 } else {
                     slide_id.clone()
                 };
-                let size = if mode == "ingest-jpeg-only" {
-                    let total = summary.get("total_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+                let size = if let Some(total) = summary.get("total_bytes").and_then(|v| v.as_u64()) {
+                    // V2 pipeline and ingest both use total_bytes
                     total as f64 / 1_048_576.0
                 } else if summary.get("l2_bytes").is_some() {
                     let l2 = summary.get("l2_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1351,7 +1757,6 @@ fn discover_slides(
             slide_id: slide_id.clone(),
             dzi_path,
             files_dir,
-            residuals_dir: slide_root.join(residuals_dir),
             pack_dir: pack_dir_path,
             bundle,
             tile_size,
@@ -1382,14 +1787,13 @@ fn generate_family_server(
     grayscale_only: bool,
     output_format: OutputFormat,
     sharpen: Option<f32>,
+    upsample_filter: ResampleFilter,
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
-    cache_dir: Option<&Path>,
 ) -> Result<ServerFamilyResult> {
     let input = ReconstructInput {
         files_dir: &slide.files_dir,
-        residuals_dir: Some(&slide.residuals_dir),
         pack_dir: Some(&slide.pack_dir),
         bundle: slide.bundle.as_deref(),
         tile_size: slide.tile_size,
@@ -1403,6 +1807,7 @@ fn generate_family_server(
         grayscale_only,
         output_format,
         sharpen,
+        upsample_filter,
     };
 
     let core_result = reconstruct_family(&input, x2, y2, &opts, buffer_pool)?;
@@ -1434,30 +1839,6 @@ fn generate_family_server(
 
     // Enqueue async disk writes if configured
     enqueue_generated(writer, write_root, &out, output_format);
-
-    // Write to cache dir if configured
-    if let Some(cache_dir) = cache_dir {
-        let ext = output_format.extension();
-        for (tile_key, tile_data) in &out {
-            let tile_path = cache_dir
-                .join(&slide.slide_id)
-                .join(format!("{}", tile_key.level))
-                .join(format!("{}_{}{}", tile_key.x, tile_key.y, ext));
-            if let Some(parent) = tile_path.parent() {
-                if let Err(err) = fs::create_dir_all(parent) {
-                    info!("Failed to create cache dir {}: {}", parent.display(), err);
-                    continue;
-                }
-            }
-            if let Err(err) = fs::write(&tile_path, tile_data) {
-                info!(
-                    "Failed to write cached tile {}: {}",
-                    tile_path.display(),
-                    err
-                );
-            }
-        }
-    }
 
     Ok(ServerFamilyResult {
         tiles: out,

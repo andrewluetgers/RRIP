@@ -22,6 +22,7 @@ from PIL import Image
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from skimage.color import rgb2lab, deltaE_cie76
+from scipy import ndimage
 
 try:
     from sewar.full_ref import vifp
@@ -78,6 +79,89 @@ def calculate_lpips(img1, img2):
         return None
 
 
+def _compute_ms_ssim(img1, img2, weights=None):
+    """Compute Multi-Scale SSIM between two grayscale images.
+
+    Uses 5 scales with standard weights. Returns None if image is too small
+    (min dimension < 176 needed for 5 downsample levels).
+    """
+    if weights is None:
+        weights = np.array([0.0448, 0.2856, 0.3001, 0.2363, 0.1333])
+    n_scales = len(weights)
+
+    # Need at least 2^(n_scales-1) * 11 = 176 pixels in each dimension
+    if min(img1.shape[0], img1.shape[1]) < 176:
+        return None
+
+    mssim_vals = []
+    mcs_vals = []
+
+    for i in range(n_scales):
+        s_val = ssim(img1, img2, data_range=255, full=True)
+        if isinstance(s_val, tuple):
+            mean_ssim = s_val[0]
+            ssim_map = s_val[1]
+        else:
+            mean_ssim = float(s_val)
+            ssim_map = None
+
+        mssim_vals.append(mean_ssim)
+
+        # Compute contrast-structure component: cs = (2*sigma12 + C2) / (sigma1^2 + sigma2^2 + C2)
+        # For simplicity, use SSIM / luminance approximation
+        # At the final scale we use the full SSIM; at intermediate scales we use CS
+        if i < n_scales - 1:
+            # CS component approximation via SSIM with luminance factored out
+            C1 = (0.01 * 255) ** 2
+            mu1 = ndimage.uniform_filter(img1.astype(np.float64), size=11)
+            mu2 = ndimage.uniform_filter(img2.astype(np.float64), size=11)
+            mu1_sq = mu1 ** 2
+            mu2_sq = mu2 ** 2
+            mu1_mu2 = mu1 * mu2
+            sigma1_sq = ndimage.uniform_filter(img1.astype(np.float64) ** 2, size=11) - mu1_sq
+            sigma2_sq = ndimage.uniform_filter(img2.astype(np.float64) ** 2, size=11) - mu2_sq
+            sigma12 = ndimage.uniform_filter(img1.astype(np.float64) * img2.astype(np.float64), size=11) - mu1_mu2
+
+            C2 = (0.03 * 255) ** 2
+            cs_map = (2.0 * sigma12 + C2) / (sigma1_sq + sigma2_sq + C2)
+            mcs_vals.append(float(np.mean(cs_map)))
+
+            # Downsample by 2x
+            h, w = img1.shape
+            img1 = (img1[0:h-h%2, 0:w-w%2].reshape(h//2, 2, w//2, 2).mean(axis=(1, 3))).astype(np.float32)
+            img2 = (img2[0:h-h%2, 0:w-w%2].reshape(h//2, 2, w//2, 2).mean(axis=(1, 3))).astype(np.float32)
+
+    # Combine: product of CS^weight for scales 1..N-1, times SSIM^weight for scale N
+    result = 1.0
+    for i in range(n_scales - 1):
+        result *= max(mcs_vals[i], 1e-10) ** weights[i]
+    result *= max(mssim_vals[-1], 1e-10) ** weights[-1]
+
+    return float(np.clip(result, 0.0, 1.0))
+
+
+def calculate_blockiness(img):
+    """Average Sobel gradient magnitude at 8x8 JPEG block boundaries."""
+    if img.ndim == 3:
+        gray = 0.299 * img[:, :, 0].astype(np.float32) + \
+               0.587 * img[:, :, 1].astype(np.float32) + \
+               0.114 * img[:, :, 2].astype(np.float32)
+    else:
+        gray = img.astype(np.float32)
+
+    sx = ndimage.sobel(gray, axis=1)
+    sy = ndimage.sobel(gray, axis=0)
+    grad = np.sqrt(sx ** 2 + sy ** 2)
+
+    boundary_grads = []
+    for x in range(8, gray.shape[1], 8):
+        boundary_grads.append(np.mean(grad[:, max(0, x-1):x+2]))
+    for y in range(8, gray.shape[0], 8):
+        boundary_grads.append(np.mean(grad[max(0, y-1):y+2, :]))
+
+    return float(np.mean(boundary_grads)) if boundary_grads else 0.0
+
+
 def find_file(directory, pattern):
     """Find a file matching pattern (with any numeric prefix)."""
     for f in sorted(directory.iterdir()):
@@ -102,6 +186,11 @@ def compute_tile_metrics(original_rgb, reconstructed_rgb):
     metrics["final_ssim"] = float(ssim(y_orig, y_recon, data_range=255))
     metrics["final_mse"] = calculate_mse(original_rgb, reconstructed_rgb)
 
+    # MS-SSIM (multi-scale structural similarity)
+    ms_ssim_val = _compute_ms_ssim(y_orig, y_recon)
+    if ms_ssim_val is not None:
+        metrics["final_ms_ssim"] = ms_ssim_val
+
     vif_val = calculate_vif(original_rgb, reconstructed_rgb)
     if vif_val is not None:
         metrics["final_vif"] = vif_val
@@ -113,6 +202,10 @@ def compute_tile_metrics(original_rgb, reconstructed_rgb):
     lpips_val = calculate_lpips(original_rgb, reconstructed_rgb)
     if lpips_val is not None:
         metrics["final_lpips"] = lpips_val
+
+    # Blockiness (JPEG artifact detection)
+    metrics["blockiness"] = calculate_blockiness(reconstructed_rgb)
+    metrics["blockiness_delta"] = metrics["blockiness"] - calculate_blockiness(original_rgb)
 
     return metrics
 
@@ -172,14 +265,25 @@ def process_run(run_dir):
 
     # Also add size_comparison for viewer compatibility
     l2_bytes = manifest.get("l2_bytes", 0)
-    l1_res = sum(t["residual_bytes"] for t in manifest["tiles"] if t["level"] == "L1")
-    l0_res = sum(t["residual_bytes"] for t in manifest["tiles"] if t["level"] == "L0")
-    manifest["size_comparison"] = {
-        "origami_total": l2_bytes + l1_res + l0_res,
-        "origami_L2_baseline": l2_bytes,
-        "origami_L1_residuals": l1_res,
-        "origami_L0_residuals": l0_res,
-    }
+    # V2 pipeline: fused_l0_bytes (single residual), no per-tile residual_bytes
+    fused_l0 = manifest.get("fused_l0_bytes", 0)
+    if fused_l0 > 0:
+        # V2 fused pipeline
+        manifest["size_comparison"] = {
+            "origami_total": manifest.get("total_bytes", l2_bytes + fused_l0),
+            "origami_L2_baseline": l2_bytes,
+            "origami_L0_residuals": fused_l0,
+        }
+    else:
+        # V1 per-tile pipeline
+        l1_res = sum(t.get("residual_bytes", 0) for t in manifest["tiles"] if t["level"] == "L1")
+        l0_res = sum(t.get("residual_bytes", 0) for t in manifest["tiles"] if t["level"] == "L0")
+        manifest["size_comparison"] = {
+            "origami_total": l2_bytes + l1_res + l0_res,
+            "origami_L2_baseline": l2_bytes,
+            "origami_L1_residuals": l1_res,
+            "origami_L0_residuals": l0_res,
+        }
 
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2)

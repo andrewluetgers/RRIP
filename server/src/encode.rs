@@ -9,10 +9,23 @@ use tracing::info;
 use crate::core::color::ycbcr_planes_from_rgb;
 use crate::core::jpeg::{create_encoder, ChromaSubsampling};
 use crate::core::pack::{write_pack, PackWriteEntry};
-use crate::core::pyramid::{discover_pyramid, extract_tile_plane, parse_tile_coords};
+use crate::core::pyramid::{discover_pyramid, parse_tile_coords};
 use crate::core::residual::{center_residual, compute_residual};
-use crate::core::upsample::upsample_2x_channel;
+use crate::core::ResampleFilter;
 use crate::turbojpeg_optimized::load_rgb_turbo;
+
+use crate::core::{upsample_4x, fir_resize};
+
+/// Downscale a grayscale buffer by a percentage (1-100).
+/// Returns (downscaled_data, new_w, new_h). If scale == 100, returns original data.
+fn downscale_gray(data: &[u8], w: u32, h: u32, scale_pct: u8, filter: ResampleFilter) -> (Vec<u8>, u32, u32) {
+    if scale_pct >= 100 {
+        return (data.to_vec(), w, h);
+    }
+    let new_w = ((w as u32 * scale_pct as u32 + 50) / 100).max(1);
+    let new_h = ((h as u32 * scale_pct as u32 + 50) / 100).max(1);
+    (fir_resize(data, w, h, new_w, new_h, filter), new_w, new_h)
+}
 
 /// Decode grayscale residual bytes, dispatching to the correct codec.
 fn decode_residual_bytes(data: &[u8]) -> Result<Vec<u8>> {
@@ -84,28 +97,25 @@ pub struct EncodeArgs {
     #[arg(long, default_value_t = 256)]
     pub tile: u32,
 
-    /// JPEG quality for residual encoding (1-100)
+    /// JPEG quality for L0 residual encoding (1-100)
     #[arg(long, default_value_t = 50)]
     pub resq: u8,
-
-    /// Override quality for L1 residuals (default: use --resq)
-    #[arg(long)]
-    pub l1q: Option<u8>,
 
     /// Override quality for L0 residuals (default: use --resq)
     #[arg(long)]
     pub l0q: Option<u8>,
 
-    /// JPEG quality for L2 baseline encoding (1-100, single-image mode only)
-    #[arg(long, default_value_t = 95)]
-    pub baseq: u8,
+    /// Quality for L2 baseline encoding. A number (1-100) encodes as lossy JPEG XL.
+    /// "lossless" or "L" encodes JPEG first, then losslessly transcodes to JXL (~16% smaller).
+    #[arg(long, default_value = "95")]
+    pub baseq: String,
 
     /// Chroma subsampling: 444, 420, 420opt
     #[arg(long, default_value = "444")]
     pub subsamp: String,
 
-    /// Encoder backend: turbojpeg, mozjpeg, jpegli, jpegxl, webp
-    #[arg(long, default_value = "turbojpeg")]
+    /// Encoder backend: jpegxl, turbojpeg, mozjpeg, jpegli, webp
+    #[arg(long, default_value = "jpegxl")]
     pub encoder: String,
 
     /// Maximum number of L2 parent tiles to process (for testing)
@@ -143,6 +153,27 @@ pub struct EncodeArgs {
     /// must apply the sharpen kernel before upsampling.
     #[arg(long)]
     pub save_sharpened: bool,
+
+    /// Downscale L0 residuals before encoding (percent, 1-100, default: 100 = no downscale).
+    /// Lower values reduce residual byte cost at the expense of reconstruction quality.
+    /// The decoder infers the scale from dimension mismatch and upscales automatically.
+    #[arg(long, default_value_t = 100)]
+    pub l0_scale: u8,
+
+    /// Unsharp mask strength for L0 residuals (e.g. 0.5-2.0).
+    /// Applied to the centered residual before JPEG encoding to preserve high-frequency detail.
+    #[arg(long)]
+    pub l0_sharpen: Option<f32>,
+
+    /// Upsample filter for predictions: bilinear, bicubic, lanczos3 (default: lanczos3)
+    #[arg(long, default_value = "lanczos3")]
+    pub upsample_filter: String,
+
+    /// Downsample filter for ground-truth and residual downscale: bilinear, bicubic, lanczos3 (default: lanczos3)
+    #[arg(long, default_value = "lanczos3")]
+    pub downsample_filter: String,
+
+    // l2jxl removed — L2 is always stored as JXL, controlled by --baseq
 }
 
 /// Return the file extension for the given encoder name.
@@ -152,6 +183,43 @@ fn output_extension(encoder_name: &str) -> &'static str {
         "jpegxl" => ".jxl",
         _ => ".jpg",
     }
+}
+
+/// Encode L2 tile as JXL. Two modes:
+/// - "lossless": Lossless JPEG→JXL transcode (~16% smaller, bit-identical JPEG roundtrip)
+/// - "<number>": Lossy JXL from pixels at that quality (bigger savings, no JPEG roundtrip)
+#[cfg(feature = "jpegxl")]
+fn encode_l2_as_jxl(jpeg_bytes: &[u8], _pixels: &[u8], _w: u32, _h: u32, mode: &str) -> Result<Vec<u8>> {
+    use jpegxl_rs::encode::{encoder_builder, ColorEncoding, EncoderFrame};
+
+    if mode == "lossless" {
+        let mut enc = encoder_builder()
+            .use_container(true)
+            .uses_original_profile(true)
+            .build()
+            .map_err(|e| anyhow::anyhow!("JXL encoder build failed: {e:?}"))?;
+        let result = enc.encode_jpeg(jpeg_bytes)
+            .map_err(|e| anyhow::anyhow!("JXL lossless JPEG transcode failed: {e:?}"))?;
+        Ok(result.data)
+    } else {
+        let quality: f32 = mode.parse()
+            .with_context(|| format!("--l2jxl value must be 'lossless' or a quality number, got '{mode}'"))?;
+        let mut enc = encoder_builder()
+            .jpeg_quality(quality)
+            .color_encoding(ColorEncoding::Srgb)
+            .build()
+            .map_err(|e| anyhow::anyhow!("JXL encoder build failed: {e:?}"))?;
+        let result: jpegxl_rs::encode::EncoderResult<u8> = enc.encode_frame(
+            &EncoderFrame::new(_pixels).num_channels(3),
+            _w, _h,
+        ).map_err(|e| anyhow::anyhow!("JXL lossy encode failed: {e:?}"))?;
+        Ok(result.data)
+    }
+}
+
+#[cfg(not(feature = "jpegxl"))]
+fn encode_l2_as_jxl(_jpeg_bytes: &[u8], _pixels: &[u8], _w: u32, _h: u32, _mode: &str) -> Result<Vec<u8>> {
+    anyhow::bail!("--l2jxl requires building with --features jpegxl");
 }
 
 /// Write an RGB buffer as a PNG file.
@@ -204,6 +272,12 @@ pub fn run(args: EncodeArgs) -> Result<()> {
     let subsamp: ChromaSubsampling = args.subsamp.parse()
         .map_err(|e: String| anyhow::anyhow!(e))?;
 
+    // Parse resample filters early so errors are caught before work begins
+    let _up: ResampleFilter = args.upsample_filter.parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
+    let _down: ResampleFilter = args.downsample_filter.parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
+
     if args.image.is_some() {
         return run_single_image(args, subsamp);
     }
@@ -214,11 +288,14 @@ pub fn run(args: EncodeArgs) -> Result<()> {
     run_pyramid(args, pyramid_path, subsamp)
 }
 
-/// Encode residuals from a pre-built DZI pyramid (original mode).
+/// Encode residuals from a pre-built DZI pyramid.
+/// V2 pipeline: no L1 residuals, single fused L0 residual per family.
 fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampling) -> Result<()> {
     let start = Instant::now();
     let encoder = create_encoder(&args.encoder)?;
-    info!("Using encoder: {} subsamp: {}", encoder.name(), subsamp);
+    let up_filter: ResampleFilter = args.upsample_filter.parse().unwrap();
+    let down_filter: ResampleFilter = args.downsample_filter.parse().unwrap();
+    info!("Using encoder: {} subsamp: {} upsample: {} downsample: {}", encoder.name(), subsamp, up_filter, down_filter);
 
     let pyramid = discover_pyramid(&pyramid_path, args.tile)?;
     info!(
@@ -248,9 +325,7 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
 
     // Create output directories
     let residuals_dir = args.out.clone();
-    let l1_out = residuals_dir.join("L1");
     let l0_out = residuals_dir.join("L0");
-    fs::create_dir_all(&l1_out)?;
     fs::create_dir_all(&l0_out)?;
 
     let pack_dir = if args.pack {
@@ -262,12 +337,18 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
     };
 
     let tile_size = pyramid.tile_size;
-    let l1q = args.l1q.unwrap_or(args.resq);
     let l0q = args.l0q.unwrap_or(args.resq);
+    let baseq_str = args.baseq.clone();
+    let baseq_is_lossless = matches!(baseq_str.to_lowercase().as_str(), "lossless" | "l");
+    let baseq_num: u8 = if baseq_is_lossless { 95 } else {
+        baseq_str.parse::<u8>().map_err(|_| anyhow::anyhow!(
+            "--baseq must be a number (1-100) or 'lossless', got '{}'", baseq_str))?
+    };
+    let l2_jxl_mode: &str = if baseq_is_lossless { "lossless" } else { &baseq_str };
     let ext = output_extension(encoder.name());
-    let mut total_l1 = 0usize;
     let mut total_l0 = 0usize;
     let mut total_bytes = 0usize;
+    info!("L2 will be stored as JXL ({} mode, baseq={})", l2_jxl_mode, baseq_str);
 
     for (pi, &(x2, y2)) in parents.iter().enumerate() {
         let parent_start = Instant::now();
@@ -281,107 +362,34 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
             .with_context(|| format!("loading L2 tile {}", l2_path.display()))?;
 
         // Convert to YCbCr planes
-        let (l2_y, l2_cb, l2_cr) = ycbcr_planes_from_rgb(&l2_rgb, l2_w, l2_h);
+        let (l2_y, _l2_cb, _l2_cr) = ycbcr_planes_from_rgb(&l2_rgb, l2_w, l2_h);
 
-        // Upsample L2 → L1 prediction (2x bilinear for all channels)
-        let l1_y = upsample_2x_channel(&l2_y, l2_w as usize, l2_h as usize);
-        let l1_cb = upsample_2x_channel(&l2_cb, l2_w as usize, l2_h as usize);
-        let l1_cr = upsample_2x_channel(&l2_cr, l2_w as usize, l2_h as usize);
-        let l1_w = l2_w * 2;
-        let l1_h = l2_h * 2;
+        // Upsample L2 Y → L0 prediction (4x direct)
+        let l0_pred_y = upsample_4x(&l2_y, l2_w as usize, l2_h as usize, up_filter);
+        let l0_w = l2_w * 4;
+        let l0_h = l2_h * 4;
 
         let mut pack_entries: Vec<PackWriteEntry> = Vec::new();
 
-        // L1 parent output dir
-        let l1_parent_dir = l1_out.join(format!("{}_{}", x2, y2));
-        fs::create_dir_all(&l1_parent_dir)?;
-
-        // Reconstructed L1 Y planes for building mosaic
-        let mut l1_recon_y = vec![0u8; (l1_w * l1_h) as usize];
-
-        // Process L1 children (2x2)
-        for dy in 0..2u32 {
-            for dx in 0..2u32 {
-                let x1 = x2 * 2 + dx;
-                let y1 = y2 * 2 + dy;
-
-                // Load L1 ground truth
-                let l1_gt_path = pyramid
-                    .files_dir
-                    .join(pyramid.l1.to_string())
-                    .join(format!("{}_{}.jpg", x1, y1));
-                if !l1_gt_path.exists() {
-                    continue;
-                }
-                let (l1_gt_rgb, gt_w, gt_h) = load_rgb_turbo(&l1_gt_path)?;
-                let (l1_gt_y, _, _) = ycbcr_planes_from_rgb(&l1_gt_rgb, gt_w, gt_h);
-
-
-                // Extract L1 prediction Y for this tile region
-                let mut l1_pred_y_tile = vec![0u8; (tile_size * tile_size) as usize];
-                extract_tile_plane(
-                    &l1_y, l1_w, l1_h,
-                    dx * tile_size, dy * tile_size,
-                    tile_size, tile_size,
-                    &mut l1_pred_y_tile,
-                );
-
-                // Compute and center residual
-                let raw_residual = compute_residual(&l1_gt_y, &l1_pred_y_tile);
-                let centered = center_residual(&raw_residual);
-
-                // Encode as grayscale JPEG
-                let jpeg_data = encoder.encode_gray(&centered, tile_size, tile_size, l1q)?;
-                total_l1 += 1;
-                total_bytes += jpeg_data.len();
-
-                // Write residual file
-                let out_path = l1_parent_dir.join(format!("{}_{}{}", x1, y1, ext));
-                fs::write(&out_path, &jpeg_data)?;
-
-                // Decode the residual back to get the actual reconstructed Y
-                // (accounts for JPEG lossy compression)
-                let decoded_residual = decode_residual_bytes(&jpeg_data)?;
-
-                // Reconstruct Y: Y_recon = clamp(Y_pred + (decoded_residual - 128), 0..255)
-                for y in 0..tile_size {
-                    for x in 0..tile_size {
-                        let tile_idx = (y * tile_size + x) as usize;
-                        let pred_val = l1_pred_y_tile[tile_idx] as i16;
-                        let res_val = decoded_residual[tile_idx] as i16 - 128;
-                        let recon = (pred_val + res_val).clamp(0, 255) as u8;
-
-                        let mosaic_x = dx * tile_size + x;
-                        let mosaic_y = dy * tile_size + y;
-                        if mosaic_x < l1_w && mosaic_y < l1_h {
-                            l1_recon_y[(mosaic_y * l1_w + mosaic_x) as usize] = recon;
-                        }
-                    }
-                }
-
-                if args.pack {
-                    pack_entries.push(PackWriteEntry {
-                        level_kind: 1,
-                        idx_in_parent: (dy * 2 + dx) as u8,
-                        jpeg_data,
-                    });
-                }
-            }
+        // Re-encode L2 as JXL at --baseq quality and add to pack
+        if args.pack {
+            let l2_jpeg_bytes = fs::read(&l2_path)?;
+            // For lossless: transcode existing JPEG to JXL losslessly
+            // For lossy: re-encode from pixels as JXL at baseq quality
+            let l2_stored = encode_l2_as_jxl(&l2_jpeg_bytes, &l2_rgb, l2_w, l2_h, l2_jxl_mode)
+                .unwrap_or_else(|_| l2_jpeg_bytes.clone()); // fallback to JPEG if JXL fails
+            total_bytes += l2_stored.len();
+            pack_entries.push(PackWriteEntry {
+                level_kind: 2,
+                idx_in_parent: 0,
+                jpeg_data: l2_stored,
+            });
         }
 
-        // Build L1 mosaic → upsample 2x → L0 prediction
-        // Use the reconstructed Y plus the bilinear-upsampled chroma
-        let l0_y = upsample_2x_channel(&l1_recon_y, l1_w as usize, l1_h as usize);
-        let _l0_cb = upsample_2x_channel(&l1_cb, l1_w as usize, l1_h as usize);
-        let _l0_cr = upsample_2x_channel(&l1_cr, l1_w as usize, l1_h as usize);
-        let l0_w = l1_w * 2;
-        let l0_h = l1_h * 2;
+        // Assemble L0 ground truth mosaic from pyramid tiles
+        let mut l0_gt_y = vec![0u8; (l0_w * l0_h) as usize];
+        let mut tiles_found = 0u32;
 
-        // L0 parent output dir
-        let l0_parent_dir = l0_out.join(format!("{}_{}", x2, y2));
-        fs::create_dir_all(&l0_parent_dir)?;
-
-        // Process L0 children (4x4)
         for dy in 0..4u32 {
             for dx in 0..4u32 {
                 let x0 = x2 * 4 + dx;
@@ -394,37 +402,56 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
                 if !l0_gt_path.exists() {
                     continue;
                 }
+                tiles_found += 1;
                 let (l0_gt_rgb, gt_w, gt_h) = load_rgb_turbo(&l0_gt_path)?;
-                let (l0_gt_y, _, _) = ycbcr_planes_from_rgb(&l0_gt_rgb, gt_w, gt_h);
+                let (tile_y, _, _) = ycbcr_planes_from_rgb(&l0_gt_rgb, gt_w, gt_h);
 
-
-                // Extract L0 prediction Y for this tile
-                let mut l0_pred_y_tile = vec![0u8; (tile_size * tile_size) as usize];
-                extract_tile_plane(
-                    &l0_y, l0_w, l0_h,
-                    dx * tile_size, dy * tile_size,
-                    tile_size, tile_size,
-                    &mut l0_pred_y_tile,
-                );
-
-                let raw_residual = compute_residual(&l0_gt_y, &l0_pred_y_tile);
-                let centered = center_residual(&raw_residual);
-
-                let jpeg_data = encoder.encode_gray(&centered, tile_size, tile_size, l0q)?;
-                total_l0 += 1;
-                total_bytes += jpeg_data.len();
-
-                let out_path = l0_parent_dir.join(format!("{}_{}{}", x0, y0, ext));
-                fs::write(&out_path, &jpeg_data)?;
-
-                if args.pack {
-                    pack_entries.push(PackWriteEntry {
-                        level_kind: 0,
-                        idx_in_parent: (dy * 4 + dx) as u8,
-                        jpeg_data,
-                    });
+                // Copy tile Y into mosaic
+                for ty in 0..gt_h.min(tile_size) {
+                    for tx in 0..gt_w.min(tile_size) {
+                        let mx = dx * tile_size + tx;
+                        let my = dy * tile_size + ty;
+                        if mx < l0_w && my < l0_h {
+                            l0_gt_y[(my * l0_w + mx) as usize] = tile_y[(ty * gt_w + tx) as usize];
+                        }
+                    }
                 }
             }
+        }
+
+        if tiles_found == 0 {
+            continue;
+        }
+
+        // Compute fused L0 residual (entire mosaic)
+        let raw_residual = compute_residual(&l0_gt_y, &l0_pred_y);
+        let centered = center_residual(&raw_residual);
+
+        // Optionally sharpen residual before encoding
+        let centered = if let Some(strength) = args.l0_sharpen {
+            crate::core::sharpen::unsharp_mask_gray(&centered, l0_w, l0_h, strength)
+        } else {
+            centered
+        };
+
+        // Optionally downscale residual before encoding
+        let (centered_enc, enc_w, enc_h) = downscale_gray(&centered, l0_w, l0_h, args.l0_scale, down_filter);
+        let jpeg_data = encoder.encode_gray(&centered_enc, enc_w, enc_h, l0q)?;
+        total_l0 += 1;
+        total_bytes += jpeg_data.len();
+
+        // Write fused residual file
+        let l0_parent_dir = l0_out.join(format!("{}_{}", x2, y2));
+        fs::create_dir_all(&l0_parent_dir)?;
+        let out_path = l0_parent_dir.join(format!("fused{}", ext));
+        fs::write(&out_path, &jpeg_data)?;
+
+        if args.pack {
+            pack_entries.push(PackWriteEntry {
+                level_kind: 0,
+                idx_in_parent: 0,
+                jpeg_data,
+            });
         }
 
         // Write pack file
@@ -434,21 +461,14 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
 
         let parent_ms = parent_start.elapsed().as_millis();
         info!(
-            "[{}/{}] L2 parent ({},{}) — L1: {} residuals, L0: {} residuals — {}ms",
-            pi + 1,
-            parents.len(),
-            x2,
-            y2,
-            pack_entries.iter().filter(|e| e.level_kind == 1).count(),
-            pack_entries.iter().filter(|e| e.level_kind == 0).count(),
-            parent_ms
+            "[{}/{}] L2 parent ({},{}) — fused L0 residual ({} tiles) — {}ms",
+            pi + 1, parents.len(), x2, y2, tiles_found, parent_ms
         );
     }
 
     let elapsed = start.elapsed();
     info!(
-        "Encode complete: {} L1 + {} L0 residuals, {:.1} MB total, {:.1}s",
-        total_l1,
+        "Encode complete: {} fused L0 residuals, {:.1} MB total, {:.1}s",
         total_l0,
         total_bytes as f64 / 1_048_576.0,
         elapsed.as_secs_f64()
@@ -457,16 +477,21 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
     // Write summary.json
     let summary = serde_json::json!({
         "encoder": args.encoder,
-        "l1q": l1q,
+        "baseq": baseq_str,
         "l0q": l0q,
         "subsamp": subsamp.to_string(),
+        "l0_scale": args.l0_scale,
+        "l0_sharpen": args.l0_sharpen.map(|v| (v * 10.0).round() / 10.0),
+        "upsample_filter": up_filter.to_string(),
+        "downsample_filter": down_filter.to_string(),
         "tile_size": tile_size,
-        "l1_residuals": total_l1,
         "l0_residuals": total_l0,
         "total_bytes": total_bytes,
         "parents": parents.len(),
         "pack": args.pack,
         "elapsed_secs": elapsed.as_secs_f64(),
+        "pipeline_version": 2,
+        "l2_format": "jxl",
     });
     fs::write(
         args.out.join("summary.json"),
@@ -477,6 +502,7 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
 }
 
 /// Single-image encode mode: creates one L2 family from a single image (for evals).
+/// V2 pipeline: L2 baseline + single fused L0 residual (no L1 residuals).
 fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> {
     // Enable Huffman optimization for all turbojpeg calls (smaller files, ~20% for small images)
     std::env::set_var("TJ_OPTIMIZE", "1");
@@ -484,7 +510,9 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     let start = Instant::now();
     let image_path = args.image.as_ref().unwrap();
     let encoder = create_encoder(&args.encoder)?;
-    info!("Single-image mode: {} encoder={} subsamp={}", image_path.display(), encoder.name(), subsamp);
+    let up_filter: ResampleFilter = args.upsample_filter.parse().unwrap();
+    let down_filter: ResampleFilter = args.downsample_filter.parse().unwrap();
+    info!("Single-image mode: {} encoder={} subsamp={} upsample={} downsample={}", image_path.display(), encoder.name(), subsamp, up_filter, down_filter);
 
     // Load the source image
     let (src_rgb, src_w, src_h) = load_rgb_turbo(image_path)
@@ -492,9 +520,13 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     info!("Source image: {}x{}", src_w, src_h);
 
     let tile_size = args.tile;
-    let l1q = args.l1q.unwrap_or(args.resq);
     let l0q = args.l0q.unwrap_or(args.resq);
-    let baseq = args.baseq;
+    let baseq_str = args.baseq.clone();
+    let baseq_is_lossless = matches!(baseq_str.to_lowercase().as_str(), "lossless" | "l");
+    let baseq_num: u8 = if baseq_is_lossless { 95 } else {
+        baseq_str.parse::<u8>().map_err(|_| anyhow::anyhow!(
+            "--baseq must be a number (1-100) or 'lossless', got '{}'", baseq_str))?
+    };
     let ext = output_extension(encoder.name());
 
     // Create output directory
@@ -505,112 +537,73 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     let tiles_y = (src_h + tile_size - 1) / tile_size;
     info!("L0 grid: {}x{} tiles ({}x{})", tiles_x, tiles_y, tile_size, tile_size);
 
-    // Extract L0 tiles from source image
-    let mut l0_tiles: Vec<Vec<u8>> = Vec::new();
-    for ty in 0..tiles_y {
-        for tx in 0..tiles_x {
-            let mut tile = vec![0u8; (tile_size * tile_size * 3) as usize];
-            for y in 0..tile_size {
-                for x in 0..tile_size {
-                    let sx = tx * tile_size + x;
-                    let sy = ty * tile_size + y;
-                    let di = ((y * tile_size + x) * 3) as usize;
-                    if sx < src_w && sy < src_h {
-                        let si = ((sy * src_w + sx) * 3) as usize;
-                        tile[di] = src_rgb[si];
-                        tile[di + 1] = src_rgb[si + 1];
-                        tile[di + 2] = src_rgb[si + 2];
-                    }
-                }
-            }
-            l0_tiles.push(tile);
-        }
-    }
-
-    // Build L1 mosaic by downsampling L0 2:1 (Lanczos3)
+    // Build L1 by downsampling L0 source 2:1 (needed for OptL2 target)
     let l1_w = (src_w + 1) / 2;
     let l1_h = (src_h + 1) / 2;
     let l1_rgb = {
         use image::{RgbImage, imageops};
         let src_img = RgbImage::from_raw(src_w, src_h, src_rgb.clone())
             .expect("failed to create RgbImage from source");
-        let resized = imageops::resize(&src_img, l1_w, l1_h, imageops::FilterType::Lanczos3);
+        let resized = imageops::resize(&src_img, l1_w, l1_h, down_filter.to_image_filter());
         resized.into_raw()
     };
 
-    // Extract L1 tiles
-    let l1_tiles_x = (l1_w + tile_size - 1) / tile_size;
-    let l1_tiles_y = (l1_h + tile_size - 1) / tile_size;
-    let mut l1_tiles: Vec<Vec<u8>> = Vec::new();
-    for ty in 0..l1_tiles_y {
-        for tx in 0..l1_tiles_x {
-            let mut tile = vec![0u8; (tile_size * tile_size * 3) as usize];
-            for y in 0..tile_size {
-                for x in 0..tile_size {
-                    let sx = tx * tile_size + x;
-                    let sy = ty * tile_size + y;
-                    let di = ((y * tile_size + x) * 3) as usize;
-                    if sx < l1_w && sy < l1_h {
-                        let si = ((sy * l1_w + sx) * 3) as usize;
-                        tile[di] = l1_rgb[si];
-                        tile[di + 1] = l1_rgb[si + 1];
-                        tile[di + 2] = l1_rgb[si + 2];
-                    }
-                }
-            }
-            l1_tiles.push(tile);
-        }
-    }
-
-    // Build L2 by downsampling directly from L0 source 4:1 (Lanczos3)
+    // Build L2 by downsampling directly from L0 source 4:1
     let l2_w = (l1_w + 1) / 2;
     let l2_h = (l1_h + 1) / 2;
-    let mut l2_rgb = {
+    let l2_rgb = {
         use image::{RgbImage, imageops};
         let src_img = RgbImage::from_raw(src_w, src_h, src_rgb.clone())
             .expect("failed to create RgbImage from source");
-        let resized = imageops::resize(&src_img, l2_w, l2_h, imageops::FilterType::Lanczos3);
+        let resized = imageops::resize(&src_img, l2_w, l2_h, down_filter.to_image_filter());
         resized.into_raw()
     };
 
-    // Optionally sharpen L2 to counteract bilinear upsample blur.
-    // --sharpen creates a sharpened version for predictions.
-    // --save-sharpened controls whether the stored L2 JPEG contains sharpened pixels.
+    // L2 pipeline order: OptL2 first (on smooth base), then sharpen (on optimized base).
+    let mut l2_to_encode = l2_rgb.clone();
+
+    // Step 1: Optionally optimize L2 for better predictions (gradient descent on smooth base)
+    if args.optl2 {
+        use crate::core::optimize_l2::optimize_l2_for_prediction;
+        info!("Running OptL2 gradient descent optimization...");
+        l2_to_encode = optimize_l2_for_prediction(&l2_to_encode, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3, up_filter);
+    }
+
+    // Step 2: Optionally sharpen L2
     let l2_sharpened = if let Some(strength) = args.sharpen {
         use crate::core::sharpen::unsharp_mask_rgb;
         info!("Applying unsharp mask (strength={:.2}) to L2...", strength);
-        Some(unsharp_mask_rgb(&l2_rgb, l2_w, l2_h, strength))
+        Some(unsharp_mask_rgb(&l2_to_encode, l2_w, l2_h, strength))
     } else {
         None
     };
 
-    // Determine what to encode: sharpened if --save-sharpened, otherwise original
-    let l2_to_encode = if args.save_sharpened {
-        l2_sharpened.as_ref().unwrap_or(&l2_rgb).clone()
-    } else {
-        l2_rgb.clone()
-    };
-
-    // Optionally optimize L2 for better predictions (operates on the version being stored)
-    let mut l2_to_encode = l2_to_encode;
-    if args.optl2 {
-        use crate::core::optimize_l2::optimize_l2_for_prediction;
-        info!("Running OptL2 gradient descent optimization...");
-        l2_to_encode = optimize_l2_for_prediction(&l2_to_encode, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3);
+    if args.save_sharpened {
+        if let Some(ref sharpened) = l2_sharpened {
+            l2_to_encode = sharpened.clone();
+        }
     }
 
-    // Encode L2 baseline
-    let l2_jpeg = encoder.encode_rgb_with_subsamp(&l2_to_encode, l2_w, l2_h, baseq, subsamp)?;
-    let l2_bytes = l2_jpeg.len();
-    let l2_out_path = args.out.join(format!("L2_0_0{}", ext));
-    fs::write(&l2_out_path, &l2_jpeg)?;
-    info!("L2 baseline: {}x{} → {} bytes (Q{} {})", l2_w, l2_h, l2_bytes, baseq, subsamp);
+    // Encode L2 baseline as JPEG (needed for OptL2 gradient descent and decode-back)
+    let l2_encoder = create_encoder("turbojpeg")?;
+    let l2_jpeg = l2_encoder.encode_rgb_with_subsamp(&l2_to_encode, l2_w, l2_h, baseq_num, subsamp)?;
 
-    // Decode L2 back (lossy round-trip) to get actual L2 that decoder will see
+    // Store L2 as JXL (primary) + JPEG (for viewer compatibility)
+    let l2_jxl_mode = if baseq_is_lossless { "lossless" } else { &baseq_str };
+    let l2_jxl_data = encode_l2_as_jxl(&l2_jpeg, &l2_to_encode, l2_w, l2_h, l2_jxl_mode)?;
+    let l2_bytes = l2_jxl_data.len();
+    fs::write(args.out.join("L2_0_0.jxl"), &l2_jxl_data)?;
+    fs::write(args.out.join("L2_0_0.jpg"), &l2_jpeg)?; // viewer fallback
+    info!("L2 baseline: {}x{} → {} bytes as JXL ({} mode, JPEG was {} bytes, Q{} {})",
+        l2_w, l2_h, l2_bytes, l2_jxl_mode, l2_jpeg.len(), baseq_str, subsamp);
+
+    // Decode L2 back (lossy round-trip) to get actual L2 that decoder will see.
+    // For lossless mode, the JXL contains exact JPEG bytes so JPEG decode is correct.
+    // For lossy mode, the JXL was encoded from pixels at baseq quality — we decode the
+    // internal JPEG since it matches the quality level (OptL2 optimized against it).
     let (l2_decoded_rgb, _, _) = crate::turbojpeg_optimized::decode_rgb_turbo(&l2_jpeg)?;
 
     // If --sharpen without --save-sharpened: sharpen the decoded L2 for predictions.
-    // This simulates what the decode server will do (sharpen after JPEG decode, before upsample).
     let l2_decoded_for_pred = if l2_sharpened.is_some() && !args.save_sharpened {
         use crate::core::sharpen::unsharp_mask_rgb;
         let strength = args.sharpen.unwrap();
@@ -620,7 +613,6 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         l2_decoded_rgb.clone()
     };
 
-    // L2 for prediction: the decoded (lossy) L2, possibly sharpened at decode time
     let l2_for_prediction = l2_decoded_for_pred;
 
     // Setup debug image directories
@@ -631,350 +623,419 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         fs::create_dir_all(&compress_dir)?;
         fs::create_dir_all(&decompress_dir)?;
         let (l2_y, l2_cb, l2_cr) = ycbcr_planes_from_rgb(&l2_decoded_rgb, l2_w, l2_h);
-        // L2 original (pre-encode, may be sharpened if --save-sharpened)
         save_rgb_png(&compress_dir.join("001_L2_original.png"), &l2_to_encode, l2_w, l2_h)?;
-        // L2 luma, Cb, Cr channels (from decoded round-trip)
         save_gray_png(&compress_dir.join("002_L2_luma.png"), &l2_y, l2_w, l2_h)?;
         save_gray_png(&compress_dir.join("003_L2_chroma_cb.png"), &l2_cb, l2_w, l2_h)?;
         save_gray_png(&compress_dir.join("004_L2_chroma_cr.png"), &l2_cr, l2_w, l2_h)?;
-        // L2 decoded (post JPEG round-trip, before any decode-time sharpen)
         save_rgb_png(&decompress_dir.join("050_L2_decode.png"), &l2_decoded_rgb, l2_w, l2_h)?;
-        // L2 used for prediction (may be sharpened if --sharpen without --save-sharpened)
         save_rgb_png(&decompress_dir.join("050_L2_for_prediction.png"), &l2_for_prediction, l2_w, l2_h)?;
     }
 
-    // Upsample L2 → L1 prediction in RGB space using residual-reconstructed L2
-    let l1_pred_rgb = {
+    // Use float YCbCr for prediction (avoids u8 quantization loss)
+    use crate::core::color::{ycbcr_planes_from_rgb_f32, rgb_from_ycbcr_f32};
+    use crate::core::residual::compute_residual_f32;
+
+    // Upsample L2 → L0 prediction directly (4x, skip L1 intermediate)
+    let l0_pred_rgb = {
         use image::{RgbImage, imageops};
         let l2_img = RgbImage::from_raw(l2_w, l2_h, l2_for_prediction)
             .expect("failed to create RgbImage from L2 reconstructed");
-        let resized = imageops::resize(&l2_img, l1_w, l1_h, imageops::FilterType::Triangle);
+        let resized = imageops::resize(&l2_img, src_w, src_h, up_filter.to_image_filter());
         resized.into_raw()
     };
-    // Use float YCbCr to avoid u8 quantization loss (matches Python pipeline)
-    use crate::core::color::{ycbcr_planes_from_rgb_f32, rgb_from_ycbcr_f32};
-    use crate::core::residual::compute_residual_f32;
-    let (l1_pred_y_f32, l1_pred_cb_f32, l1_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l1_pred_rgb, l1_w, l1_h);
 
-    // Write L1 prediction mosaic as debug image
+    let (l0_pred_y_f32, l0_pred_cb_f32, l0_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l0_pred_rgb, src_w, src_h);
+
     if args.debug_images {
-        save_rgb_png(&decompress_dir.join("051_L1_mosaic_prediction.png"), &l1_pred_rgb, l1_w, l1_h)?;
+        save_rgb_png(&decompress_dir.join("060_L0_mosaic_prediction.png"), &l0_pred_rgb, src_w, src_h)?;
     }
 
-    // Process L1 residuals
-    let l1_out = args.out.join("L1").join("0_0");
-    fs::create_dir_all(&l1_out)?;
-    // Float Y mosaic for L0 prediction (avoids u8 quantization in recon Y)
-    let mut l1_recon_y_f32 = vec![0.0f32; (l1_w * l1_h) as usize];
-    let mut l1_recon_rgb = vec![0u8; (l1_w * l1_h * 3) as usize];
     let mut total_bytes = l2_bytes;
     let mut manifest_tiles: Vec<serde_json::Value> = Vec::new();
 
-    for (idx, l1_tile) in l1_tiles.iter().enumerate() {
-        let tx = idx as u32 % l1_tiles_x;
-        let ty = idx as u32 / l1_tiles_x;
-
-        let (l1_gt_y, _, _) = ycbcr_planes_from_rgb(l1_tile, tile_size, tile_size);
-
-        // Extract L1 float prediction Y for this tile
-        let tile_n = (tile_size * tile_size) as usize;
-        let mut pred_y_f32_tile = vec![0.0f32; tile_n];
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let ti = (y * tile_size + x) as usize;
-                let mx = tx * tile_size + x;
-                let my = ty * tile_size + y;
-                if mx < l1_w && my < l1_h {
-                    pred_y_f32_tile[ti] = l1_pred_y_f32[(my * l1_w + mx) as usize];
-                }
-            }
-        }
-
-        // Float-precision residual: avoids quantizing pred_Y to u8 before subtraction
-        let centered = compute_residual_f32(&l1_gt_y, &pred_y_f32_tile);
-        let res_data = encoder.encode_gray(&centered, tile_size, tile_size, l1q)?;
-        total_bytes += res_data.len();
-
-        let out_path = l1_out.join(format!("{}_{}{}", tx, ty, ext));
-        fs::write(&out_path, &res_data)?;
-
-        // Decode residual back and reconstruct
-        let decoded_res = decode_residual_bytes(&res_data)?;
-
-        // Extract float Cb/Cr prediction for this tile (for float-precision reconstruction)
-        let mut pred_cb_f32_tile = vec![0.0f32; tile_n];
-        let mut pred_cr_f32_tile = vec![0.0f32; tile_n];
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let ti = (y * tile_size + x) as usize;
-                let mx = tx * tile_size + x;
-                let my = ty * tile_size + y;
-                if mx < l1_w && my < l1_h {
-                    let mi = (my * l1_w + mx) as usize;
-                    pred_cb_f32_tile[ti] = l1_pred_cb_f32[mi];
-                    pred_cr_f32_tile[ti] = l1_pred_cr_f32[mi];
-                }
-            }
-        }
-
-        // Reconstruct Y (float) and build RGB mosaic
-        let mut recon_y_f32_tile = vec![0.0f32; tile_n];
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let ti = (y * tile_size + x) as usize;
-                let pred_val = pred_y_f32_tile[ti];
-                let res_val = decoded_res[ti] as f32 - 128.0;
-                let recon = (pred_val + res_val).clamp(0.0, 255.0);
-                recon_y_f32_tile[ti] = recon;
-                let mx = tx * tile_size + x;
-                let my = ty * tile_size + y;
-                if mx < l1_w && my < l1_h {
-                    let mi = (my * l1_w + mx) as usize;
-                    l1_recon_y_f32[mi] = recon;
-                    // Reconstruct RGB with float precision (single quantization at end)
-                    let cbf = pred_cb_f32_tile[ti] - 128.0;
-                    let crf = pred_cr_f32_tile[ti] - 128.0;
-                    let r = (recon + 1.402 * crf).round().clamp(0.0, 255.0) as u8;
-                    let g = (recon - 0.344136 * cbf - 0.714136 * crf).round().clamp(0.0, 255.0) as u8;
-                    let b = (recon + 1.772 * cbf).round().clamp(0.0, 255.0) as u8;
-                    let ri = mi * 3;
-                    l1_recon_rgb[ri] = r;
-                    l1_recon_rgb[ri + 1] = g;
-                    l1_recon_rgb[ri + 2] = b;
-                }
-            }
-        }
-
-        // Write per-tile debug images
-        if args.debug_images {
-            let step = 10 + idx as u32 * 10;
-            // Original RGB tile
-            save_rgb_png(&compress_dir.join(format!("{:03}_L1_{}_{}_original.png", step, tx, ty)),
-                l1_tile, tile_size, tile_size)?;
-            // Luma of original
-            save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_luma.png", step + 1, tx, ty)),
-                &l1_gt_y, tile_size, tile_size)?;
-            // Chroma channels (from prediction, quantized for debug visualization)
-            let pred_cb_u8: Vec<u8> = pred_cb_f32_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
-            let pred_cr_u8: Vec<u8> = pred_cr_f32_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
-            save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cb.png", step + 2, tx, ty)),
-                &pred_cb_u8, tile_size, tile_size)?;
-            save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cr.png", step + 3, tx, ty)),
-                &pred_cr_u8, tile_size, tile_size)?;
-            // Prediction (RGB) — extract from l1_pred_rgb mosaic
-            let mut pred_rgb_tile = vec![0u8; (tile_size * tile_size * 3) as usize];
-            for y in 0..tile_size {
-                for x in 0..tile_size {
-                    let mx = tx * tile_size + x;
-                    let my = ty * tile_size + y;
-                    if mx < l1_w && my < l1_h {
-                        let si = ((my * l1_w + mx) * 3) as usize;
-                        let di = ((y * tile_size + x) * 3) as usize;
-                        pred_rgb_tile[di] = l1_pred_rgb[si];
-                        pred_rgb_tile[di + 1] = l1_pred_rgb[si + 1];
-                        pred_rgb_tile[di + 2] = l1_pred_rgb[si + 2];
-                    }
-                }
-            }
-            save_rgb_png(&compress_dir.join(format!("{:03}_L1_{}_{}_prediction.png", step + 4, tx, ty)),
-                &pred_rgb_tile, tile_size, tile_size)?;
-            // Raw residual (normalized to [0,255] for visualization)
-            let residual_raw: Vec<f32> = l1_gt_y.iter().zip(pred_y_f32_tile.iter())
-                .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
-            let raw_normalized = normalize_f32_to_u8(&residual_raw);
-            save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_residual_raw.png", step + 5, tx, ty)),
-                &raw_normalized, tile_size, tile_size)?;
-            // Centered residual
-            save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_residual_centered.png", step + 7, tx, ty)),
-                &centered, tile_size, tile_size)?;
-            // Reconstructed RGB (float-precision YCbCr → RGB)
-            let recon_rgb = rgb_from_ycbcr_f32(&recon_y_f32_tile, &pred_cb_f32_tile, &pred_cr_f32_tile);
-            save_rgb_png(&decompress_dir.join(format!("{:03}_L1_{}_{}_reconstructed.png", 63, tx, ty)),
-                &recon_rgb, tile_size, tile_size)?;
-        }
-
-        if args.manifest {
-            // Compute PSNR for this L1 tile (Y-channel, reconstructed vs ground truth)
-            let mut mse_sum = 0.0f64;
-            for i in 0..l1_gt_y.len() {
-                let ry = (i as u32) / tile_size;
-                let rx = (i as u32) % tile_size;
-                let my = ty * tile_size + ry;
-                let mx = tx * tile_size + rx;
-                if mx < l1_w && my < l1_h {
-                    let recon_val = l1_recon_y_f32[(my * l1_w + mx) as usize] as f64;
-                    let gt_val = l1_gt_y[i] as f64;
-                    let diff = recon_val - gt_val;
-                    mse_sum += diff * diff;
-                }
-            }
-            let mse = mse_sum / l1_gt_y.len() as f64;
-            let psnr = if mse > 0.0 { 10.0 * (255.0f64 * 255.0 / mse).log10() } else { 100.0 };
-
-            manifest_tiles.push(serde_json::json!({
-                "level": "L1",
-                "tx": tx, "ty": ty,
-                "residual_bytes": res_data.len(),
-                "y_psnr_db": (psnr * 100.0).round() / 100.0,
-                "y_mse": (mse * 100.0).round() / 100.0,
-            }));
-        }
+    // Pack entries for single-image mode
+    let mut pack_entries: Vec<PackWriteEntry> = Vec::new();
+    if args.pack {
+        let l2_stored_bytes = l2_jxl_data.clone();
+        pack_entries.push(PackWriteEntry {
+            level_kind: 2,
+            idx_in_parent: 0,
+            jpeg_data: l2_stored_bytes,
+        });
     }
 
-    // Upsample reconstructed L1 → L0 prediction in RGB space (matches L2→L1 approach)
-    let l0_pred_rgb = {
-        use image::{RgbImage, imageops};
-        let l1_img = RgbImage::from_raw(l1_w, l1_h, l1_recon_rgb)
-            .expect("failed to create RgbImage from L1 reconstructed");
-        let resized = imageops::resize(&l1_img, src_w, src_h, imageops::FilterType::Triangle);
-        resized.into_raw()
+    // Compute fused L0 residual (full source image size)
+    // Extract ground truth Y from source
+    let (src_gt_y, _, _) = ycbcr_planes_from_rgb(&src_rgb, src_w, src_h);
+
+    // Float-precision residual for the entire L0 mosaic
+    let centered = compute_residual_f32(&src_gt_y, &l0_pred_y_f32);
+
+    // Optionally sharpen residual before encoding
+    let centered = if let Some(strength) = args.l0_sharpen {
+        crate::core::sharpen::unsharp_mask_gray(&centered, src_w, src_h, strength)
+    } else {
+        centered
     };
 
-    // Use float YCbCr for L0 prediction (matches Python pipeline, avoids u8 quantization)
-    let (l0_pred_y_f32, l0_pred_cb_f32, l0_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l0_pred_rgb, src_w, src_h);
+    // Optionally downscale residual before encoding
+    let (centered_enc, enc_w, enc_h) = downscale_gray(&centered, src_w, src_h, args.l0_scale, down_filter);
+    let res_data = encoder.encode_gray(&centered_enc, enc_w, enc_h, l0q)?;
+    total_bytes += res_data.len();
 
-    // Write L0 prediction mosaic as debug image
-    if args.debug_images {
-        save_rgb_png(&decompress_dir.join("065_L0_mosaic_prediction.png"), &l0_pred_rgb, src_w, src_h)?;
-    }
-
-    // Process L0 residuals
+    // Write fused L0 residual
     let l0_out_dir = args.out.join("L0").join("0_0");
     fs::create_dir_all(&l0_out_dir)?;
+    let out_path = l0_out_dir.join(format!("fused{}", ext));
+    fs::write(&out_path, &res_data)?;
 
-    for (idx, l0_tile) in l0_tiles.iter().enumerate() {
-        let tx = idx as u32 % tiles_x;
-        let ty = idx as u32 / tiles_x;
+    if args.pack {
+        pack_entries.push(PackWriteEntry {
+            level_kind: 0,
+            idx_in_parent: 0,
+            jpeg_data: res_data.clone(),
+        });
+    }
 
-        let (l0_gt_y, _, _) = ycbcr_planes_from_rgb(l0_tile, tile_size, tile_size);
+    // Debug images for the fused residual
+    if args.debug_images {
+        // Raw residual (normalized for visualization)
+        let residual_raw: Vec<f32> = src_gt_y.iter().zip(l0_pred_y_f32.iter())
+            .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
+        let raw_normalized = normalize_f32_to_u8(&residual_raw);
+        save_gray_png(&compress_dir.join("020_L0_fused_residual_raw.png"),
+            &raw_normalized, src_w, src_h)?;
+        save_gray_png(&compress_dir.join("021_L0_fused_residual_centered.png"),
+            &centered, src_w, src_h)?;
+    }
 
-        // Extract float prediction Y for this L0 tile
-        let tile_n = (tile_size * tile_size) as usize;
-        let mut pred_y_f32_tile = vec![0.0f32; tile_n];
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let ti = (y * tile_size + x) as usize;
-                let mx = tx * tile_size + x;
-                let my = ty * tile_size + y;
-                if mx < src_w && my < src_h {
-                    pred_y_f32_tile[ti] = l0_pred_y_f32[(my * src_w + mx) as usize];
-                }
-            }
+    // Compute per-tile metrics and debug images
+    if args.manifest || args.debug_images {
+        // Decode residual back for reconstruction quality measurement
+        let decoded_res = decode_residual_bytes(&res_data)?;
+        // If residual was downscaled, we need to upscale for metrics
+        let decoded_res_full = if args.l0_scale < 100 {
+            fir_resize(&decoded_res, enc_w, enc_h, src_w, src_h, up_filter)
+        } else {
+            decoded_res
+        };
+
+        // Reconstruct full L0 Y
+        let mut recon_y = vec![0.0f32; (src_w * src_h) as usize];
+        for i in 0..(src_w * src_h) as usize {
+            let pred_val = l0_pred_y_f32[i];
+            let res_val = decoded_res_full[i] as f32 - 128.0;
+            recon_y[i] = (pred_val + res_val).clamp(0.0, 255.0);
         }
 
-        // Float-precision residual
-        let centered = compute_residual_f32(&l0_gt_y, &pred_y_f32_tile);
-        let res_data = encoder.encode_gray(&centered, tile_size, tile_size, l0q)?;
-        total_bytes += res_data.len();
-
-        let out_path = l0_out_dir.join(format!("{}_{}{}", tx, ty, ext));
-        fs::write(&out_path, &res_data)?;
-
-        // Extract float Cb/Cr prediction for this L0 tile
-        let mut pred_cb_f32_tile = vec![0.0f32; tile_n];
-        let mut pred_cr_f32_tile = vec![0.0f32; tile_n];
-        for y in 0..tile_size {
-            for x in 0..tile_size {
-                let ti = (y * tile_size + x) as usize;
-                let mx = tx * tile_size + x;
-                let my = ty * tile_size + y;
-                if mx < src_w && my < src_h {
-                    let mi = (my * src_w + mx) as usize;
-                    pred_cb_f32_tile[ti] = l0_pred_cb_f32[mi];
-                    pred_cr_f32_tile[ti] = l0_pred_cr_f32[mi];
-                }
-            }
-        }
-
-        // Write per-tile debug images for L0
         if args.debug_images {
-            let step = 20 + idx as u32;
-            // Original RGB tile
-            save_rgb_png(&compress_dir.join(format!("{:03}_L0_{}_{}_original.png", step, tx, ty)),
-                l0_tile, tile_size, tile_size)?;
-            // Luma of original
-            save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_luma.png", step, tx, ty)),
-                &l0_gt_y, tile_size, tile_size)?;
-            // Chroma channels (from prediction, quantized for debug visualization)
-            let pred_cb_u8: Vec<u8> = pred_cb_f32_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
-            let pred_cr_u8: Vec<u8> = pred_cr_f32_tile.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
-            save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cb.png", step, tx, ty)),
-                &pred_cb_u8, tile_size, tile_size)?;
-            save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cr.png", step, tx, ty)),
-                &pred_cr_u8, tile_size, tile_size)?;
-            // Prediction (RGB) — extract from l0_pred_rgb mosaic
-            let mut pred_rgb_tile = vec![0u8; (tile_size * tile_size * 3) as usize];
-            for y in 0..tile_size {
-                for x in 0..tile_size {
-                    let mx = tx * tile_size + x;
-                    let my = ty * tile_size + y;
-                    if mx < src_w && my < src_h {
-                        let si = ((my * src_w + mx) * 3) as usize;
-                        let di = ((y * tile_size + x) * 3) as usize;
-                        pred_rgb_tile[di] = l0_pred_rgb[si];
-                        pred_rgb_tile[di + 1] = l0_pred_rgb[si + 1];
-                        pred_rgb_tile[di + 2] = l0_pred_rgb[si + 2];
+            // Full reconstructed RGB
+            let recon_rgb = rgb_from_ycbcr_f32(&recon_y, &l0_pred_cb_f32, &l0_pred_cr_f32);
+            save_rgb_png(&decompress_dir.join("070_L0_reconstructed.png"),
+                &recon_rgb, src_w, src_h)?;
+
+            // Per-tile reconstructed images
+            for ty in 0..tiles_y {
+                for tx in 0..tiles_x {
+                    let tile_n = (tile_size * tile_size) as usize;
+                    let mut tile_y = vec![0.0f32; tile_n];
+                    let mut tile_cb = vec![0.0f32; tile_n];
+                    let mut tile_cr = vec![0.0f32; tile_n];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let ti = (y * tile_size + x) as usize;
+                            let mx = tx * tile_size + x;
+                            let my = ty * tile_size + y;
+                            if mx < src_w && my < src_h {
+                                let mi = (my * src_w + mx) as usize;
+                                tile_y[ti] = recon_y[mi];
+                                tile_cb[ti] = l0_pred_cb_f32[mi];
+                                tile_cr[ti] = l0_pred_cr_f32[mi];
+                            }
+                        }
                     }
+                    let tile_rgb = rgb_from_ycbcr_f32(&tile_y, &tile_cb, &tile_cr);
+                    let step = 70 + (ty * tiles_x + tx) as u32;
+                    save_rgb_png(&decompress_dir.join(format!("{:03}_L0_{}_{}_reconstructed.png", step, tx, ty)),
+                        &tile_rgb, tile_size, tile_size)?;
                 }
             }
-            save_rgb_png(&compress_dir.join(format!("{:03}_L0_{}_{}_prediction.png", step, tx, ty)),
-                &pred_rgb_tile, tile_size, tile_size)?;
-            // Raw residual (normalized to [0,255] for visualization)
-            let residual_raw: Vec<f32> = l0_gt_y.iter().zip(pred_y_f32_tile.iter())
-                .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
-            let raw_normalized = normalize_f32_to_u8(&residual_raw);
-            save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_raw.png", step, tx, ty)),
-                &raw_normalized, tile_size, tile_size)?;
-            // Centered residual
-            save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_centered.png", step, tx, ty)),
-                &centered, tile_size, tile_size)?;
         }
 
         if args.manifest {
-            // Compute PSNR for this L0 tile
-            let decoded_res = decode_residual_bytes(&res_data)?;
+            // Per-tile PSNR
+            for ty in 0..tiles_y {
+                for tx in 0..tiles_x {
+                    let mut mse_sum = 0.0f64;
+                    let mut count = 0usize;
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let mx = tx * tile_size + x;
+                            let my = ty * tile_size + y;
+                            if mx < src_w && my < src_h {
+                                let mi = (my * src_w + mx) as usize;
+                                let recon_val = recon_y[mi] as f64;
+                                let gt_val = src_gt_y[mi] as f64;
+                                let diff = recon_val - gt_val;
+                                mse_sum += diff * diff;
+                                count += 1;
+                            }
+                        }
+                    }
+                    let mse = if count > 0 { mse_sum / count as f64 } else { 0.0 };
+                    let psnr = if mse > 0.0 { 10.0 * (255.0f64 * 255.0 / mse).log10() } else { 100.0 };
 
-            // Write reconstructed RGB debug image for L0 (float-precision YCbCr → RGB)
-            if args.debug_images {
-                let mut recon_y_f32_tile = vec![0.0f32; tile_n];
-                for i in 0..l0_gt_y.len() {
-                    let pv = pred_y_f32_tile[i];
-                    let rv = decoded_res[i] as f32 - 128.0;
-                    recon_y_f32_tile[i] = (pv + rv).clamp(0.0, 255.0);
+                    manifest_tiles.push(serde_json::json!({
+                        "level": "L0",
+                        "tx": tx, "ty": ty,
+                        "y_psnr_db": (psnr * 100.0).round() / 100.0,
+                        "y_mse": (mse * 100.0).round() / 100.0,
+                    }));
                 }
-                let recon_rgb = rgb_from_ycbcr_f32(&recon_y_f32_tile, &pred_cb_f32_tile, &pred_cr_f32_tile);
-                let step = 70 + idx as u32;
-                save_rgb_png(&decompress_dir.join(format!("{:03}_L0_{}_{}_reconstructed.png", step, tx, ty)),
-                    &recon_rgb, tile_size, tile_size)?;
             }
-
-            let mut mse_sum = 0.0f64;
-            let n = l0_gt_y.len();
-            for i in 0..n {
-                let pred_val = pred_y_f32_tile[i] as f64;
-                let res_val = decoded_res[i] as f64 - 128.0;
-                let recon = (pred_val + res_val).max(0.0).min(255.0);
-                let gt_val = l0_gt_y[i] as f64;
-                let diff = recon - gt_val;
-                mse_sum += diff * diff;
-            }
-            let mse = mse_sum / n as f64;
-            let psnr = if mse > 0.0 { 10.0 * (255.0f64 * 255.0 / mse).log10() } else { 100.0 };
-
-            manifest_tiles.push(serde_json::json!({
-                "level": "L0",
-                "tx": tx, "ty": ty,
-                "residual_bytes": res_data.len(),
-                "y_psnr_db": (psnr * 100.0).round() / 100.0,
-                "y_mse": (mse * 100.0).round() / 100.0,
-            }));
         }
+
+        // --- L1 debug images and metrics ---
+        // L1 tiles are derived by downscaling corrected L0 Y + using L2 chroma 2x
+        let l1_tiles_x = (l1_w + tile_size - 1) / tile_size;
+        let l1_tiles_y = (l1_h + tile_size - 1) / tile_size;
+
+        // Reconstruct L1 Y by downscaling corrected L0 Y 2x
+        let l1_recon_y_u8: Vec<u8> = {
+            let recon_y_u8: Vec<u8> = recon_y.iter().map(|&v| v.round().clamp(0.0, 255.0) as u8).collect();
+            fir_resize(&recon_y_u8, src_w, src_h, l1_w, l1_h, up_filter)
+        };
+
+        // L1 chroma: upsample L2 chroma 2x (same as decode pipeline)
+        let l1_pred_cb_f32_full = ycbcr_planes_from_rgb_f32(&{
+            use image::{RgbImage, imageops};
+            let l2_img = RgbImage::from_raw(l2_w, l2_h, l2_decoded_rgb.clone())
+                .expect("l2 for l1 chroma");
+            let resized = imageops::resize(&l2_img, l1_w, l1_h, up_filter.to_image_filter());
+            resized.into_raw()
+        }, l1_w, l1_h);
+        let l1_pred_cb_f32_ds = l1_pred_cb_f32_full.1;
+        let l1_pred_cr_f32_ds = l1_pred_cb_f32_full.2;
+
+        if args.debug_images {
+            // L0 per-tile source images (compress dir)
+            for ty in 0..tiles_y {
+                for tx in 0..tiles_x {
+                    let mut tile = vec![0u8; (tile_size * tile_size * 3) as usize];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let sx = tx * tile_size + x;
+                            let sy = ty * tile_size + y;
+                            let di = ((y * tile_size + x) * 3) as usize;
+                            if sx < src_w && sy < src_h {
+                                let si = ((sy * src_w + sx) * 3) as usize;
+                                tile[di] = src_rgb[si];
+                                tile[di + 1] = src_rgb[si + 1];
+                                tile[di + 2] = src_rgb[si + 2];
+                            }
+                        }
+                    }
+                    let step = 20 + (ty * tiles_x + tx) as u32;
+                    save_rgb_png(&compress_dir.join(format!("{:03}_L0_{}_{}_original.png", step, tx, ty)),
+                        &tile, tile_size, tile_size)?;
+
+                    // Luma of original
+                    let (tile_gt_y, _, _) = ycbcr_planes_from_rgb(&tile, tile_size, tile_size);
+                    save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_luma.png", step, tx, ty)),
+                        &tile_gt_y, tile_size, tile_size)?;
+
+                    // Prediction tile + chroma channels
+                    let tile_n = (tile_size * tile_size) as usize;
+                    let mut pred_tile = vec![0u8; tile_n * 3];
+                    let mut pred_cb_tile = vec![0u8; tile_n];
+                    let mut pred_cr_tile = vec![0u8; tile_n];
+                    let mut pred_y_tile_f32 = vec![0.0f32; tile_n];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let mx = tx * tile_size + x;
+                            let my = ty * tile_size + y;
+                            let ti = (y * tile_size + x) as usize;
+                            if mx < src_w && my < src_h {
+                                let si = ((my * src_w + mx) * 3) as usize;
+                                let mi = (my * src_w + mx) as usize;
+                                pred_tile[ti * 3] = l0_pred_rgb[si];
+                                pred_tile[ti * 3 + 1] = l0_pred_rgb[si + 1];
+                                pred_tile[ti * 3 + 2] = l0_pred_rgb[si + 2];
+                                pred_cb_tile[ti] = l0_pred_cb_f32[mi].round().clamp(0.0, 255.0) as u8;
+                                pred_cr_tile[ti] = l0_pred_cr_f32[mi].round().clamp(0.0, 255.0) as u8;
+                                pred_y_tile_f32[ti] = l0_pred_y_f32[mi];
+                            }
+                        }
+                    }
+                    save_rgb_png(&compress_dir.join(format!("{:03}_L0_{}_{}_prediction.png", step, tx, ty)),
+                        &pred_tile, tile_size, tile_size)?;
+                    save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cb.png", step, tx, ty)),
+                        &pred_cb_tile, tile_size, tile_size)?;
+                    save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_chroma_cr.png", step, tx, ty)),
+                        &pred_cr_tile, tile_size, tile_size)?;
+
+                    // Per-tile residual (extracted from the fused residual)
+                    let residual_raw_tile: Vec<f32> = tile_gt_y.iter().zip(pred_y_tile_f32.iter())
+                        .map(|(&gt_val, &pred_val)| gt_val as f32 - pred_val).collect();
+                    let raw_norm = normalize_f32_to_u8(&residual_raw_tile);
+                    save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_raw.png", step, tx, ty)),
+                        &raw_norm, tile_size, tile_size)?;
+
+                    // Centered residual (what gets encoded)
+                    let centered_tile: Vec<u8> = tile_gt_y.iter().zip(pred_y_tile_f32.iter())
+                        .map(|(&gt_val, &pred_val)| (gt_val as f32 - pred_val + 128.0).round().clamp(0.0, 255.0) as u8)
+                        .collect();
+                    save_gray_png(&compress_dir.join(format!("{:03}_L0_{}_{}_residual_centered.png", step, tx, ty)),
+                        &centered_tile, tile_size, tile_size)?;
+                }
+            }
+
+            // L1 per-tile debug images
+            for ty in 0..l1_tiles_y {
+                for tx in 0..l1_tiles_x {
+                    let tile_n = (tile_size * tile_size) as usize;
+                    let step = 10 + (ty * l1_tiles_x + tx) as u32;
+
+                    // L1 original (from downsampled source)
+                    let mut l1_orig_tile = vec![0u8; tile_n * 3];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let sx = tx * tile_size + x;
+                            let sy = ty * tile_size + y;
+                            let di = ((y * tile_size + x) * 3) as usize;
+                            if sx < l1_w && sy < l1_h {
+                                let si = ((sy * l1_w + sx) * 3) as usize;
+                                l1_orig_tile[di] = l1_rgb[si];
+                                l1_orig_tile[di + 1] = l1_rgb[si + 1];
+                                l1_orig_tile[di + 2] = l1_rgb[si + 2];
+                            }
+                        }
+                    }
+                    save_rgb_png(&compress_dir.join(format!("{:03}_L1_{}_{}_original.png", step, tx, ty)),
+                        &l1_orig_tile, tile_size, tile_size)?;
+
+                    // L1 luma of original
+                    let (l1_tile_gt_y, _, _) = ycbcr_planes_from_rgb(&l1_orig_tile, tile_size, tile_size);
+                    save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_luma.png", step, tx, ty)),
+                        &l1_tile_gt_y, tile_size, tile_size)?;
+
+                    // L1 prediction (upsampled L2)
+                    // Use the L2→L1 upsample for prediction
+                    let l1_pred_rgb_full = {
+                        use image::{RgbImage, imageops};
+                        let l2_img = RgbImage::from_raw(l2_w, l2_h, l2_decoded_rgb.clone())
+                            .expect("l2 for l1 pred");
+                        let resized = imageops::resize(&l2_img, l1_w, l1_h, up_filter.to_image_filter());
+                        resized.into_raw()
+                    };
+                    let mut l1_pred_tile = vec![0u8; tile_n * 3];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let sx = tx * tile_size + x;
+                            let sy = ty * tile_size + y;
+                            let di = ((y * tile_size + x) * 3) as usize;
+                            if sx < l1_w && sy < l1_h {
+                                let si = ((sy * l1_w + sx) * 3) as usize;
+                                l1_pred_tile[di] = l1_pred_rgb_full[si];
+                                l1_pred_tile[di + 1] = l1_pred_rgb_full[si + 1];
+                                l1_pred_tile[di + 2] = l1_pred_rgb_full[si + 2];
+                            }
+                        }
+                    }
+                    save_rgb_png(&compress_dir.join(format!("{:03}_L1_{}_{}_prediction.png", step, tx, ty)),
+                        &l1_pred_tile, tile_size, tile_size)?;
+
+                    // L1 chroma channels (from prediction)
+                    let l1_pred_cb_tile: Vec<u8> = (0..tile_n).map(|i| {
+                        let mx = (i as u32 % tile_size) + tx * tile_size;
+                        let my = (i as u32 / tile_size) + ty * tile_size;
+                        if mx < l1_w && my < l1_h {
+                            l1_pred_cb_f32_ds[(my * l1_w + mx) as usize].round().clamp(0.0, 255.0) as u8
+                        } else { 128 }
+                    }).collect();
+                    let l1_pred_cr_tile: Vec<u8> = (0..tile_n).map(|i| {
+                        let mx = (i as u32 % tile_size) + tx * tile_size;
+                        let my = (i as u32 / tile_size) + ty * tile_size;
+                        if mx < l1_w && my < l1_h {
+                            l1_pred_cr_f32_ds[(my * l1_w + mx) as usize].round().clamp(0.0, 255.0) as u8
+                        } else { 128 }
+                    }).collect();
+                    save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cb.png", step, tx, ty)),
+                        &l1_pred_cb_tile, tile_size, tile_size)?;
+                    save_gray_png(&compress_dir.join(format!("{:03}_L1_{}_{}_chroma_cr.png", step, tx, ty)),
+                        &l1_pred_cr_tile, tile_size, tile_size)?;
+
+                    // L1 reconstructed (from downscaled corrected L0 Y + L2 chroma 2x)
+                    let mut l1_recon_tile_y = vec![0.0f32; tile_n];
+                    let mut l1_recon_tile_cb = vec![0.0f32; tile_n];
+                    let mut l1_recon_tile_cr = vec![0.0f32; tile_n];
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let ti = (y * tile_size + x) as usize;
+                            let mx = tx * tile_size + x;
+                            let my = ty * tile_size + y;
+                            if mx < l1_w && my < l1_h {
+                                let mi = (my * l1_w + mx) as usize;
+                                l1_recon_tile_y[ti] = l1_recon_y_u8[mi] as f32;
+                                l1_recon_tile_cb[ti] = l1_pred_cb_f32_ds[mi];
+                                l1_recon_tile_cr[ti] = l1_pred_cr_f32_ds[mi];
+                            }
+                        }
+                    }
+                    let l1_recon_rgb = rgb_from_ycbcr_f32(&l1_recon_tile_y, &l1_recon_tile_cb, &l1_recon_tile_cr);
+                    save_rgb_png(&decompress_dir.join(format!("{:03}_L1_{}_{}_reconstructed.png", 63, tx, ty)),
+                        &l1_recon_rgb, tile_size, tile_size)?;
+                }
+            }
+        }
+
+        // L1 manifest metrics
+        if args.manifest {
+            let (l1_gt_y_all, _, _) = ycbcr_planes_from_rgb(&l1_rgb, l1_w, l1_h);
+            for ty in 0..l1_tiles_y {
+                for tx in 0..l1_tiles_x {
+                    let mut mse_sum = 0.0f64;
+                    let mut count = 0usize;
+                    for y in 0..tile_size {
+                        for x in 0..tile_size {
+                            let mx = tx * tile_size + x;
+                            let my = ty * tile_size + y;
+                            if mx < l1_w && my < l1_h {
+                                let mi = (my * l1_w + mx) as usize;
+                                let recon_val = l1_recon_y_u8[mi] as f64;
+                                let gt_val = l1_gt_y_all[mi] as f64;
+                                let diff = recon_val - gt_val;
+                                mse_sum += diff * diff;
+                                count += 1;
+                            }
+                        }
+                    }
+                    let mse = if count > 0 { mse_sum / count as f64 } else { 0.0 };
+                    let psnr = if mse > 0.0 { 10.0 * (255.0f64 * 255.0 / mse).log10() } else { 100.0 };
+
+                    manifest_tiles.push(serde_json::json!({
+                        "level": "L1",
+                        "tx": tx, "ty": ty,
+                        "y_psnr_db": (psnr * 100.0).round() / 100.0,
+                        "y_mse": (mse * 100.0).round() / 100.0,
+                    }));
+                }
+            }
+        }
+    }
+
+    // Write pack file for single-image mode (one family at 0,0)
+    if args.pack && !pack_entries.is_empty() {
+        let pack_dir = args.out.join("packs");
+        fs::create_dir_all(&pack_dir)?;
+        write_pack(&pack_dir, 0, 0, &pack_entries)?;
+        info!("Pack file written: {} entries (L2=1, L0=1)", pack_entries.len());
     }
 
     let elapsed = start.elapsed();
     info!(
-        "Single-image encode complete: {} L1 + {} L0 tiles, {} total bytes, {:.1}s",
-        l1_tiles.len(), l0_tiles.len(), total_bytes, elapsed.as_secs_f64()
+        "Single-image encode complete: {} L0 tiles, fused residual {} bytes, {} total bytes, {:.1}s",
+        tiles_x * tiles_y, res_data.len(), total_bytes, elapsed.as_secs_f64()
     );
 
     // Write summary.json
@@ -985,20 +1046,23 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         "source_h": src_h,
         "encoder": args.encoder,
         "subsamp": subsamp.to_string(),
-        "baseq": baseq,
-        "l1q": l1q,
+        "baseq": baseq_str,
         "l0q": l0q,
         "optl2": args.optl2,
-        "sharpen": args.sharpen,
+        "sharpen": args.sharpen.map(|v| (v * 10.0).round() / 10.0),
         "save_sharpened": args.save_sharpened,
+        "l0_scale": args.l0_scale,
+        "l0_sharpen": args.l0_sharpen.map(|v| (v * 10.0).round() / 10.0),
+        "upsample_filter": up_filter.to_string(),
+        "downsample_filter": down_filter.to_string(),
         "tile_size": tile_size,
         "l2_bytes": l2_bytes,
         "l2_w": l2_w,
         "l2_h": l2_h,
-        "l1_tiles": l1_tiles.len(),
-        "l0_tiles": l0_tiles.len(),
+        "l0_tiles": tiles_x * tiles_y,
         "total_bytes": total_bytes,
         "elapsed_secs": elapsed.as_secs_f64(),
+        "pipeline_version": 2,
     });
     fs::write(
         args.out.join("summary.json"),
@@ -1014,17 +1078,23 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
             "source_h": src_h,
             "encoder": args.encoder,
             "subsamp": subsamp.to_string(),
-            "baseq": baseq,
-            "l1q": l1q,
+            "baseq": baseq_str,
             "l0q": l0q,
             "optl2": args.optl2,
-            "sharpen": args.sharpen,
+            "sharpen": args.sharpen.map(|v| (v * 10.0).round() / 10.0),
+            "l0_scale": args.l0_scale,
+            "l0_sharpen": args.l0_sharpen.map(|v| (v * 10.0).round() / 10.0),
+            "l2_format": "jxl",
+            "upsample_filter": up_filter.to_string(),
+            "downsample_filter": down_filter.to_string(),
             "tile_size": tile_size,
             "l2_bytes": l2_bytes,
             "l2_w": l2_w,
             "l2_h": l2_h,
+            "fused_l0_bytes": res_data.len(),
             "total_bytes": total_bytes,
             "tiles": manifest_tiles,
+            "pipeline_version": 2,
         });
         fs::write(
             args.out.join("manifest.json"),

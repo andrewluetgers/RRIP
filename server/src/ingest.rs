@@ -389,6 +389,14 @@ fn process_family(
     let (l1_pred_y_f32, l1_pred_cb_f32, l1_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l1_pred_rgb, l1_w, l1_h);
 
     let mut pack_entries: Vec<PackWriteEntry> = Vec::new();
+    // Add L2 baseline tile to pack
+    if do_pack {
+        pack_entries.push(PackWriteEntry {
+            level_kind: 2,
+            idx_in_parent: 0,
+            jpeg_data: l2_jpeg.clone(),
+        });
+    }
     let mut total_residual_bytes = 0usize;
     let mut l1_residual_sizes: Vec<usize> = Vec::with_capacity(4);
     let mut l0_residual_sizes: Vec<usize> = Vec::with_capacity(16);

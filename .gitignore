@@ -96,9 +96,12 @@ evals/archive/legacy-data/
 evals/archive/legacy-runs/
 evals/archive/legacy_runs/
 evals/viewer/node_modules/
+node_modules/
+package-lock.json
 
 # Build artifacts and vendor libs
 server/target2/
 vendor/
 notebooks/pipeline_demo_out/
 .agents/
+.claude/

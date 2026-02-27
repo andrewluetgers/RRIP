@@ -236,6 +236,53 @@ fn unsharp_mask_rgb_neon(src: &[u8], w: u32, h: u32, strength: f32) -> Vec<u8> {
     out
 }
 
+/// Apply unsharp mask to a single-channel grayscale buffer.
+/// Same 3x3 separable Gaussian kernel [0.25, 0.5, 0.25] as the RGB variant.
+/// Scalar-only (residual tiles are small, not a hot path).
+pub fn unsharp_mask_gray(src: &[u8], w: u32, h: u32, strength: f32) -> Vec<u8> {
+    let w = w as usize;
+    let h = h as usize;
+    let len = w * h;
+    debug_assert_eq!(src.len(), len);
+
+    // Pass 1: horizontal blur [0.25, 0.5, 0.25] → u16 (×4 to stay integer)
+    let mut hblur = vec![0u16; len];
+    for y in 0..h {
+        let row = y * w;
+        for x in 0..w {
+            let x0 = if x > 0 { x - 1 } else { 0 };
+            let x2 = if x + 1 < w { x + 1 } else { w - 1 };
+            let a = src[row + x0] as u16;
+            let b = src[row + x] as u16;
+            let d = src[row + x2] as u16;
+            hblur[row + x] = a + 2 * b + d;
+        }
+    }
+
+    // Pass 2: vertical blur on hblur, fused with sharpen output
+    let strength_i = (strength * 256.0).round() as i32;
+    let mut out = vec![0u8; len];
+    for y in 0..h {
+        let y0 = if y > 0 { y - 1 } else { 0 };
+        let y2 = if y + 1 < h { y + 1 } else { h - 1 };
+        let row0 = y0 * w;
+        let row1 = y * w;
+        let row2 = y2 * w;
+        for x in 0..w {
+            let blur16 = hblur[row0 + x] as i32
+                + 2 * hblur[row1 + x] as i32
+                + hblur[row2 + x] as i32;
+            let s16 = (src[row1 + x] as i32) << 4;
+            let diff = s16 - blur16;
+            let v = s16 * 256 + strength_i * diff;
+            let v = (v + 2048) >> 12;
+            out[row1 + x] = v.clamp(0, 255) as u8;
+        }
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

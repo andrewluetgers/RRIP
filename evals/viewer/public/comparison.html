@@ -301,6 +301,10 @@
             font-size: 18px;
             text-align: center;
             height: 100%;
+            position: relative;
+        }
+        .metric-cell:has(.metric-dist) {
+            padding: 0;
         }
 
         .metric-value {
@@ -323,6 +327,72 @@
             color: #dc3545;
             font-size: 15px;
         }
+
+        /* Metric distribution cells (histogram in cell background) */
+        .metric-dist {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            min-height: 44px;
+            overflow: hidden;
+        }
+        .metric-dist .dist-bars {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+            gap: 1px;
+            pointer-events: none;
+        }
+        .metric-dist .dist-bars .bar {
+            flex: 1;
+            background: rgba(23, 162, 184, 0.06);
+            border-top: 1px solid rgba(23, 162, 184, 0.45);
+        }
+        .metric-dist .dist-bars .bar.avg-bin {
+            background: rgba(23, 162, 184, 0.16);
+            border-top: 1px solid rgba(23, 162, 184, 0.7);
+        }
+        .metric-dist .dist-bars.warm .bar {
+            background: rgba(220, 53, 69, 0.06);
+            border-top: 1px solid rgba(220, 53, 69, 0.45);
+        }
+        .metric-dist .dist-bars.warm .bar.avg-bin {
+            background: rgba(220, 53, 69, 0.16);
+            border-top: 1px solid rgba(220, 53, 69, 0.7);
+        }
+        .metric-dist .dist-labels {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+        }
+        .metric-dist .dist-avg {
+            font-weight: 700;
+            font-size: 16px;
+            color: #007bff;
+        }
+        .metric-dist .dist-avg.best {
+            font-weight: 900;
+        }
+        .metric-dist .dist-unit {
+            font-size: 13px;
+            color: #6c757d;
+            margin-left: 3px;
+        }
+        .metric-dist .dist-min, .metric-dist .dist-max {
+            position: absolute;
+            font-size: 9px;
+            color: #999;
+            bottom: 2px;
+        }
+        .metric-dist .dist-min { left: 4px; }
+        .metric-dist .dist-max { right: 4px; }
 
         .stage-label {
             font-size: 10px;
@@ -562,11 +632,93 @@
             margin-top: 6px;
             font-style: italic;
         }
+
+        .flicker-controls {
+            margin-top: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .flicker-toggle {
+            padding: 3px 8px;
+            font-size: 11px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .flicker-toggle:hover {
+            background: #5a6268;
+        }
+
+        .flicker-toggle.active {
+            background: #dc3545;
+        }
+
+        .flicker-speed {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #6c757d;
+        }
+
+        .flicker-speed input[type="range"] {
+            width: 80px;
+            height: 14px;
+        }
+
+        .flicker-speed .speed-label {
+            min-width: 32px;
+            text-align: right;
+        }
+
+        .image-viewport .flicker-original {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .image-viewport .flicker-original img {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .flicker-indicator {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 4px;
+        }
+
+        .flicker-indicator.showing-original {
+            background: #28a745;
+            color: white;
+        }
+
+        .flicker-indicator.showing-recon {
+            background: #007bff;
+            color: white;
+        }
     </style>
 </head>
 <body class="zoom-actual">
     <div class="header">
-        <h1>ORIGAMI Multi-Run Comparison Viewer <a href="/" style="font-size: 14px; font-weight: normal; margin-left: 16px; color: #17a2b8;">Home</a> <a href="/pipeline.html" style="font-size: 14px; font-weight: normal; margin-left: 8px; color: #17a2b8;">Pipeline Walkthrough &rarr;</a></h1>
+        <h1>ORIGAMI Multi-Run Comparison Viewer <a href="/" style="font-size: 14px; font-weight: normal; margin-left: 16px; color: #17a2b8;">Home</a> <a href="/pipeline.html" style="font-size: 14px; font-weight: normal; margin-left: 8px; color: #17a2b8;">Pipeline Walkthrough &rarr;</a> <a href="/runs.html" style="font-size: 14px; font-weight: normal; margin-left: 8px; color: #17a2b8;">Runs</a></h1>
 
         <!-- Process Diagram (collapsed by default) -->
         <details class="process-diagram">
@@ -961,6 +1113,14 @@
                 metric: 'ssim'
             },
             {
+                id: 'ms_ssim',
+                label: 'Avg MS-SSIM \u2191',
+                stage: 'Metric',
+                desc: 'Multi-Scale Structural Similarity (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'ms_ssim'
+            },
+            {
                 id: 'mse',
                 label: 'Avg MSE \u2193',
                 stage: 'Metric',
@@ -991,6 +1151,14 @@
                 desc: 'Learned Perceptual Image Patch Similarity (0=identical) \u2014 averaged across 20 L0+L1 tiles',
                 type: 'metric',
                 metric: 'lpips'
+            },
+            {
+                id: 'blockiness',
+                label: 'Blockiness \u2193',
+                stage: 'Metric',
+                desc: 'JPEG block boundary artifact strength (delta vs original) \u2014 averaged across 20 L0+L1 tiles',
+                type: 'metric',
+                metric: 'blockiness'
             }
         ];
 
@@ -1211,6 +1379,13 @@
         }
 
         function buildComparisonGrid(tile) {
+            // Stop flicker when rebuilding grid
+            if (flickerActive) {
+                flickerActive = false;
+                stopFlicker();
+                // Button state will be reset when grid rebuilds with new HTML
+            }
+
             const grid = document.getElementById('comparisonGrid');
 
             let html = '<table class="grid-container">';
@@ -1237,8 +1412,19 @@
                 html += '<tr>';
                 html += `<td class="row-label">
                     <div class="stage-name">${stage.label}</div>
-                    <div class="stage-desc">${stage.desc}</div>
-                </td>`;
+                    <div class="stage-desc">${stage.desc}</div>`;
+                if (stage.id === 'reconstructed_rgb') {
+                    html += `<div class="flicker-controls">
+                        <button class="flicker-toggle" id="flickerToggle" onclick="toggleFlicker()">Flicker Test</button>
+                        <div class="flicker-speed" id="flickerSpeedControl" style="display:none;">
+                            <span>Speed:</span>
+                            <input type="range" id="flickerSpeed" min="100" max="2000" value="500" step="50" oninput="updateFlickerSpeed(this.value)">
+                            <span class="speed-label" id="flickerSpeedLabel">500ms</span>
+                        </div>
+                        <div id="flickerIndicator"></div>
+                    </div>`;
+                }
+                html += '</td>';
 
                 if (stage.type === 'metric') {
                     // Metric row - display text/numbers
@@ -1274,6 +1460,10 @@
                         html += '<span class="metric-value">0.00</span>';
                     } else if (stage.metric === 'lpips') {
                         html += '<span class="metric-value">0.0000</span>';
+                    } else if (stage.metric === 'ms_ssim') {
+                        html += '<span class="metric-value">1.0000</span>';
+                    } else if (stage.metric === 'blockiness') {
+                        html += '<span class="metric-value">0.0</span>';
                     } else {
                         html += '<span class="metric-value">Baseline</span>';
                     }
@@ -1377,10 +1567,12 @@
             family_ratio: true,
             psnr: true,
             ssim: true,
+            ms_ssim: true,
             mse: false,
             vif: true,
             delta_e: false,
             lpips: false,
+            blockiness: false,
         };
 
         function colorizeMetrics() {
@@ -1405,8 +1597,8 @@
                 const range = Math.abs(bestVal - worstVal);
 
                 cells.forEach(({ el, value }) => {
-                    // Bold only the best value(s)
-                    const valSpan = el.querySelector('.metric-value');
+                    // Bold only the best value(s) — check both old .metric-value and new .dist-avg
+                    const valSpan = el.querySelector('.metric-value') || el.querySelector('.dist-avg');
                     if (valSpan) {
                         valSpan.classList.toggle('best', value === bestVal);
                     }
@@ -1510,6 +1702,14 @@
                             case 'lpips':
                                 value = metrics.lpips ?? null;
                                 if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'ms_ssim':
+                                value = metrics.ms_ssim ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(4)}</span>`;
+                                break;
+                            case 'blockiness':
+                                value = metrics.blockiness_delta ?? null;
+                                if (value !== null) html = `<span class="metric-value">${value.toFixed(1)}</span>`;
                                 break;
                             case 'l2_size':
                                 value = sizes.prior_size || manifest.l2_bytes || null;
@@ -1622,7 +1822,7 @@
                         'final_mse': 'y_mse',
                     };
 
-                    function avgFamilyMetric(manifest, isBaseline, baselineKey, origamiKey) {
+                    function collectFamilyMetricValues(manifest, isBaseline, baselineKey, origamiKey) {
                         const vals = [];
                         if (isBaseline) {
                             if (manifest.tiles) {
@@ -1656,7 +1856,46 @@
                                 }
                             }
                         }
+                        return vals;
+                    }
+
+                    function avgFamilyMetric(manifest, isBaseline, baselineKey, origamiKey) {
+                        const vals = collectFamilyMetricValues(manifest, isBaseline, baselineKey, origamiKey);
                         return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                    }
+
+                    function renderDistHtml(vals, decimals, unit, lowerIsBetter) {
+                        if (!vals || vals.length === 0) return null;
+                        const sorted = [...vals].sort((a, b) => a - b);
+                        const min = sorted[0], max = sorted[sorted.length - 1];
+                        const avg = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+                        const NUM_BINS = 16;
+
+                        if (min === max) {
+                            return `<div class="metric-dist"><div class="dist-labels"><span class="dist-avg">${avg.toFixed(decimals)}</span>${unit ? `<span class="dist-unit">${unit}</span>` : ''}</div></div>`;
+                        }
+
+                        const range = max - min;
+                        const binSize = range / NUM_BINS;
+                        const bins = new Array(NUM_BINS).fill(0);
+                        for (const v of sorted) {
+                            let idx = Math.floor((v - min) / binSize);
+                            if (idx >= NUM_BINS) idx = NUM_BINS - 1;
+                            bins[idx]++;
+                        }
+                        const maxBin = Math.max(...bins);
+                        const avgBinIdx = Math.min(Math.floor((avg - min) / binSize), NUM_BINS - 1);
+
+                        const warmClass = lowerIsBetter ? ' warm' : '';
+                        let barsHtml = `<div class="dist-bars${warmClass}">`;
+                        for (let i = 0; i < NUM_BINS; i++) {
+                            const pct = maxBin > 0 ? Math.max((bins[i] / maxBin) * 100, bins[i] > 0 ? 4 : 0) : 0;
+                            const cls = i === avgBinIdx ? ' avg-bin' : '';
+                            barsHtml += `<div class="bar${cls}" style="height:${pct}%"></div>`;
+                        }
+                        barsHtml += '</div>';
+
+                        return `<div class="metric-dist">${barsHtml}<div class="dist-labels"><span class="dist-min">${min.toFixed(decimals)}</span><span class="dist-avg">${avg.toFixed(decimals)}</span>${unit ? `<span class="dist-unit">${unit}</span>` : ''}<span class="dist-max">${max.toFixed(decimals)}</span></div></div>`;
                     }
 
                     switch(stage.metric) {
@@ -1720,42 +1959,62 @@
                             }
                             break;
                         }
-                        case 'psnr':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'psnr', 'final_psnr');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(2)}</span><span class="metric-unit">dB</span>`;
-                            }
+                        case 'psnr': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'psnr', 'final_psnr');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 2, 'dB', false);
+                            if (distHtml) html = distHtml;
                             break;
-                        case 'ssim':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'ssim', 'final_ssim');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                            }
+                        }
+                        case 'ssim': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'ssim', 'final_ssim');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 4, '', false);
+                            if (distHtml) html = distHtml;
                             break;
-                        case 'mse':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'mse', 'final_mse');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(1)}</span>`;
-                            }
+                        }
+                        case 'ms_ssim': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'ms_ssim', 'final_ms_ssim');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 4, '', false);
+                            if (distHtml) html = distHtml;
                             break;
-                        case 'vif':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'vif', 'final_vif');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                            }
+                        }
+                        case 'mse': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'mse', 'final_mse');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 1, '', true);
+                            if (distHtml) html = distHtml;
                             break;
-                        case 'delta_e':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'delta_e', 'final_delta_e');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(2)}</span>`;
-                            }
+                        }
+                        case 'vif': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'vif', 'final_vif');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 4, '', false);
+                            if (distHtml) html = distHtml;
                             break;
-                        case 'lpips':
-                            value = avgFamilyMetric(manifest, isJpegBaseline, 'lpips', 'final_lpips');
-                            if (value !== null) {
-                                html = `<span class="metric-value">${value.toFixed(4)}</span>`;
-                            }
+                        }
+                        case 'delta_e': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'delta_e', 'final_delta_e');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 2, '', true);
+                            if (distHtml) html = distHtml;
                             break;
+                        }
+                        case 'lpips': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'lpips', 'final_lpips');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 4, '', true);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
+                        case 'blockiness': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'blockiness_delta', 'blockiness_delta');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 1, '', true);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
                     }
 
                     if (html) {
@@ -1916,6 +2175,101 @@
             if (currentTileIndex < availableTiles.length - 1) {
                 loadTile(currentTileIndex + 1);
             }
+        }
+
+        // --- Flicker Test ---
+        let flickerActive = false;
+        let flickerInterval = null;
+        let flickerMs = 500;
+        let flickerShowingOriginal = false;
+
+        function toggleFlicker() {
+            flickerActive = !flickerActive;
+            const btn = document.getElementById('flickerToggle');
+            const speedCtrl = document.getElementById('flickerSpeedControl');
+            if (flickerActive) {
+                btn.classList.add('active');
+                btn.textContent = 'Stop Flicker';
+                speedCtrl.style.display = 'flex';
+                setupFlickerOverlays();
+                startFlicker();
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = 'Flicker Test';
+                speedCtrl.style.display = 'none';
+                stopFlicker();
+                removeFlickerOverlays();
+            }
+        }
+
+        function updateFlickerSpeed(val) {
+            flickerMs = parseInt(val);
+            document.getElementById('flickerSpeedLabel').textContent = val + 'ms';
+            if (flickerActive) {
+                stopFlicker();
+                startFlicker();
+            }
+        }
+
+        function startFlicker() {
+            const indicator = document.getElementById('flickerIndicator');
+            flickerInterval = setInterval(() => {
+                flickerShowingOriginal = !flickerShowingOriginal;
+                document.querySelectorAll('.flicker-original').forEach(el => {
+                    el.style.opacity = flickerShowingOriginal ? '1' : '0';
+                });
+                if (indicator) {
+                    indicator.innerHTML = flickerShowingOriginal
+                        ? '<span class="flicker-indicator showing-original">ORIG</span>'
+                        : '<span class="flicker-indicator showing-recon">RECON</span>';
+                }
+            }, flickerMs);
+        }
+
+        function stopFlicker() {
+            if (flickerInterval) {
+                clearInterval(flickerInterval);
+                flickerInterval = null;
+            }
+            flickerShowingOriginal = false;
+        }
+
+        function setupFlickerOverlays() {
+            // For each capture column in the reconstructed_rgb row, add an overlay with the original image
+            activeColumns.forEach(col => {
+                const cellId = `${colId(col)}_reconstructed_rgb`;
+                const viewport = document.getElementById(cellId)?.closest('.image-viewport');
+                if (!viewport) return;
+
+                // Get the original image src from the orig column
+                const origCell = document.getElementById('orig_reconstructed_rgb');
+                const origImg = origCell?.querySelector('img');
+                if (!origImg) return;
+
+                // Create overlay
+                const overlay = document.createElement('div');
+                overlay.className = 'flicker-original';
+                overlay.style.opacity = '0';
+                const img = document.createElement('img');
+                img.src = origImg.src;
+                // Match the reconstructed image sizing
+                const reconImg = viewport.querySelector('img');
+                if (reconImg) {
+                    img.style.width = reconImg.style.width || '';
+                    img.style.height = reconImg.style.height || '';
+                    img.style.maxWidth = window.getComputedStyle(reconImg).maxWidth;
+                    img.style.maxHeight = window.getComputedStyle(reconImg).maxHeight;
+                    img.style.transform = reconImg.style.transform || '';
+                }
+                overlay.appendChild(img);
+                viewport.appendChild(overlay);
+            });
+        }
+
+        function removeFlickerOverlays() {
+            document.querySelectorAll('.flicker-original').forEach(el => el.remove());
+            const indicator = document.getElementById('flickerIndicator');
+            if (indicator) indicator.innerHTML = '';
         }
 
         function setZoom(zoom) {
