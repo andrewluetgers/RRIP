@@ -192,7 +192,7 @@ fn output_extension(encoder_name: &str) -> &'static str {
 fn encode_l2_as_jxl(jpeg_bytes: &[u8], _pixels: &[u8], _w: u32, _h: u32, mode: &str) -> Result<Vec<u8>> {
     use jpegxl_rs::encode::{encoder_builder, ColorEncoding, EncoderFrame};
 
-    if mode == "lossless" {
+    if mode == "lossless" || mode.eq_ignore_ascii_case("l") {
         let mut enc = encoder_builder()
             .use_container(true)
             .uses_original_profile(true)
@@ -344,11 +344,13 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
         baseq_str.parse::<u8>().map_err(|_| anyhow::anyhow!(
             "--baseq must be a number (1-100) or 'lossless', got '{}'", baseq_str))?
     };
+    let use_jxl_l2 = args.encoder == "jpegxl";
     let l2_jxl_mode: &str = if baseq_is_lossless { "lossless" } else { &baseq_str };
+    let l2_format = if use_jxl_l2 { "jxl" } else { "jpg" };
     let ext = output_extension(encoder.name());
     let mut total_l0 = 0usize;
     let mut total_bytes = 0usize;
-    info!("L2 will be stored as JXL ({} mode, baseq={})", l2_jxl_mode, baseq_str);
+    info!("L2 will be stored as {} (baseq={})", l2_format.to_uppercase(), baseq_str);
 
     for (pi, &(x2, y2)) in parents.iter().enumerate() {
         let parent_start = Instant::now();
@@ -371,13 +373,15 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
 
         let mut pack_entries: Vec<PackWriteEntry> = Vec::new();
 
-        // Re-encode L2 as JXL at --baseq quality and add to pack
+        // Store L2 in pack — as JXL (lossless transcode) or raw JPEG depending on encoder
         if args.pack {
             let l2_jpeg_bytes = fs::read(&l2_path)?;
-            // For lossless: transcode existing JPEG to JXL losslessly
-            // For lossy: re-encode from pixels as JXL at baseq quality
-            let l2_stored = encode_l2_as_jxl(&l2_jpeg_bytes, &l2_rgb, l2_w, l2_h, l2_jxl_mode)
-                .unwrap_or_else(|_| l2_jpeg_bytes.clone()); // fallback to JPEG if JXL fails
+            let l2_stored = if use_jxl_l2 {
+                encode_l2_as_jxl(&l2_jpeg_bytes, &l2_rgb, l2_w, l2_h, l2_jxl_mode)
+                    .unwrap_or_else(|_| l2_jpeg_bytes.clone())
+            } else {
+                l2_jpeg_bytes
+            };
             total_bytes += l2_stored.len();
             pack_entries.push(PackWriteEntry {
                 level_kind: 2,
@@ -491,7 +495,7 @@ fn run_pyramid(args: EncodeArgs, pyramid_path: PathBuf, subsamp: ChromaSubsampli
         "pack": args.pack,
         "elapsed_secs": elapsed.as_secs_f64(),
         "pipeline_version": 2,
-        "l2_format": "jxl",
+        "l2_format": l2_format,
     });
     fs::write(
         args.out.join("summary.json"),
@@ -514,9 +518,14 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     let down_filter: ResampleFilter = args.downsample_filter.parse().unwrap();
     info!("Single-image mode: {} encoder={} subsamp={} upsample={} downsample={}", image_path.display(), encoder.name(), subsamp, up_filter, down_filter);
 
+    // Per-stage timing accumulator
+    let mut timings: Vec<(&str, f64)> = Vec::new();
+    let mut t = Instant::now();
+
     // Load the source image
     let (src_rgb, src_w, src_h) = load_rgb_turbo(image_path)
         .with_context(|| format!("loading source image {}", image_path.display()))?;
+    timings.push(("load_source", t.elapsed().as_secs_f64())); t = Instant::now();
     info!("Source image: {}x{}", src_w, src_h);
 
     let tile_size = args.tile;
@@ -547,6 +556,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         let resized = imageops::resize(&src_img, l1_w, l1_h, down_filter.to_image_filter());
         resized.into_raw()
     };
+    timings.push(("downsample_l0_to_l1", t.elapsed().as_secs_f64())); t = Instant::now();
 
     // Build L2 by downsampling directly from L0 source 4:1
     let l2_w = (l1_w + 1) / 2;
@@ -558,6 +568,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         let resized = imageops::resize(&src_img, l2_w, l2_h, down_filter.to_image_filter());
         resized.into_raw()
     };
+    timings.push(("downsample_l0_to_l2", t.elapsed().as_secs_f64())); t = Instant::now();
 
     // L2 pipeline order: OptL2 first (on smooth base), then sharpen (on optimized base).
     let mut l2_to_encode = l2_rgb.clone();
@@ -568,6 +579,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         info!("Running OptL2 gradient descent optimization...");
         l2_to_encode = optimize_l2_for_prediction(&l2_to_encode, &l1_rgb, l2_w, l2_h, l1_w, l1_h, args.max_delta, 100, 0.3, up_filter);
     }
+    timings.push(("optl2", t.elapsed().as_secs_f64())); t = Instant::now();
 
     // Step 2: Optionally sharpen L2
     let l2_sharpened = if let Some(strength) = args.sharpen {
@@ -577,6 +589,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     } else {
         None
     };
+    timings.push(("sharpen_l2", t.elapsed().as_secs_f64())); t = Instant::now();
 
     if args.save_sharpened {
         if let Some(ref sharpened) = l2_sharpened {
@@ -584,24 +597,35 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         }
     }
 
-    // Encode L2 baseline as JPEG (needed for OptL2 gradient descent and decode-back)
-    let l2_encoder = create_encoder("turbojpeg")?;
-    let l2_jpeg = l2_encoder.encode_rgb_with_subsamp(&l2_to_encode, l2_w, l2_h, baseq_num, subsamp)?;
+    // Encode L2 baseline using the selected encoder.
+    // For JXL: encode as JPEG first (for roundtrip decode), then losslessly transcode to JXL for storage.
+    // For JPEG-family encoders: encode once, store as JPEG.
+    let use_jxl_l2 = args.encoder == "jpegxl";
+    let l2_jpeg_encoder = create_encoder("turbojpeg")?;
+    let l2_jpeg = l2_jpeg_encoder.encode_rgb_with_subsamp(&l2_to_encode, l2_w, l2_h, baseq_num, subsamp)?;
+    timings.push(("encode_l2_jpeg", t.elapsed().as_secs_f64())); t = Instant::now();
 
-    // Store L2 as JXL (primary) + JPEG (for viewer compatibility)
-    let l2_jxl_mode = if baseq_is_lossless { "lossless" } else { &baseq_str };
-    let l2_jxl_data = encode_l2_as_jxl(&l2_jpeg, &l2_to_encode, l2_w, l2_h, l2_jxl_mode)?;
-    let l2_bytes = l2_jxl_data.len();
-    fs::write(args.out.join("L2_0_0.jxl"), &l2_jxl_data)?;
-    fs::write(args.out.join("L2_0_0.jpg"), &l2_jpeg)?; // viewer fallback
-    info!("L2 baseline: {}x{} → {} bytes as JXL ({} mode, JPEG was {} bytes, Q{} {})",
-        l2_w, l2_h, l2_bytes, l2_jxl_mode, l2_jpeg.len(), baseq_str, subsamp);
+    let (l2_stored, l2_format) = if use_jxl_l2 {
+        let l2_jxl_mode = if baseq_is_lossless { "lossless" } else { &baseq_str };
+        let l2_jxl_data = encode_l2_as_jxl(&l2_jpeg, &l2_to_encode, l2_w, l2_h, l2_jxl_mode)?;
+        timings.push(("transcode_l2_jxl", t.elapsed().as_secs_f64())); t = Instant::now();
+        fs::write(args.out.join("L2_0_0.jxl"), &l2_jxl_data)?;
+        fs::write(args.out.join("L2_0_0.jpg"), &l2_jpeg)?; // viewer fallback
+        info!("L2 baseline: {}x{} → {} bytes as JXL ({} mode, JPEG was {} bytes, Q{} {})",
+            l2_w, l2_h, l2_jxl_data.len(), l2_jxl_mode, l2_jpeg.len(), baseq_str, subsamp);
+        (l2_jxl_data, "jxl")
+    } else {
+        timings.push(("transcode_l2_jxl", 0.0)); t = Instant::now(); // skip
+        fs::write(args.out.join(format!("L2_0_0{}", ext)), &l2_jpeg)?;
+        info!("L2 baseline: {}x{} → {} bytes as JPEG (Q{} {})",
+            l2_w, l2_h, l2_jpeg.len(), baseq_str, subsamp);
+        (l2_jpeg.clone(), "jpg")
+    };
+    let l2_bytes = l2_stored.len();
 
     // Decode L2 back (lossy round-trip) to get actual L2 that decoder will see.
-    // For lossless mode, the JXL contains exact JPEG bytes so JPEG decode is correct.
-    // For lossy mode, the JXL was encoded from pixels at baseq quality — we decode the
-    // internal JPEG since it matches the quality level (OptL2 optimized against it).
     let (l2_decoded_rgb, _, _) = crate::turbojpeg_optimized::decode_rgb_turbo(&l2_jpeg)?;
+    timings.push(("decode_l2_roundtrip", t.elapsed().as_secs_f64())); t = Instant::now();
 
     // If --sharpen without --save-sharpened: sharpen the decoded L2 for predictions.
     let l2_decoded_for_pred = if l2_sharpened.is_some() && !args.save_sharpened {
@@ -612,6 +636,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     } else {
         l2_decoded_rgb.clone()
     };
+    timings.push(("sharpen_decode_l2", t.elapsed().as_secs_f64())); t = Instant::now();
 
     let l2_for_prediction = l2_decoded_for_pred;
 
@@ -643,8 +668,10 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         let resized = imageops::resize(&l2_img, src_w, src_h, up_filter.to_image_filter());
         resized.into_raw()
     };
+    timings.push(("upsample_l2_to_l0_4x", t.elapsed().as_secs_f64())); t = Instant::now();
 
     let (l0_pred_y_f32, l0_pred_cb_f32, l0_pred_cr_f32) = ycbcr_planes_from_rgb_f32(&l0_pred_rgb, src_w, src_h);
+    timings.push(("ycbcr_convert_prediction", t.elapsed().as_secs_f64())); t = Instant::now();
 
     if args.debug_images {
         save_rgb_png(&decompress_dir.join("060_L0_mosaic_prediction.png"), &l0_pred_rgb, src_w, src_h)?;
@@ -656,17 +683,17 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
     // Pack entries for single-image mode
     let mut pack_entries: Vec<PackWriteEntry> = Vec::new();
     if args.pack {
-        let l2_stored_bytes = l2_jxl_data.clone();
         pack_entries.push(PackWriteEntry {
             level_kind: 2,
             idx_in_parent: 0,
-            jpeg_data: l2_stored_bytes,
+            jpeg_data: l2_stored.clone(),
         });
     }
 
     // Compute fused L0 residual (full source image size)
     // Extract ground truth Y from source
     let (src_gt_y, _, _) = ycbcr_planes_from_rgb(&src_rgb, src_w, src_h);
+    timings.push(("ycbcr_convert_source", t.elapsed().as_secs_f64())); t = Instant::now();
 
     // Float-precision residual for the entire L0 mosaic
     let centered = compute_residual_f32(&src_gt_y, &l0_pred_y_f32);
@@ -680,7 +707,10 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
 
     // Optionally downscale residual before encoding
     let (centered_enc, enc_w, enc_h) = downscale_gray(&centered, src_w, src_h, args.l0_scale, down_filter);
+    timings.push(("compute_residual", t.elapsed().as_secs_f64())); t = Instant::now();
+
     let res_data = encoder.encode_gray(&centered_enc, enc_w, enc_h, l0q)?;
+    timings.push(("encode_residual", t.elapsed().as_secs_f64())); t = Instant::now();
     total_bytes += res_data.len();
 
     // Write fused L0 residual
@@ -1024,6 +1054,8 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         }
     }
 
+    timings.push(("debug_images_and_metrics", t.elapsed().as_secs_f64())); t = Instant::now();
+
     // Write pack file for single-image mode (one family at 0,0)
     if args.pack && !pack_entries.is_empty() {
         let pack_dir = args.out.join("packs");
@@ -1031,12 +1063,23 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         write_pack(&pack_dir, 0, 0, &pack_entries)?;
         info!("Pack file written: {} entries (L2=1, L0=1)", pack_entries.len());
     }
+    timings.push(("write_pack", t.elapsed().as_secs_f64()));
 
     let elapsed = start.elapsed();
     info!(
         "Single-image encode complete: {} L0 tiles, fused residual {} bytes, {} total bytes, {:.1}s",
         tiles_x * tiles_y, res_data.len(), total_bytes, elapsed.as_secs_f64()
     );
+
+    // Print per-stage timing breakdown
+    info!("=== TIMING BREAKDOWN ===");
+    let mut accounted = 0.0f64;
+    for (stage, secs) in &timings {
+        accounted += secs;
+        info!("  {:30} {:>8.3}ms", stage, secs * 1000.0);
+    }
+    info!("  {:30} {:>8.3}ms", "TOTAL (accounted)", accounted * 1000.0);
+    info!("  {:30} {:>8.3}ms", "TOTAL (wall clock)", elapsed.as_secs_f64() * 1000.0);
 
     // Write summary.json
     let summary = serde_json::json!({
@@ -1063,6 +1106,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
         "total_bytes": total_bytes,
         "elapsed_secs": elapsed.as_secs_f64(),
         "pipeline_version": 2,
+        "timing_breakdown_ms": timings.iter().map(|(k, v)| (k.to_string(), (v * 1000.0 * 100.0).round() / 100.0)).collect::<std::collections::HashMap<_, _>>(),
     });
     fs::write(
         args.out.join("summary.json"),
@@ -1084,7 +1128,7 @@ fn run_single_image(args: EncodeArgs, subsamp: ChromaSubsampling) -> Result<()> 
             "sharpen": args.sharpen.map(|v| (v * 10.0).round() / 10.0),
             "l0_scale": args.l0_scale,
             "l0_sharpen": args.l0_sharpen.map(|v| (v * 10.0).round() / 10.0),
-            "l2_format": "jxl",
+            "l2_format": l2_format,
             "upsample_filter": up_filter.to_string(),
             "downsample_filter": down_filter.to_string(),
             "tile_size": tile_size,

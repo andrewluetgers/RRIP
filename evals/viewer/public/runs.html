@@ -416,7 +416,13 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="f-baseq">L2 Base Q</label>
-                    <input type="number" id="f-baseq" value="90" min="1" max="100">
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" id="f-baseq" value="90" style="width:80px;padding:8px 12px;border:1px solid #ced4da;border-radius:6px;font-size:14px" placeholder="1-100 or L">
+                        <div class="checkbox-group" style="white-space:nowrap">
+                            <input type="checkbox" id="f-baseq-lossless">
+                            <label for="f-baseq-lossless" style="font-size:13px">Lossless</label>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="f-l0q">L0 Residual Q</label>
@@ -473,9 +479,37 @@
 (function() {
     let pollTimer = null;
 
+    // ─── Lossless checkbox ↔ text input sync ───
+    function getBaseQ() {
+        const raw = document.getElementById('f-baseq').value.trim();
+        const ll = document.getElementById('f-baseq-lossless').checked;
+        if (ll || raw.toLowerCase() === 'l' || raw.toLowerCase() === 'lossless') return 'L';
+        return parseInt(raw) || 90;
+    }
+
+    document.getElementById('f-baseq-lossless').addEventListener('change', function() {
+        const input = document.getElementById('f-baseq');
+        if (this.checked) {
+            input.dataset.prevValue = input.value;
+            input.value = 'L';
+            input.disabled = true;
+        } else {
+            input.value = input.dataset.prevValue || '90';
+            input.disabled = false;
+        }
+        updatePreview();
+    });
+
+    document.getElementById('f-baseq').addEventListener('input', function() {
+        const raw = this.value.trim().toLowerCase();
+        const cb = document.getElementById('f-baseq-lossless');
+        cb.checked = (raw === 'l' || raw === 'lossless');
+        updatePreview();
+    });
+
     // ─── Name generation (mirrors server-side generateRunName) ───
     function generateRunName() {
-        const baseq = parseInt(document.getElementById('f-baseq').value) || 90;
+        const baseq = getBaseQ();
         const l0q = parseInt(document.getElementById('f-l0q').value) || 70;
         const optl2 = document.getElementById('f-optl2').checked;
         const sh = parseFloat(document.getElementById('f-sharpen').value) || 0;
@@ -680,7 +714,7 @@
         const l0sh = parseFloat(document.getElementById('f-l0sharpen').value);
         const params = {
             image,
-            baseq: parseInt(document.getElementById('f-baseq').value) || 90,
+            baseq: getBaseQ(),
             l0q: parseInt(document.getElementById('f-l0q').value) || 70,
             optl2: document.getElementById('f-optl2').checked,
             max_delta: parseInt(document.getElementById('f-maxdelta').value) || 20,

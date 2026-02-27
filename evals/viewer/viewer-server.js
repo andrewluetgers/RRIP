@@ -25,6 +25,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── Run name generation (shared convention) ───
 
 /**
+ * Check if a baseq value represents lossless mode.
+ */
+function isLosslessBaseQ(val) {
+  if (typeof val === 'string') {
+    const v = val.trim().toLowerCase();
+    return v === 'l' || v === 'lossless';
+  }
+  return false;
+}
+
+/**
  * Generate a standardized run directory name from parameters.
  * Format: b{baseq}_l1q{N}_l0q{N}[_optl2][_l1s{N}][_l0s{N}]
  * JPEG baseline: jpeg_q{N}
@@ -34,7 +45,8 @@ function generateRunName(params) {
     return `jpeg_q${params.baseq || params.quality}`;
   }
   // V2 fused pipeline: no L1 residuals
-  let name = `v2_b${params.baseq}_l0q${params.l0q}`;
+  const bq = isLosslessBaseQ(params.baseq) ? 'L' : params.baseq;
+  let name = `v2_b${bq}_l0q${params.l0q}`;
   if (params.optl2) name += '_optl2';
   if (params.optl2 && params.max_delta && params.max_delta !== 20) name += `_d${params.max_delta}`;
   if (params.sharpen) name += `_sh${Math.round(params.sharpen * 10)}`;
@@ -471,11 +483,12 @@ async function getCaptures() {
 // ─── Build encode command ───
 
 function buildEncodeCommand(params, outDir) {
+  const baseqArg = isLosslessBaseQ(params.baseq) ? 'lossless' : String(params.baseq);
   const args = [
     'encode',
     '--image', params.image,
     '--out', outDir,
-    '--baseq', String(params.baseq),
+    '--baseq', baseqArg,
     '--l0q', String(params.l0q),
     '--subsamp', '444',
     '--manifest',
@@ -526,7 +539,7 @@ app.post('/api/runs', async (req, res) => {
 
     const params = {
       image: imagePath,
-      baseq: baseq || 95,
+      baseq: isLosslessBaseQ(baseq) ? 'lossless' : (baseq || 95),
       l0q: l0q || 60,
       optl2: optl2 !== false,
       max_delta: max_delta || 20,
