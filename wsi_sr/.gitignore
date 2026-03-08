@@ -1,0 +1,18 @@
+# Large data files — stored in GCS, not git
+tcga_slides_metadata.json
+tcga_training_manifest.json
+tcga_training_manifest.csv
+tcga_stage1_manifest.json
+tcga_stage1_manifest.csv
+*.duckdb
+*.duckdb.wal
+
+# Model weights
+*.pt
+*.onnx
+
+# Node modules
+monitor/node_modules/
+
+# Python cache
+__pycache__/

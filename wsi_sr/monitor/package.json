@@ -1,0 +1,14 @@
+{
+  "name": "wsi-sr-monitor",
+  "version": "1.0.0",
+  "description": "WSI SR training pipeline monitor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "duckdb": "^1.4.0",
+    "express": "^4.21.0"
+  }
+}

@@ -137,6 +137,93 @@ class WSISRX4(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Dual-branch SR: Y-heavy + lightweight chroma
+# ---------------------------------------------------------------------------
+
+def rgb_to_ycbcr(x: torch.Tensor) -> torch.Tensor:
+    """RGB [0,1] float tensor (BCHW) → YCbCr [0,1]."""
+    r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
+    y  =  0.299 * r + 0.587 * g + 0.114 * b
+    cb = -0.169 * r - 0.331 * g + 0.500 * b + 0.5
+    cr =  0.500 * r - 0.419 * g - 0.081 * b + 0.5
+    return torch.cat([y, cb, cr], dim=1)
+
+
+def ycbcr_to_rgb(x: torch.Tensor) -> torch.Tensor:
+    """YCbCr [0,1] float tensor (BCHW) → RGB [0,1]."""
+    y, cb, cr = x[:, 0:1], x[:, 1:2] - 0.5, x[:, 2:3] - 0.5
+    r = y + 1.402 * cr
+    g = y - 0.344 * cb - 0.714 * cr
+    b = y + 1.772 * cb
+    return torch.cat([r, g, b], dim=1)
+
+
+class WSISRX4Dual(nn.Module):
+    """Dual-branch 4x SR: heavy Y branch + lightweight CbCr branch.
+
+    Allocates most capacity to luma (where residual quality matters)
+    while still learning chroma upsampling (where Delta E comes from).
+
+    Y branch:    1→y_ch channels, y_blocks CollapsibleBlocks → pixel_shuffle(4)
+    CbCr branch: 2→c_ch channels, c_blocks CollapsibleBlocks → pixel_shuffle(4)
+
+    Both branches use global residual (bilinear upsample of input added to output).
+    Input/output are RGB — YCbCr conversion is internal.
+    """
+
+    def __init__(self, y_channels: int = 16, y_blocks: int = 5,
+                 c_channels: int = 8, c_blocks: int = 2):
+        super().__init__()
+        # Y branch (heavy)
+        self.y_head = nn.Sequential(
+            nn.Conv2d(1, y_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.y_body = nn.Sequential(
+            *[CollapsibleBlock(y_channels) for _ in range(y_blocks)]
+        )
+        self.y_tail = nn.Conv2d(y_channels, 1 * 16, 3, padding=1)  # 1 * 4^2
+
+        # CbCr branch (light)
+        self.c_head = nn.Sequential(
+            nn.Conv2d(2, c_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.c_body = nn.Sequential(
+            *[CollapsibleBlock(c_channels) for _ in range(c_blocks)]
+        )
+        self.c_tail = nn.Conv2d(c_channels, 2 * 16, 3, padding=1)  # 2 * 4^2
+
+        self.shuffle = nn.PixelShuffle(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Convert RGB → YCbCr
+        ycbcr = rgb_to_ycbcr(x)
+        y_in = ycbcr[:, 0:1]
+        cbcr_in = ycbcr[:, 1:3]
+
+        # Bilinear upsample as base
+        y_base = F.interpolate(y_in, scale_factor=4, mode="bilinear", align_corners=False)
+        cbcr_base = F.interpolate(cbcr_in, scale_factor=4, mode="bilinear", align_corners=False)
+
+        # Y branch
+        hy = self.y_head(y_in)
+        hy = self.y_body(hy)
+        hy = self.shuffle(self.y_tail(hy))
+        y_out = y_base + hy
+
+        # CbCr branch
+        hc = self.c_head(cbcr_in)
+        hc = self.c_body(hc)
+        hc = self.shuffle(self.c_tail(hc))
+        cbcr_out = cbcr_base + hc
+
+        # Recombine and convert back to RGB
+        ycbcr_out = torch.cat([y_out, cbcr_out], dim=1)
+        return ycbcr_to_rgb(ycbcr_out)
+
+
+# ---------------------------------------------------------------------------
 # Enhance model: 1024x1024 → 1024x1024
 # ---------------------------------------------------------------------------
 
@@ -176,19 +263,82 @@ class WSIEnhanceNet(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# ESPCN baseline: classic lightweight SR for comparison
+# ---------------------------------------------------------------------------
+
+class ESPCN(nn.Module):
+    """Efficient Sub-Pixel Convolutional Neural Network (Shi et al., CVPR 2016).
+
+    Classic lightweight SR baseline. 3 convs in LR space + pixel shuffle.
+    ~24K params at default settings — close to our WSISRX4 collapsed size.
+
+    Architecture:
+      conv(3→64, 5x5) → tanh → conv(64→32, 3x3) → tanh → conv(32→3*r², 3x3) → pixel_shuffle(r)
+
+    No global residual — the model predicts the full HR output directly.
+    This is the standard formulation from the paper.
+    """
+
+    def __init__(self, upscale_factor: int = 4, channels: int = 3):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, 64, 5, padding=2)
+        self.conv2 = nn.Conv2d(64, 32, 3, padding=1)
+        self.conv3 = nn.Conv2d(32, channels * (upscale_factor ** 2), 3, padding=1)
+        self.shuffle = nn.PixelShuffle(upscale_factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = torch.tanh(self.conv1(x))
+        h = torch.tanh(self.conv2(h))
+        h = self.conv3(h)
+        return self.shuffle(h)
+
+
+class ESPCNR(nn.Module):
+    """ESPCN with global residual connection (our modification).
+
+    Same as ESPCN but adds bilinear-upsampled input to the output,
+    so the model only needs to predict the residual correction.
+    This makes it a fair comparison with WSISRX4 which also uses global residual.
+    """
+
+    def __init__(self, upscale_factor: int = 4, channels: int = 3):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, 64, 5, padding=2)
+        self.conv2 = nn.Conv2d(64, 32, 3, padding=1)
+        self.conv3 = nn.Conv2d(32, channels * (upscale_factor ** 2), 3, padding=1)
+        self.shuffle = nn.PixelShuffle(upscale_factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        base = F.interpolate(x, scale_factor=4, mode="bilinear", align_corners=False)
+        h = torch.tanh(self.conv1(x))
+        h = torch.tanh(self.conv2(h))
+        h = self.conv3(h)
+        return base + self.shuffle(h)
+
+
+# ---------------------------------------------------------------------------
 # Collapse + export utilities
 # ---------------------------------------------------------------------------
+
+def _collapse_sequential(seq: nn.Sequential) -> nn.Sequential:
+    """Collapse all CollapsibleBlocks in a Sequential."""
+    new_seq = nn.Sequential()
+    for block in seq:
+        if isinstance(block, CollapsibleBlock):
+            new_seq.append(collapse_block(block))
+        else:
+            new_seq.append(block)
+    return new_seq
+
 
 def collapse_model(model: nn.Module) -> nn.Module:
     """Collapse all multi-branch blocks to plain convs for fast inference."""
     collapsed = copy.deepcopy(model)
-    new_body = nn.Sequential()
-    for block in collapsed.body:
-        if isinstance(block, CollapsibleBlock):
-            new_body.append(collapse_block(block))
-        else:
-            new_body.append(block)
-    collapsed.body = new_body
+    if isinstance(model, WSISRX4Dual):
+        collapsed.y_body = _collapse_sequential(collapsed.y_body)
+        collapsed.c_body = _collapse_sequential(collapsed.c_body)
+    elif hasattr(collapsed, 'body'):
+        collapsed.body = _collapse_sequential(collapsed.body)
     return collapsed
 
 
@@ -235,9 +385,37 @@ if __name__ == "__main__":
 
     print()
     print("=" * 60)
-    print("Tradeoff: SR vs Enhance")
+    print("ESPCN Baseline (256→1024)")
     print("=" * 60)
-    print("  SR mode:      convolutions at 256x256 (fast), pixel shuffle to 1024x1024")
-    print("  Enhance mode: convolutions at 1024x1024 (16x more compute, but safer)")
-    print("  SR is faster but must hallucinate spatial detail.")
-    print("  Enhance is slower but only refines existing structure — safer for pathology.")
+    espcn = ESPCN(upscale_factor=4)
+    print(f"  ESPCN:  {count_params(espcn):,} params, {model_size_kb(espcn):.1f} KB")
+    y_espcn = espcn(x)
+    print(f"  Input: {x.shape} → Output: {y_espcn.shape}")
+    espcnr = ESPCNR(upscale_factor=4)
+    print(f"  ESPCNR: {count_params(espcnr):,} params, {model_size_kb(espcnr):.1f} KB (with global residual)")
+    y_espcnr = espcnr(x)
+    print(f"  Input: {x.shape} → Output: {y_espcnr.shape}")
+
+    print()
+    print("=" * 60)
+    print("Dual-Branch SR (256→1024, Y-heavy + CbCr-light)")
+    print("=" * 60)
+    dual = WSISRX4Dual(y_channels=16, y_blocks=5, c_channels=8, c_blocks=2)
+    print(f"  Training: {count_params(dual):,} params, {model_size_kb(dual):.1f} KB")
+    y_dual = dual(x)
+    print(f"  Input: {x.shape} → Output: {y_dual.shape}")
+    dual.eval()
+    dual_c = collapse_model(dual)
+    print(f"  Collapsed: {count_params(dual_c):,} params, {model_size_kb(dual_c):.1f} KB")
+    with torch.no_grad():
+        diff_dual = (dual(x) - dual_c(x)).abs().max().item()
+    print(f"  Collapse error: {diff_dual:.2e}")
+
+    print()
+    print("=" * 60)
+    print("Comparison")
+    print("=" * 60)
+    print(f"  WSISRX4 (collapsed):  {count_params(sr_c):,} params, {model_size_kb(sr_c):.1f} KB — RGB, reparameterizable blocks")
+    print(f"  WSISRX4Dual (collapsed): {count_params(dual_c):,} params, {model_size_kb(dual_c):.1f} KB — Y(5blk) + CbCr(2blk)")
+    print(f"  ESPCN:                {count_params(espcn):,} params, {model_size_kb(espcn):.1f} KB — classic baseline (tanh)")
+    print(f"  ESPCNR:               {count_params(espcnr):,} params, {model_size_kb(espcnr):.1f} KB — baseline + global residual")

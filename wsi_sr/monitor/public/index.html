@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WSI SR Training Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+  .container { max-width: 1440px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin-bottom: 4px; color: #58a6ff; }
+  h2 { font-size: 16px; margin: 20px 0 8px; color: #8b949e;
+       border-bottom: 1px solid #21262d; padding-bottom: 4px; cursor: pointer; }
+  h2:hover { color: #c9d1d9; }
+  h3 { font-size: 13px; margin: 8px 0 6px; color: #8b949e; }
+  .subtitle { font-size: 12px; color: #484f58; margin-bottom: 12px; }
+
+  /* Pipeline */
+  .pipeline { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+  .stage { flex: 1; min-width: 150px; background: #161b22; border: 1px solid #30363d;
+           border-radius: 6px; padding: 10px; position: relative; overflow: hidden; }
+  .stage .progress-bar { position: absolute; bottom: 0; left: 0; height: 3px;
+                         background: #58a6ff; transition: width 0.5s; }
+  .stage.completed { border-color: #238636; }
+  .stage.completed .progress-bar { background: #238636; width: 100% !important; }
+  .stage.running { border-color: #d29922; animation: pulse 2s infinite; }
+  .stage.running .progress-bar { background: #d29922; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .stage .name { font-weight: 600; font-size: 12px; }
+  .stage .status { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .stage .cost { font-size: 10px; color: #58a6ff; margin-top: 2px; }
+  .stage .detail { font-size: 10px; color: #484f58; margin-top: 2px; }
+
+  /* Cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+  .card-wide { grid-column: 1 / -1; }
+
+  /* Stats */
+  .stat-row { display: flex; justify-content: space-between; padding: 3px 0;
+              border-bottom: 1px solid #21262d; font-size: 12px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: #8b949e; }
+  .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .good { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { text-align: left; padding: 4px 6px; color: #8b949e; border-bottom: 1px solid #30363d;
+       font-weight: 500; position: sticky; top: 0; background: #161b22; }
+  td { padding: 3px 6px; border-bottom: 1px solid #21262d; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #1c2128; }
+
+  /* Charts */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-box { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; }
+  .chart-box canvas { max-height: 240px; }
+
+  /* Bars */
+  .bar { display: flex; align-items: center; gap: 6px; margin: 1px 0; font-size: 11px; }
+  .bar-label { width: 80px; text-align: right; flex-shrink: 0; color: #8b949e; }
+  .bar-fill { height: 14px; background: #58a6ff; border-radius: 2px; min-width: 2px; }
+  .bar-value { flex-shrink: 0; }
+
+  /* Collapsible */
+  .collapsible { overflow: hidden; transition: max-height 0.3s; }
+  .collapsed { max-height: 0 !important; }
+
+  /* Tags */
+  .tag { display: inline-block; padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 500; }
+  .tag-train { background: #0d419d; color: #79c0ff; }
+  .tag-eval { background: #3d1e02; color: #d29922; }
+  .tag-holdout { background: #3d0e0e; color: #f85149; }
+  .tag-running { background: #3d2e02; color: #d29922; }
+  .tag-completed { background: #0d3d0e; color: #3fb950; }
+
+  /* Checkpoints */
+  .ckpt-list { list-style: none; }
+  .ckpt-list li { display: flex; justify-content: space-between; align-items: center;
+                  padding: 4px 0; border-bottom: 1px solid #21262d; font-size: 12px; }
+  .ckpt-list li:last-child { border-bottom: none; }
+  .btn { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+         background: #21262d; color: #58a6ff; border: 1px solid #30363d; cursor: pointer;
+         text-decoration: none; }
+  .btn:hover { background: #30363d; }
+
+  .refresh { position: fixed; top: 8px; right: 16px; font-size: 10px; color: #484f58; }
+  .refresh.active { color: #58a6ff; }
+  .empty { color: #484f58; font-style: italic; text-align: center; padding: 20px; font-size: 12px; }
+
+  /* Live extraction/training panel */
+  .live-panel { background: #1c1e24; border: 1px solid #d29922; border-radius: 6px;
+                padding: 12px; margin: 8px 0; }
+  .live-panel h3 { color: #d29922; }
+  .live-progress { height: 6px; background: #21262d; border-radius: 3px; margin: 6px 0; overflow: hidden; }
+  .live-progress-fill { height: 100%; background: #d29922; transition: width 1s; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WSI SR Training Monitor</h1>
+  <div class="subtitle">Pipeline status, training metrics, checkpoints</div>
+  <div class="refresh" id="refresh">polling</div>
+
+  <!-- Pipeline Overview -->
+  <h2 onclick="toggle('pipeline-wrap')">Pipeline</h2>
+  <div id="pipeline-wrap" class="collapsible">
+    <div class="pipeline" id="pipeline"></div>
+  </div>
+
+  <!-- Live Activity (extraction or training in progress) -->
+  <div id="live-section"></div>
+
+  <!-- Dataset -->
+  <h2 onclick="toggle('dataset-wrap')">TCGA Dataset</h2>
+  <div id="dataset-wrap" class="collapsible">
+    <div class="grid">
+      <div class="card" id="dataset-stats"></div>
+      <div class="card" id="dataset-bars"></div>
+    </div>
+  </div>
+
+  <!-- Manifest / Training Plan -->
+  <h2 onclick="toggle('manifest-wrap')">Training Plan</h2>
+  <div id="manifest-wrap" class="collapsible">
+    <div class="grid">
+      <div class="card" id="manifest-summary"></div>
+      <div class="card" id="manifest-types"></div>
+    </div>
+  </div>
+
+  <!-- Training Runs -->
+  <div id="training-section" style="display:none">
+    <h2 onclick="toggle('training-wrap')">Training</h2>
+    <div id="training-wrap" class="collapsible">
+      <div class="grid">
+        <div class="card" id="run-summary"></div>
+        <div class="card" id="run-baselines"></div>
+      </div>
+      <div class="chart-grid" id="charts"></div>
+    </div>
+  </div>
+
+  <!-- Checkpoints -->
+  <h2 onclick="toggle('ckpt-wrap')">Checkpoints</h2>
+  <div id="ckpt-wrap" class="collapsible">
+    <div class="grid">
+      <div class="card" id="checkpoints"></div>
+    </div>
+  </div>
+
+  <!-- Evaluation -->
+  <div id="eval-section" style="display:none">
+    <h2 onclick="toggle('eval-wrap')">Evaluation</h2>
+    <div id="eval-wrap" class="collapsible">
+      <div class="grid">
+        <div class="card card-wide" id="eval-difficulty"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+let charts = {};
+
+async function fetchJSON(url) {
+  try {
+    const r = await fetch(API + url);
+    if (!r.ok) return null;
+    return r.json();
+  } catch { return null; }
+}
+
+function toggle(id) {
+  document.getElementById(id).classList.toggle("collapsed");
+}
+
+// --- Pipeline ---
+async function renderPipeline() {
+  const data = await fetchJSON("/api/stages");
+  if (!data) return;
+  const el = document.getElementById("pipeline");
+  el.innerHTML = data.stages.map(s => {
+    const pct = Math.round((s.progress || 0) * 100);
+    const cls = s.status === "completed" ? "completed" : s.status === "running" ? "running" : "";
+    const cost = s.estimated_cost_usd ? `est $${s.estimated_cost_usd.toFixed(2)}` : "";
+    const actual = s.actual_cost_usd ? ` / $${s.actual_cost_usd.toFixed(2)} actual` : "";
+    return `<div class="stage ${cls}">
+      <div class="name">${s.name}</div>
+      <div class="status"><span class="tag tag-${s.status || 'pending'}">${s.status || 'pending'}</span>
+        ${pct > 0 && pct < 100 ? ` ${pct}%` : ""}</div>
+      ${cost ? `<div class="cost">${cost}${actual}</div>` : ""}
+      ${s.note ? `<div class="detail">${s.note}</div>` : ""}
+      <div class="progress-bar" style="width:${pct}%"></div>
+    </div>`;
+  }).join("");
+}
+
+// --- Live Activity ---
+async function renderLive() {
+  const data = await fetchJSON("/api/remote-status");
+  const el = document.getElementById("live-section");
+  if (!data) { el.innerHTML = ""; return; }
+
+  let html = "";
+
+  // Extraction progress
+  if (data.extract) {
+    const e = data.extract;
+    const pct = e.total_slides > 0 ? Math.round(e.slides_done / e.total_slides * 100) : 0;
+    html += `<div class="live-panel">
+      <h3>Tile Extraction In Progress</h3>
+      <div class="live-progress"><div class="live-progress-fill" style="width:${pct}%"></div></div>
+      <div class="stat-row"><span class="stat-label">Slides</span>
+        <span class="stat-value">${e.slides_done || 0} / ${e.total_slides || "?"} (${pct}%)</span></div>
+      <div class="stat-row"><span class="stat-label">Tiles extracted</span>
+        <span class="stat-value">${(e.total_tiles || 0).toLocaleString()}</span></div>
+      <div class="stat-row"><span class="stat-label">Current slide</span>
+        <span class="stat-value">${e.current_slide || "—"}</span></div>
+      <div class="stat-row"><span class="stat-label">Elapsed</span>
+        <span class="stat-value">${e.elapsed_min ? e.elapsed_min.toFixed(1) + " min" : "—"}</span></div>
+      <div class="stat-row"><span class="stat-label">ETA</span>
+        <span class="stat-value">${e.eta_min ? e.eta_min.toFixed(0) + " min" : "—"}</span></div>
+      ${e.errors ? `<div class="stat-row"><span class="stat-label">Errors</span>
+        <span class="stat-value bad">${e.errors}</span></div>` : ""}
+    </div>`;
+  }
+
+  // Training progress
+  if (data.train) {
+    const t = data.train;
+    const pct = t.total_epochs > 0 ? Math.round(t.epoch / t.total_epochs * 100) : 0;
+    html += `<div class="live-panel">
+      <h3>Training In Progress</h3>
+      <div class="live-progress"><div class="live-progress-fill" style="width:${pct}%"></div></div>
+      <div class="stat-row"><span class="stat-label">Epoch</span>
+        <span class="stat-value">${t.epoch || 0} / ${t.total_epochs || "?"} (${pct}%)</span></div>
+      <div class="stat-row"><span class="stat-label">Loss</span>
+        <span class="stat-value">${t.loss ? t.loss.toFixed(5) : "—"}</span></div>
+      <div class="stat-row"><span class="stat-label">Val PSNR</span>
+        <span class="stat-value good">${t.val_psnr ? t.val_psnr.toFixed(2) + " dB" : "—"}</span></div>
+      <div class="stat-row"><span class="stat-label">Best PSNR</span>
+        <span class="stat-value good">${t.best_psnr ? t.best_psnr.toFixed(2) + " dB (ep " + t.best_epoch + ")" : "—"}</span></div>
+      ${t.val_ssim ? `<div class="stat-row"><span class="stat-label">Val SSIM</span>
+        <span class="stat-value">${t.val_ssim.toFixed(4)}</span></div>` : ""}
+      ${t.val_delta_e ? `<div class="stat-row"><span class="stat-label">Val Delta E</span>
+        <span class="stat-value">${t.val_delta_e.toFixed(2)}</span></div>` : ""}
+      ${t.residual_kb ? `<div class="stat-row"><span class="stat-label">Residual</span>
+        <span class="stat-value">${t.residual_kb.toFixed(1)} KB</span></div>` : ""}
+      ${t.exploring ? `<div class="stat-row"><span class="stat-label">Exploring</span>
+        <span class="stat-value warn">${t.explored_tiles || 0} tiles evaluated</span></div>` : ""}
+      <div class="stat-row"><span class="stat-label">Elapsed</span>
+        <span class="stat-value">${t.elapsed_min ? t.elapsed_min.toFixed(1) + " min" : "—"}</span></div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// --- Dataset ---
+async function renderDataset() {
+  const data = await fetchJSON("/api/dataset");
+  if (!data) return;
+  const statsEl = document.getElementById("dataset-stats");
+  const totalGB = data.by_project.reduce((s, p) => s + (p.total_gb || 0), 0);
+  const diag = data.by_strategy.find(s => s.experimental_strategy === "Diagnostic Slide");
+  const tissue = data.by_strategy.find(s => s.experimental_strategy === "Tissue Slide");
+  statsEl.innerHTML = `<h3>Overview</h3>
+    <div class="stat-row"><span class="stat-label">Total slides</span><span class="stat-value">${data.total_slides.toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Diagnostic (FFPE)</span><span class="stat-value">${(diag?.n || 0).toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Tissue (frozen)</span><span class="stat-value">${(tissue?.n || 0).toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Total storage</span><span class="stat-value">${(totalGB/1000).toFixed(1)} TB</span></div>
+    <div class="stat-row"><span class="stat-label">Cancer types</span><span class="stat-value">${data.by_project.length}</span></div>`;
+
+  const barsEl = document.getElementById("dataset-bars");
+  const maxN = Math.max(...data.by_project.map(p => p.n));
+  barsEl.innerHTML = `<h3>Slides per Cancer Type</h3>
+    <div style="max-height:360px;overflow-y:auto">
+    ${data.by_project.map(p => `<div class="bar">
+      <span class="bar-label">${p.project_id.replace("TCGA-","")}</span>
+      <div class="bar-fill" style="width:${(p.n/maxN*100).toFixed(1)}%"></div>
+      <span class="bar-value">${p.n}</span>
+    </div>`).join("")}
+    </div>`;
+}
+
+// --- Manifest ---
+async function renderManifest() {
+  const manifests = await fetchJSON("/api/manifests");
+  if (!manifests?.length) {
+    document.getElementById("manifest-summary").innerHTML = '<div class="empty">No manifest loaded</div>';
+    return;
+  }
+  const mid = manifests[0].manifest_id;
+  const data = await fetchJSON(`/api/manifest/${mid}`);
+  if (!data) return;
+  const config = typeof data.manifest.config === "string" ? JSON.parse(data.manifest.config) : data.manifest.config || {};
+  const summary = typeof data.manifest.summary === "string" ? JSON.parse(data.manifest.summary) : data.manifest.summary || {};
+
+  document.getElementById("manifest-summary").innerHTML = `<h3>Plan: ${mid}</h3>
+    <div class="stat-row"><span class="stat-label">Total slides</span><span class="stat-value">${summary.total_slides || "?"}</span></div>
+    ${(data.slides_by_role || []).map(r => `<div class="stat-row">
+      <span class="stat-label"><span class="tag tag-${r.role}">${r.role}</span></span>
+      <span class="stat-value">${r.n} slides, ${r.total_gb} GB${r.est_train_tiles ? `, ~${r.est_train_tiles.toLocaleString()} tiles` : ""}</span>
+    </div>`).join("")}
+    <div class="stat-row"><span class="stat-label">Tile stride</span><span class="stat-value">${config.tile_stride || "?"}</span></div>
+    <div class="stat-row"><span class="stat-label">Est. total tiles</span><span class="stat-value">${(summary.estimated_total_tiles || 0).toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Est. storage</span><span class="stat-value">${summary.estimated_tile_storage_gb || "?"} GB</span></div>
+    <div class="stat-row"><span class="stat-label">Holdout types</span><span class="stat-value">${(config.holdout_types || []).join(", ") || "none"}</span></div>`;
+
+  document.getElementById("manifest-types").innerHTML = `<h3>Cancer Types (${(data.cancer_types||[]).length})</h3>
+    <div style="max-height:360px;overflow-y:auto">
+    <table>
+      <tr><th>Type</th><th>Site</th><th>Role</th><th>Train</th><th>Eval</th><th>Tiles</th></tr>
+      ${(data.cancer_types||[]).map(ct => `<tr>
+        <td>${(ct.project_id||"").replace("TCGA-","")}</td>
+        <td>${ct.primary_site || ""}</td>
+        <td><span class="tag tag-${ct.role === "holdout" ? "holdout" : "train"}">${ct.role || ""}</span></td>
+        <td>${ct.train_slide_count || 0}</td>
+        <td>${ct.eval_slide_count || 0}</td>
+        <td>${((ct.estimated_train_tiles||0)+(ct.estimated_eval_adjacent_tiles||0)+(ct.estimated_eval_holdout_tiles||0)).toLocaleString()}</td>
+      </tr>`).join("")}
+    </table></div>`;
+}
+
+// --- Training ---
+async function renderTraining() {
+  const runs = await fetchJSON("/api/runs");
+  if (!runs?.length) return;
+
+  document.getElementById("training-section").style.display = "";
+  const run = runs[0];
+  const detail = await fetchJSON(`/api/runs/${run.run_id}`);
+  if (!detail) return;
+  const epochs = detail.epochs || [];
+  const baselines = detail.baselines || [];
+
+  const valEpochs = epochs.filter(e => e.type === "val");
+  const lastVal = valEpochs[valEpochs.length - 1];
+  const config = typeof run.config === "string" ? JSON.parse(run.config) : (run.config || {});
+
+  document.getElementById("run-summary").innerHTML = `<h3>Run: ${run.run_id}</h3>
+    <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value"><span class="tag tag-${run.status}">${run.status}</span></span></div>
+    <div class="stat-row"><span class="stat-label">Architecture</span><span class="stat-value">${config.arch || config.mode || "?"}</span></div>
+    <div class="stat-row"><span class="stat-label">Epochs</span><span class="stat-value">${epochs.length} / ${run.total_epochs || config.epochs || "?"}</span></div>
+    <div class="stat-row"><span class="stat-label">Best PSNR</span><span class="stat-value good">${run.best_psnr?.toFixed(2) || "?"} dB (ep ${run.best_epoch || "?"})</span></div>
+    ${lastVal ? `
+    <div class="stat-row"><span class="stat-label">Val SSIM</span><span class="stat-value">${lastVal.val_ssim?.toFixed(4) || "?"}</span></div>
+    <div class="stat-row"><span class="stat-label">Val Delta E</span><span class="stat-value">${lastVal.val_delta_e?.toFixed(2) || "?"}</span></div>
+    <div class="stat-row"><span class="stat-label">Residual</span><span class="stat-value">${lastVal.residual_size_kb?.toFixed(1) || "?"} KB</span></div>` : ""}`;
+
+  document.getElementById("run-baselines").innerHTML = `<h3>Baselines</h3>
+    <table><tr><th>Method</th><th>PSNR</th><th>SSIM</th><th>Delta E</th><th>Res KB</th><th>p99</th></tr>
+    ${baselines.map(b => `<tr><td>${b.method}</td><td>${b.psnr?.toFixed(2)||""}</td>
+      <td>${b.ssim?.toFixed(4)||""}</td><td>${b.delta_e?.toFixed(2)||""}</td>
+      <td>${b.residual_size_kb?.toFixed(1)||""}</td><td>${b.p99_dev?.toFixed(1)||""}</td></tr>`).join("")}
+    </table>`;
+
+  if (epochs.length > 0) renderCharts(epochs, baselines);
+}
+
+function renderCharts(epochs, baselines) {
+  const el = document.getElementById("charts");
+  const allE = epochs.map(e => e.epoch);
+
+  const defs = [
+    { id: "loss", title: "MAE Loss", yLog: true, data: [
+      { label: "Loss", data: epochs.map(e => e.loss), borderColor: "#58a6ff" }
+    ]},
+    { id: "psnr", title: "PSNR (dB)", data: [
+      { label: "Train", data: epochs.map(e => e.train_psnr), borderColor: "#58a6ff55" },
+      { label: "Val", data: epochs.map(e => e.val_psnr), borderColor: "#f85149" },
+    ], baselines: baselines.map(b => ({ label: b.method, value: b.psnr, color: b.method==="bilinear"?"#d29922":"#a371f7" }))},
+    { id: "ssim", title: "SSIM", data: [
+      { label: "Val SSIM", data: epochs.map(e => e.val_ssim), borderColor: "#3fb950" },
+    ], baselines: baselines.filter(b=>b.ssim).map(b => ({ label: b.method, value: b.ssim, color: b.method==="bilinear"?"#d29922":"#a371f7" }))},
+    { id: "delta_e", title: "Delta E CIE2000", data: [
+      { label: "Val Delta E", data: epochs.map(e => e.val_delta_e), borderColor: "#bc8cff" },
+    ], baselines: baselines.filter(b=>b.delta_e).map(b => ({ label: b.method, value: b.delta_e, color: b.method==="bilinear"?"#d29922":"#a371f7" }))},
+    { id: "residual", title: "Residual Size (KB)", data: [
+      { label: "Residual", data: epochs.map(e => e.residual_size_kb), borderColor: "#3fb950" },
+    ], baselines: baselines.filter(b=>b.residual_size_kb).map(b => ({ label: b.method, value: b.residual_size_kb, color: b.method==="bilinear"?"#d29922":"#a371f7" }))},
+    { id: "dev", title: "Pixel Deviation", data: [
+      { label: "max", data: epochs.map(e => e.max_dev), borderColor: "#f8514988" },
+      { label: "p99", data: epochs.map(e => e.p99_dev), borderColor: "#d29922" },
+      { label: ">20px %", data: epochs.map(e => e.pct_over_20), borderColor: "#f85149" },
+    ]},
+  ];
+
+  el.innerHTML = defs.map(c => `<div class="chart-box"><canvas id="c-${c.id}"></canvas></div>`).join("");
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const opts = {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: "#8b949e", font: { size: 10 } } } },
+    scales: { x: { ticks: { color: "#484f58", font: { size: 9 } }, grid: { color: "#21262d" } },
+              y: { ticks: { color: "#484f58", font: { size: 9 } }, grid: { color: "#21262d" } } },
+  };
+
+  defs.forEach(def => {
+    const datasets = def.data.map(d => ({ ...d, borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.3 }));
+    (def.baselines||[]).forEach(bl => {
+      if (bl.value != null) datasets.push({
+        label: `${bl.label}: ${bl.value.toFixed(2)}`, data: allE.map(() => bl.value),
+        borderColor: bl.color, borderWidth: 1, borderDash: [4,3], pointRadius: 0, fill: false,
+      });
+    });
+    const o = JSON.parse(JSON.stringify(opts));
+    o.plugins.title = { display: true, text: def.title, color: "#c9d1d9", font: { size: 12 } };
+    if (def.yLog) o.scales.y.type = "logarithmic";
+    charts[def.id] = new Chart(document.getElementById(`c-${def.id}`), {
+      type: "line", data: { labels: allE, datasets }, options: o,
+    });
+  });
+}
+
+// --- Checkpoints ---
+async function renderCheckpoints() {
+  const data = await fetchJSON("/api/checkpoints");
+  if (!data) return;
+  const el = document.getElementById("checkpoints");
+  const all = [...(data.local||[]), ...(data.remote||[])];
+  if (!all.length) {
+    el.innerHTML = '<div class="empty">No checkpoints yet</div>';
+    return;
+  }
+  el.innerHTML = `<h3>Model Checkpoints</h3><ul class="ckpt-list">
+    ${(data.local||[]).map(c => `<li>
+      <span>${c.name} <span style="color:#484f58">(${c.size_mb} MB, local)</span></span>
+      <a href="${c.download_url}" class="btn">Download</a>
+    </li>`).join("")}
+    ${(data.remote||[]).map(c => `<li>
+      <span>${c.name} <span style="color:#484f58">(GCS)</span></span>
+      <a href="/api/checkpoints/fetch-remote/${c.name}" class="btn">Fetch + Download</a>
+    </li>`).join("")}
+  </ul>`;
+}
+
+// --- Refresh ---
+async function refresh() {
+  const el = document.getElementById("refresh");
+  el.classList.add("active");
+  el.textContent = "updating...";
+  try {
+    await Promise.all([
+      renderPipeline(), renderLive(), renderDataset(),
+      renderManifest(), renderTraining(), renderCheckpoints(),
+    ]);
+  } catch (e) { console.error("Refresh error:", e); }
+  el.classList.remove("active");
+  el.textContent = `last: ${new Date().toLocaleTimeString()}`;
+}
+
+refresh();
+setInterval(refresh, 10_000);
+</script>
+</body>
+</html>
