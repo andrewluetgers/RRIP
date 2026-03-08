@@ -249,6 +249,20 @@ def main():
         t0 = time.time()
 
         print(f"  Downloading...")
+        # Write "downloading" status so monitor shows activity
+        if not args.skip_upload:
+            write_progress(args.bucket, {
+                "stage": "extract",
+                "slides_done": i,
+                "total_slides": len(slides),
+                "total_tiles": total_tiles,
+                "errors": len(failed),
+                "current_slide": f"{project}/{fid[:12]}",
+                "current_step": "downloading",
+                "elapsed_min": round((time.time() - t_start) / 60, 1),
+                "eta_min": round((len(slides) - i) * (time.time() - t_start) / max(i, 1) / 60, 0) if i > 0 else None,
+                "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
         if not download_slide(fid, svs_path):
             failed.append(fid)
             print(f"  FAILED to download")
@@ -256,6 +270,21 @@ def main():
 
         svs_size = os.path.getsize(svs_path) / 1e6
         print(f"  Downloaded {svs_size:.0f} MB in {time.time()-t0:.1f}s")
+
+        # Write "extracting" status
+        if not args.skip_upload:
+            write_progress(args.bucket, {
+                "stage": "extract",
+                "slides_done": i,
+                "total_slides": len(slides),
+                "total_tiles": total_tiles,
+                "errors": len(failed),
+                "current_slide": f"{project}/{fid[:12]}",
+                "current_step": f"extracting ({svs_size:.0f}MB)",
+                "elapsed_min": round((time.time() - t_start) / 60, 1),
+                "eta_min": round((len(slides) - i) * (time.time() - t_start) / max(i, 1) / 60, 0) if i > 0 else None,
+                "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
 
         # 2. Extract tiles
         tile_dir = os.path.join(args.output, project, fid[:12])

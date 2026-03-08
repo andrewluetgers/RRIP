@@ -8,17 +8,18 @@ const app = express();
 const PORT = process.env.PORT || 8090;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "wsi_sr.duckdb");
 const BUCKET = process.env.GCS_BUCKET || "gs://wsi-1-480715-tcga-tiles";
-const POLL_INTERVAL = 10_000; // 10s
+const POLL_INTERVAL = 5_000; // 5s
 
-// Open DuckDB in read-only mode (Python writers, Node readers)
-const db = new duckdb.Database(DB_PATH, { access_mode: "READ_ONLY" });
+// Open DuckDB in read-write mode (monitor is the primary DB owner)
+const db = new duckdb.Database(DB_PATH);
 const conn = db.connect();
 
-// In-memory cache for remote status (polled from GCS)
+// In-memory cache for remote status (polled from GCS + cloud APIs)
 let remoteStatus = {
   extract: null,
   train: null,
   checkpoints: [],
+  vms: [],
   lastPoll: null,
 };
 
@@ -44,42 +45,131 @@ function query(sql, params = []) {
 // Remote processes write JSON status files to GCS. We poll them.
 
 function gsutilRead(gcsPath) {
-  try {
-    const out = execSync(`gsutil -q cat ${gcsPath} 2>/dev/null`, {
-      timeout: 10_000, encoding: "utf8",
+  return new Promise((resolve) => {
+    exec(`gsutil -q cat ${gcsPath} 2>/dev/null`, { timeout: 15_000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      try { resolve(JSON.parse(stdout)); } catch { resolve(null); }
     });
-    return JSON.parse(out);
-  } catch {
-    return null;
-  }
+  });
 }
 
 function gsutilLs(gcsPath) {
-  try {
-    const out = execSync(`gsutil -q ls ${gcsPath} 2>/dev/null`, {
-      timeout: 10_000, encoding: "utf8",
+  return new Promise((resolve) => {
+    exec(`gsutil -q ls ${gcsPath} 2>/dev/null`, { timeout: 15_000 }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      resolve(stdout.trim().split("\n").filter(Boolean));
     });
-    return out.trim().split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
+  });
 }
 
-function pollGCS() {
-  // Extract progress
-  remoteStatus.extract = gsutilRead(`${BUCKET}/status/extract_progress.json`);
+async function pollVMs() {
+  const vms = [];
 
-  // Training progress
-  remoteStatus.train = gsutilRead(`${BUCKET}/status/train_progress.json`);
+  // GCP VMs
+  try {
+    const gcpOut = await new Promise((resolve) => {
+      exec('gcloud compute instances list --project=wsi-1-480715 --format="json(name,zone,status,machineType,scheduling.preemptible,creationTimestamp)" 2>/dev/null',
+        { timeout: 15_000 }, (err, stdout) => {
+          if (err || !stdout) return resolve([]);
+          try { resolve(JSON.parse(stdout)); } catch { resolve([]); }
+        });
+    });
+    for (const vm of gcpOut) {
+      const created = new Date(vm.creationTimestamp);
+      const uptimeMin = Math.round((Date.now() - created.getTime()) / 60000);
+      const machineType = (vm.machineType || "").split("/").pop();
+      // Rough cost estimates per machine type (spot pricing)
+      const hourlyRates = { "e2-highcpu-8": 0.07, "e2-highcpu-16": 0.14, "c3-highcpu-22": 0.35, "c3-highcpu-44": 0.70, "c3-highcpu-88": 1.40 };
+      const rate = hourlyRates[machineType] || 0.20;
+      const cost = (uptimeMin / 60) * rate;
+      vms.push({
+        provider: "GCP", name: vm.name, type: machineType,
+        zone: (vm.zone || "").split("/").pop(),
+        status: vm.status, spot: vm.scheduling?.preemptible || false,
+        uptime_min: uptimeMin, hourly_rate: rate, cost_usd: Math.round(cost * 100) / 100,
+      });
+    }
+  } catch { /* non-fatal */ }
 
-  // Checkpoints
-  const ckptFiles = gsutilLs(`${BUCKET}/checkpoints/*.json`);
+  // RunPod pods
+  try {
+    const rpOut = await new Promise((resolve) => {
+      const apiKey = process.env.RUNPOD_API_KEY;
+      if (!apiKey) return resolve([]);
+      exec(`curl -s -H "Content-Type: application/json" -H "Authorization: Bearer ${apiKey}" --data '{"query":"{ myself { pods { id name desiredStatus machine { gpuDisplayName } costPerHr runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort } } } } }"}' https://api.runpod.io/graphql`,
+        { timeout: 15_000 }, (err, stdout) => {
+          if (err || !stdout) return resolve([]);
+          try {
+            const data = JSON.parse(stdout);
+            resolve(data?.data?.myself?.pods || []);
+          } catch { resolve([]); }
+        });
+    });
+    for (const pod of rpOut) {
+      if (pod.desiredStatus === "EXITED") continue;
+      const uptimeSec = pod.runtime?.uptimeInSeconds || 0;
+      const rate = pod.costPerHr || 0;
+      const cost = (uptimeSec / 3600) * rate;
+      const ports = pod.runtime?.ports || [];
+      const ssh = ports.find(p => p.privatePort === 22);
+      vms.push({
+        provider: "RunPod", name: pod.name, type: pod.machine?.gpuDisplayName || "?",
+        status: pod.runtime ? "RUNNING" : "PROVISIONING",
+        spot: false, uptime_min: Math.round(uptimeSec / 60),
+        hourly_rate: rate, cost_usd: Math.round(cost * 100) / 100,
+        ssh: ssh ? `${ssh.ip}:${ssh.publicPort}` : null,
+      });
+    }
+  } catch { /* non-fatal */ }
+
+  return vms;
+}
+
+async function pollGCS() {
+  // Try multiple stage prefixes for progress files
+  for (const prefix of ["stage1", "stage2", ""]) {
+    const base = prefix ? `${BUCKET}/${prefix}` : BUCKET;
+
+    if (!remoteStatus.extract) {
+      remoteStatus.extract = await gsutilRead(`${base}/status/extract_progress.json`);
+    }
+    if (!remoteStatus.train) {
+      remoteStatus.train = await gsutilRead(`${base}/status/train_progress.json`);
+    }
+  }
+
+  // Checkpoints from any stage
+  const ckptLists = await Promise.all([
+    gsutilLs(`${BUCKET}/checkpoints/*.json`),
+    gsutilLs(`${BUCKET}/stage1/checkpoints/*.json`),
+    gsutilLs(`${BUCKET}/stage2/checkpoints/*.json`),
+  ]);
+  const ckptFiles = ckptLists.flat();
   remoteStatus.checkpoints = ckptFiles.map(f => {
     const name = path.basename(f, ".json");
     return { name, gcs_path: f.replace(".json", ".pt"), meta_path: f };
   });
 
+  // Poll VM status (GCP + RunPod)
+  remoteStatus.vms = await pollVMs();
+
   remoteStatus.lastPoll = new Date().toISOString();
+
+  // Auto-update stage progress in DuckDB from remote status
+  try {
+    if (remoteStatus.extract) {
+      const e = remoteStatus.extract;
+      const pct = e.total_slides > 0 ? e.slides_done / e.total_slides : 0;
+      const note = `${e.slides_done}/${e.total_slides} slides, ${(e.total_tiles||0).toLocaleString()} tiles`;
+      conn.all(`UPDATE stages SET status = 'running', progress = ${pct}, note = '${note.replace(/'/g,"''")}' WHERE stage_id = 'extract' OR stage_id = 's1_extract'`, () => {});
+    }
+    if (remoteStatus.train) {
+      const t = remoteStatus.train;
+      const pct = t.total_epochs > 0 ? t.epoch / t.total_epochs : 0;
+      const note = `Epoch ${t.epoch}/${t.total_epochs}, PSNR ${t.val_psnr?.toFixed(1)||"?"}dB`;
+      conn.all(`UPDATE stages SET status = 'running', progress = ${pct}, note = '${note.replace(/'/g,"''")}' WHERE stage_id = 'train' OR stage_id = 's1_train'`, () => {});
+    }
+  } catch (e) { /* non-fatal */ }
 }
 
 // Poll every 10s
@@ -102,9 +192,37 @@ app.get("/api/stages", async (req, res) => {
   }
 });
 
+// --- API: Update stage status ---
+app.use(express.json());
+app.post("/api/stages/:id", async (req, res) => {
+  try {
+    const { status, progress, note, actual_cost } = req.body;
+    const updates = [];
+    const params = [];
+    if (status) { updates.push("status = ?"); params.push(status); }
+    if (progress !== undefined) { updates.push("progress = ?"); params.push(progress); }
+    if (note) { updates.push("note = ?"); params.push(note); }
+    if (actual_cost !== undefined) { updates.push("actual_cost_usd = ?"); params.push(actual_cost); }
+    if (status === "running") { updates.push("started_at = current_timestamp"); }
+    if (status === "completed") { updates.push("completed_at = current_timestamp"); updates.push("progress = 1.0"); }
+    if (updates.length) {
+      params.push(req.params.id);
+      await query(`UPDATE stages SET ${updates.join(", ")} WHERE stage_id = ?`, params);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- API: Remote status (from GCS polling) ---
 app.get("/api/remote-status", (req, res) => {
   res.json(remoteStatus);
+});
+
+// --- API: VMs/Infrastructure ---
+app.get("/api/vms", (req, res) => {
+  res.json(remoteStatus.vms || []);
 });
 
 // --- API: Dataset summary ---

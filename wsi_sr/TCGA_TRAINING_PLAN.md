@@ -699,3 +699,42 @@ After each stage, decide:
 | 2 | Full evaluation, export ONNX, benchmark in Rust |
 
 **Total wall-clock time: ~1.5 days from start to evaluated model.**
+
+## 13. Cleanup (REQUIRED — plan is not complete until done)
+
+**Do NOT auto-clean. All cleanups require manual confirmation.**
+
+### Compute
+
+| Resource | Provider | How to verify | How to clean |
+|----------|----------|--------------|-------------|
+| `tcga-extract-s1` | GCP us-central1-c | `gcloud compute instances list --project=wsi-1-480715` | `gcloud compute instances delete tcga-extract-s1 --zone=us-central1-c --project=wsi-1-480715` |
+| `sr-train-gpu` | AWS us-east-1 | `aws ec2 describe-instances --filters Name=tag:Name,Values=sr-train-gpu --region us-east-1` | `aws ec2 terminate-instances --instance-ids <id> --region us-east-1` |
+| `origami-b200-sr` | RunPod | Query RunPod API | `podTerminate` mutation |
+| Any other pods | RunPod | Query RunPod API | Stop or terminate via API |
+
+### Storage
+
+| Resource | Provider | Size | How to clean |
+|----------|----------|------|-------------|
+| `gs://wsi-1-480715-tcga-tiles/` | GCS | ~110 GB (full) / ~3 GB (stage1) | `gsutil -m rm -r gs://wsi-1-480715-tcga-tiles/stage1/` |
+| EBS volume on sr-train-gpu | AWS | 200 GB | Deleted with instance termination |
+| RunPod network volume | RunPod | 150 GB | Deleted with pod termination |
+
+### Keys / Credentials
+
+| Resource | Where | How to clean |
+|----------|-------|-------------|
+| `sr-train` key pair | AWS us-east-1 + `~/.ssh/sr-train.pem` | `aws ec2 delete-key-pair --key-name sr-train --region us-east-1` |
+| `sr-train-sg` security group | AWS us-east-1 | `aws ec2 delete-security-group --group-id <id> --region us-east-1` |
+
+### Cleanup checklist
+
+- [ ] All GCP VMs stopped/deleted
+- [ ] All AWS instances terminated
+- [ ] All RunPod pods stopped/terminated
+- [ ] GCS staging data deleted (keep final model + eval results)
+- [ ] AWS EBS volumes deleted
+- [ ] AWS key pair + security group deleted
+- [ ] Final model checkpoint + eval results downloaded locally
+- [ ] Cost audit: verify actual spend matches estimates

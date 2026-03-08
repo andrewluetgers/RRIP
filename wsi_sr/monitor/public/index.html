@@ -105,8 +105,11 @@
   <div class="subtitle">Pipeline status, training metrics, checkpoints</div>
   <div class="refresh" id="refresh">polling</div>
 
-  <!-- Pipeline Overview -->
-  <h2 onclick="toggle('pipeline-wrap')">Pipeline</h2>
+  <!-- Overall Plan Progress -->
+  <div id="plan-overview" class="card" style="margin-bottom:12px"></div>
+
+  <!-- Pipeline Stages -->
+  <h2 onclick="toggle('pipeline-wrap')">Pipeline Stages</h2>
   <div id="pipeline-wrap" class="collapsible">
     <div class="pipeline" id="pipeline"></div>
   </div>
@@ -114,20 +117,23 @@
   <!-- Live Activity (extraction or training in progress) -->
   <div id="live-section"></div>
 
-  <!-- Dataset -->
-  <h2 onclick="toggle('dataset-wrap')">TCGA Dataset</h2>
-  <div id="dataset-wrap" class="collapsible">
-    <div class="grid">
-      <div class="card" id="dataset-stats"></div>
-      <div class="card" id="dataset-bars"></div>
-    </div>
+  <!-- Infrastructure / VMs -->
+  <h2 onclick="toggle('infra-wrap')">Infrastructure</h2>
+  <div id="infra-wrap" class="collapsible">
+    <div id="vm-list"></div>
   </div>
 
-  <!-- Manifest / Training Plan -->
-  <h2 onclick="toggle('manifest-wrap')">Training Plan</h2>
-  <div id="manifest-wrap" class="collapsible">
+  <!-- Dataset + Training Plan (top row) -->
+  <h2 onclick="toggle('data-plan-wrap')">Dataset &amp; Training Plan</h2>
+  <div id="data-plan-wrap" class="collapsible">
     <div class="grid">
+      <div class="card" id="dataset-stats"></div>
       <div class="card" id="manifest-summary"></div>
+    </div>
+
+    <!-- Slides per cancer type + Cancer types table (full height, no scroll) -->
+    <div class="grid" style="margin-top:12px">
+      <div class="card" id="dataset-bars"></div>
       <div class="card" id="manifest-types"></div>
     </div>
   </div>
@@ -179,6 +185,79 @@ function toggle(id) {
   document.getElementById(id).classList.toggle("collapsed");
 }
 
+// --- Plan Overview ---
+const PLAN_STAGES = [
+  { id: "s0", name: "Stage 0: Local Smoke Test", desc: "14 tiles, 3 architectures, 20 epochs each",
+    slides: 0, tiles: 14, status: "completed" },
+  { id: "s1", name: "Stage 1: Validation Run", desc: "5 cancer types, 35 slides, ~5K tiles",
+    slides: 35, tiles: 5000, status: "running" },
+  { id: "s2", name: "Stage 2: Full Training", desc: "32 cancer types, 800 slides, ~206K tiles",
+    slides: 800, tiles: 206242, status: "pending" },
+];
+
+async function renderPlanOverview() {
+  const [remote, vms] = await Promise.all([
+    fetchJSON("/api/remote-status"),
+    fetchJSON("/api/vms"),
+  ]);
+
+  const totalSpent = (vms || []).reduce((s, v) => s + (v.cost_usd || 0), 0);
+  const burnRate = (vms || []).filter(v => v.status === "RUNNING").reduce((s, v) => s + (v.hourly_rate || 0), 0);
+
+  // Current activity detail
+  let activity = "Idle";
+  let detail = "";
+  if (remote?.extract) {
+    const e = remote.extract;
+    activity = `Extracting: ${e.slides_done}/${e.total_slides} slides, ${(e.total_tiles||0).toLocaleString()} tiles`;
+    if (e.eta_min) detail = `ETA: ${Math.round(e.eta_min)} min`;
+  }
+  if (remote?.train) {
+    const t = remote.train;
+    activity = `Training: epoch ${t.epoch}/${t.total_epochs}, PSNR ${t.val_psnr?.toFixed(1)||"?"}dB`;
+    if (t.best_psnr) detail = `Best: ${t.best_psnr.toFixed(2)} dB (ep ${t.best_epoch})`;
+  }
+
+  const el = document.getElementById("plan-overview");
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:14px;font-weight:600;color:#c9d1d9">Training Plan</span>
+      <span style="font-size:12px;color:#58a6ff">$${totalSpent.toFixed(2)} spent${burnRate > 0 ? `, $${burnRate.toFixed(2)}/hr` : ""}</span>
+    </div>
+    <table style="margin-bottom:10px">
+      <tr><th style="width:45%">Stage</th><th>Slides</th><th>Tiles</th><th>Status</th></tr>
+      ${PLAN_STAGES.map(s => {
+        let statusHtml, pct = "";
+        if (s.status === "completed") {
+          statusHtml = '<span class="good">Done</span>';
+        } else if (s.status === "running") {
+          const done = remote?.extract?.slides_done || 0;
+          const total = s.slides;
+          pct = total > 0 ? Math.round(done / total * 100) : 0;
+          statusHtml = '<span class="warn">In Progress (' + pct + '%)</span>' +
+            '<div class="live-progress" style="height:4px;margin-top:3px"><div class="live-progress-fill" style="width:' + pct + '%"></div></div>';
+        } else {
+          statusHtml = '<span style="color:#484f58">Pending</span>';
+        }
+        return '<tr' + (s.status === "running" ? ' style="color:#c9d1d9"' : '') + '>' +
+          '<td><strong>' + s.name + '</strong><br><span style="font-size:10px;color:#484f58">' + s.desc + '</span></td>' +
+          '<td>' + (s.slides || '—') + '</td>' +
+          '<td>' + (s.tiles ? s.tiles.toLocaleString() : '—') + '</td>' +
+          '<td>' + statusHtml + '</td></tr>';
+      }).join("")}
+      <tr style="border-top:1px solid #30363d">
+        <td><strong>Total</strong></td>
+        <td>835</td>
+        <td>211,256</td>
+        <td></td>
+      </tr>
+    </table>
+    <div style="display:flex;justify-content:space-between;font-size:12px">
+      <span style="color:#c9d1d9">${activity}</span>
+      <span style="color:#8b949e">${detail}</span>
+    </div>`;
+}
+
 // --- Pipeline ---
 async function renderPipeline() {
   const data = await fetchJSON("/api/stages");
@@ -220,7 +299,7 @@ async function renderLive() {
       <div class="stat-row"><span class="stat-label">Tiles extracted</span>
         <span class="stat-value">${(e.total_tiles || 0).toLocaleString()}</span></div>
       <div class="stat-row"><span class="stat-label">Current slide</span>
-        <span class="stat-value">${e.current_slide || "—"}</span></div>
+        <span class="stat-value">${e.current_slide || "—"} ${e.current_step ? `<span style="color:#d29922">(${e.current_step})</span>` : ""}</span></div>
       <div class="stat-row"><span class="stat-label">Elapsed</span>
         <span class="stat-value">${e.elapsed_min ? e.elapsed_min.toFixed(1) + " min" : "—"}</span></div>
       <div class="stat-row"><span class="stat-label">ETA</span>
@@ -261,6 +340,40 @@ async function renderLive() {
   el.innerHTML = html;
 }
 
+// --- Infrastructure / VMs ---
+async function renderVMs() {
+  const vms = await fetchJSON("/api/vms");
+  const el = document.getElementById("vm-list");
+  if (!vms?.length) {
+    el.innerHTML = '<div class="card"><div class="empty">No VMs running</div></div>';
+    return;
+  }
+  const totalCost = vms.reduce((s, v) => s + (v.cost_usd || 0), 0);
+  const totalRate = vms.reduce((s, v) => s + (v.hourly_rate || 0), 0);
+  el.innerHTML = `<div class="card">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+      <h3>Active Machines</h3>
+      <span style="font-size:12px;color:#58a6ff">$${totalCost.toFixed(2)} spent, $${totalRate.toFixed(2)}/hr burn rate</span>
+    </div>
+    <table>
+      <tr><th>Provider</th><th>Name</th><th>Type</th><th>Status</th><th>Uptime</th><th>Rate</th><th>Cost</th></tr>
+      ${vms.map(v => {
+        const statusCls = v.status === "RUNNING" ? "good" : v.status === "PROVISIONING" ? "warn" : "";
+        const uptime = v.uptime_min >= 60 ? `${(v.uptime_min/60).toFixed(1)}h` : `${v.uptime_min}m`;
+        return `<tr>
+          <td>${v.provider}</td>
+          <td>${v.name}${v.spot ? ' <span style="color:#484f58">(spot)</span>' : ""}</td>
+          <td>${v.type}</td>
+          <td><span class="${statusCls}">${v.status}</span></td>
+          <td>${uptime}</td>
+          <td>$${v.hourly_rate?.toFixed(2) || "?"}/hr</td>
+          <td>$${v.cost_usd?.toFixed(2) || "0.00"}</td>
+        </tr>`;
+      }).join("")}
+    </table>
+  </div>`;
+}
+
 // --- Dataset ---
 async function renderDataset() {
   const data = await fetchJSON("/api/dataset");
@@ -279,13 +392,11 @@ async function renderDataset() {
   const barsEl = document.getElementById("dataset-bars");
   const maxN = Math.max(...data.by_project.map(p => p.n));
   barsEl.innerHTML = `<h3>Slides per Cancer Type</h3>
-    <div style="max-height:360px;overflow-y:auto">
     ${data.by_project.map(p => `<div class="bar">
       <span class="bar-label">${p.project_id.replace("TCGA-","")}</span>
       <div class="bar-fill" style="width:${(p.n/maxN*100).toFixed(1)}%"></div>
       <span class="bar-value">${p.n}</span>
-    </div>`).join("")}
-    </div>`;
+    </div>`).join("")}`;
 }
 
 // --- Manifest ---
@@ -313,7 +424,6 @@ async function renderManifest() {
     <div class="stat-row"><span class="stat-label">Holdout types</span><span class="stat-value">${(config.holdout_types || []).join(", ") || "none"}</span></div>`;
 
   document.getElementById("manifest-types").innerHTML = `<h3>Cancer Types (${(data.cancer_types||[]).length})</h3>
-    <div style="max-height:360px;overflow-y:auto">
     <table>
       <tr><th>Type</th><th>Site</th><th>Role</th><th>Train</th><th>Eval</th><th>Tiles</th></tr>
       ${(data.cancer_types||[]).map(ct => `<tr>
@@ -324,7 +434,7 @@ async function renderManifest() {
         <td>${ct.eval_slide_count || 0}</td>
         <td>${((ct.estimated_train_tiles||0)+(ct.estimated_eval_adjacent_tiles||0)+(ct.estimated_eval_holdout_tiles||0)).toLocaleString()}</td>
       </tr>`).join("")}
-    </table></div>`;
+    </table>`;
 }
 
 // --- Training ---
@@ -448,8 +558,8 @@ async function refresh() {
   el.textContent = "updating...";
   try {
     await Promise.all([
-      renderPipeline(), renderLive(), renderDataset(),
-      renderManifest(), renderTraining(), renderCheckpoints(),
+      renderPlanOverview(), renderPipeline(), renderLive(), renderVMs(),
+      renderDataset(), renderManifest(), renderTraining(), renderCheckpoints(),
     ]);
   } catch (e) { console.error("Refresh error:", e); }
   el.classList.remove("active");

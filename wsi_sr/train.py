@@ -517,11 +517,15 @@ def main():
         print("SSIMULACRA2: skipped (pip install ssimulacra2 or ssimulacra2-py)")
 
     # Compute baseline residual stats + visual metrics (bilinear/bicubic) for reference
-    print("\nBaseline stats (q80, val set):")
+    # Sample up to 20 val tiles to keep this fast (SSIM/Delta E are CPU-intensive)
+    max_baseline_samples = min(20, len(val_loader))
+    print(f"\nBaseline stats (q80, {max_baseline_samples} val samples):")
     baseline_stats = {"bilinear": [], "bicubic": []}
     baseline_metrics = {"bilinear": [], "bicubic": []}
     with torch.no_grad():
-        for lr_img, hr_img, _ in val_loader:
+        for bi, (lr_img, hr_img, _) in enumerate(val_loader):
+            if bi >= max_baseline_samples:
+                break
             hr_img = hr_img.to("cpu")
             bilinear_up = F.interpolate(lr_img, scale_factor=4, mode="bilinear", align_corners=False)
             baseline_stats["bilinear"].append(compute_residual_stats(bilinear_up, hr_img, jpeg_quality=80))
