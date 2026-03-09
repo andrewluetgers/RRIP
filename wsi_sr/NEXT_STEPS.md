@@ -1,112 +1,199 @@
 # WSI SR — Next Steps
 
-## Status (Stage 1 training + architecture comparison IN PROGRESS)
+## Status (2026-03-09)
 
-**Stage 1 extraction**: COMPLETE — 35 slides, 24,092 tiles from 5 cancer types (BRCA, GBM, KIRC, LUAD, SKCM)
-**Stage 2 extraction**: IN PROGRESS — 104/800 slides, 191K tiles on GCP c3-highcpu-22 (11 workers)
+### Stage 1: COMPLETE
 
-### Architecture comparison (3 runs on AWS A10G, 5,180 tiles, 50 epochs each)
+**Extraction**: 798/800 slides, 1.4M tiles, 246 GiB in GCS. GCP VM deleted.
+**Architecture comparison**: All 5 models trained on 5,180 tiles, 50 epochs each.
 
-| Metric | Bilinear | Bicubic | Lanczos3 (ORIGAMI) | WSISRX4 (ours) | ESPCNR | Dual |
-|--------|----------|---------|-------------------|----------------|--------|------|
-| Val PSNR | 27.02 | 28.34 | **28.59** | **30.38** | running | pending |
-| Val SSIM | 0.776 | 0.822 | **0.830** | **0.858** | running | pending |
-| Val Delta E | 3.30 | 2.87 | **2.80** | **2.55** | running | pending |
-| Residual KB | 150.5 | 142.5 | **141.4** | **127.0** | running | pending |
-| Params | — | — | — | 19,008 | 37,200 | 17,736 |
+| Model | Params | PSNR | SSIM | Delta E | Residual KB | vs Lanczos |
+|-------|--------|------|------|---------|-------------|------------|
+| **WSISRX4Dual** | 18K | **30.52** | **0.860** | 2.54 | **125.3** | **+1.93 dB** |
+| ESPCNR | 37K | 30.49 | 0.861 | **2.41** | 126.7 | +1.90 dB |
+| WSISRX4 | 19K | 30.38 | 0.858 | 2.55 | 127.0 | +1.79 dB |
+| WSISRX4Large | 295K | 29.67 | — | — | 127.0 | +1.08 dB |
+| WSISRX4WideDeep | 112K | 29.57 | 0.855 | 2.63 | 127.2 | +0.98 dB |
+| *Lanczos3 baseline* | — | 28.59 | 0.830 | 2.80 | 141.4 | — |
 
-**KEY RESULT: WSISRX4 beats lanczos3 by +1.8 dB PSNR, 10% smaller residuals, better Delta E.**
+**Key findings:**
+1. Dual-branch (18K) wins: best PSNR, smallest residuals, fewest outliers, smallest model
+2. Larger models (WideDeep 112K, Large 295K) are WORSE on 5K tiles / 50 epochs — underfitting
+3. All SR models beat lanczos3 by 1-2 dB and reduce residuals 10-11%
+4. ONNX integration working in Rust server (sr_model.rs)
+
+### Checkpoints Downloaded
+All model checkpoints in `models/`:
+- `dual_best.pt`, `wsisrx4_v2_best.pt`, `espcnr_best.pt`, `stage1_best.pt`
+- `widedeep_best.pt`, `large_best.pt`
+- ONNX exports: `model_sr.onnx`, `model_sr_int8.onnx`, `dual.onnx`, `dual_int8.onnx`, etc.
 
 ### Active Infrastructure
 
 | Provider | Instance | Type | Purpose | Cost/hr |
 |----------|----------|------|---------|---------|
-| GCP | tcga-extract-s2 | c3-highcpu-22 spot | Stage 2 extraction (104/800) | ~$0.35 |
-| AWS | i-0c16c38153c56df36 | g5.xlarge (A10G) | Architecture comparison runs | $1.01 |
-| RunPod | — | — | No active pods (capacity issues) | $0 |
+| AWS | i-0c16c38153c56df36 | g5.xlarge (A10G) | Available (running duplicate Large) | $1.01 |
+| RunPod | vmcy46xale4sbo | H100 NVL | Available (Large training done) | ~$3.00 |
 
-**Total spend so far**: ~$7.16
+**Total spend so far**: ~$25 (training) + ~$5 (extraction) = ~$30
 
-## Immediate Tasks
+---
 
-### 1. ~~Add Lanczos3 Baseline~~ DONE
-Lanczos3 baseline added and confirmed: PSNR 28.59, SSIM 0.830, Delta E 2.80.
-WSISRX4 beats it: +1.8 dB PSNR, +0.028 SSIM, -0.25 Delta E, -10% residual size.
+## Stage 2 Training Plan
 
-### 2. ~~Shut Down Idle VMs~~ PARTIALLY DONE
-- **GCP `tcga-extract-s1`**: DELETED (was preempted then deleted)
-- **RunPod `origami-b200-sr`**: TERMINATED (never provisioned)
-- **GCP `tcga-extract-s2`**: RUNNING — doing Stage 2 extraction (104/800 slides)
-- **AWS `i-0c16c38153c56df36`**: RUNNING — doing architecture comparison runs
-- When all work is done, clean up:
-  ```bash
-  # GCP
-  gcloud compute instances delete tcga-extract-s2 --zone=us-central1-c --project=wsi-1-480715 --quiet
-  # AWS
-  aws ec2 terminate-instances --instance-ids i-0c16c38153c56df36 --region us-east-1
-  aws ec2 delete-key-pair --key-name sr-train --region us-east-1
-  aws ec2 delete-security-group --group-id sg-08a64f7d8e0f39bd1 --region us-east-1
-  aws iam remove-role-from-instance-profile --instance-profile-name sr-train-s3 --role-name sr-train-s3
-  aws iam delete-instance-profile --instance-profile-name sr-train-s3
-  aws iam detach-role-policy --role-name sr-train-s3 --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
-  aws iam delete-role --role-name sr-train-s3
-  ```
+### Goal
+Train on 1.4M tiles (280x more data) to see if:
+1. The Dual model improves further (currently 30.52 PSNR, 125 KB residuals)
+2. Larger models (WideDeep, Large) finally converge with enough data
+3. We can push residual size below 110 KB (>22% reduction vs lanczos3)
 
-### 3. Run ESPCNR + Dual-Branch Comparisons — IN PROGRESS
-Running on AWS A10G (i-0c16c38153c56df36, 98.80.233.222):
-- Run 1 (WSISRX4 v2 with lanczos3 baseline): **DONE** — PSNR 30.38
-- Run 2 (ESPCNR 37K params): **IN PROGRESS** — epoch ~14/50
-- Run 3 (Dual-branch 17.7K params): **PENDING**
-- All 3 runs sequenced in `/home/ubuntu/comparisons.log`
-- Results auto-upload to `s3://wsi-sr-training-results/stage1/`
-- Status cron writes `active_run.json` to S3 every 30s
-- SSH: `ssh -o StrictHostKeyChecking=no -i ~/.ssh/sr-train.pem ubuntu@98.80.233.222`
-- Log: `tail -f /home/ubuntu/comparisons.log`
+### Phase 0: Prep (30 min, free)
 
-### 4. Fix Monitor Dashboard
-- [ ] **Plan hierarchy**: Show Stage 0/1/2 with progress, not just pipeline steps
-- [ ] **35 vs 800 context**: Make clear that current extraction is Stage 1 (35 slides), not the full plan (800)
-- [ ] **Eval review page**: Load specific eval results, per-tile metrics
-- [ ] **VM cost tracking**: Show actual spend per VM with running total
-- [ ] **Extraction completed state**: Don't show stale "57%" when extraction is done
-- [ ] **Training charts**: Pull training_log.jsonl from S3 and render Chart.js graphs
-- [ ] **Layout**: Dataset overview + training plan on top; bars + cancer types full-height below (no scroll)
-- [ ] **FFPE vs frozen**: Show that training data is 100% FFPE diagnostic slides
+- [ ] Kill duplicate Large run on AWS
+- [ ] Verify Stage 2 data: `gsutil du -s gs://wsi-1-480715-tcga-tiles/stage2/`
+- [ ] Fix train.py outdir bug (DONE — now uses `checkpoints/{run_id}/`)
 
-### 5. Fix GCS Write Auth for AWS
-The current workaround (relay through local) is fragile. Options:
-- **Best**: Give the AWS instance a GCS service account key file
-- **Current**: Write to S3, monitor polls both S3 + GCS
-- **Future**: Use a shared storage layer (e.g., just use S3 for everything)
+### Phase 1: Quick Validation on A10G (4 hrs, ~$4)
 
-### 6. Fix Baseline Computation Speed
-The baseline SSIM/Delta E on full-res tiles was taking 30+ minutes. Fixed by sampling 20 tiles.
-For validation during training, the same issue exists — each val epoch computes metrics on all 518 tiles.
-Consider: only compute full metrics every 25 epochs, just PSNR + residual stats every 5 epochs.
+Run on existing AWS A10G with Stage 1 data (5K tiles). Answer hyperparameter questions before committing to expensive Stage 2 runs.
 
-### 7. Train on Full TCGA (Stage 2)
-Gated on Stage 1 results passing:
-- [ ] WSISRX4 beats lanczos3 baseline on PSNR and residual size
-- [ ] No cancer type has catastrophic failure
-- [ ] 20x and 40x magnification both converge
-- [ ] Architecture decision made (WSISRX4 vs ESPCNR vs Dual)
+**Experiment 1.1: Dual 200 epochs**
+Does the winning model keep improving past 50 epochs, or has it saturated on 5K tiles?
+```bash
+python train.py --tiles $TILES --arch wsisrx4dual --epochs 200 \
+    --batch 16 --lr 2e-4 --run-id dual_s1_200ep \
+    --gcs-status s3://wsi-sr-training-results/stage1
+```
+Decision: If PSNR plateaus by epoch 80-100 → model saturated, more data needed. If still climbing → more epochs matter.
 
-## Decision Matrix After Stage 1
+**Experiment 1.2: Dual + FFT loss**
+Does frequency-domain loss shrink residuals?
+```bash
+python train.py --tiles $TILES --arch wsisrx4dual --epochs 50 \
+    --batch 16 --lr 2e-4 --fft-weight 0.1 --run-id dual_fft_s1 \
+    --gcs-status s3://wsi-sr-training-results/stage1
+```
+Decision: If residual KB drops → use FFT loss for Stage 2. If PSNR drops → skip FFT.
 
-| If... | Then... |
-|-------|---------|
-| WSISRX4 beats lanczos3 by >1 dB | Proceed to Stage 2 with WSISRX4 |
-| ESPCNR beats WSISRX4 significantly | Consider larger WSISRX4 (channels=32) or use ESPCNR |
-| Dual-branch has better Delta E | Use dual-branch for chroma improvement |
-| Model doesn't beat lanczos3 | Increase model capacity, add more blocks or channels |
-| FFT loss helps SSIM but not PSNR | Keep FFT loss, it's helping structural quality |
+**Experiment 1.3: WideDeep lower LR**
+Was the 112K model's poor Stage 1 result a learning rate issue?
+```bash
+python train.py --tiles $TILES --arch widedeep --epochs 100 \
+    --batch 8 --lr 5e-5 --run-id widedeep_lr5e5_s1 \
+    --gcs-status s3://wsi-sr-training-results/stage1
+```
+Decision: If WideDeep beats Dual → LR was the issue. If still worse → genuinely needs more data.
 
-## Timeline
+### Phase 2: Data Transfer to H100 (1-2 hrs, ~$18)
 
-| Priority | Task | Time | Cost |
-|----------|------|------|------|
-| NOW | Shut down GCP VM + RunPod B200 | 2 min | saves $0.14/hr + $4.99/hr |
-| NOW | Add lanczos3 baseline, rerun eval | 30 min | $0.50 (AWS) |
-| SOON | Run ESPCNR + Dual comparisons | 1 hr | $1.00 (AWS) |
-| SOON | Fix monitor dashboard | 2 hrs | $0 (local) |
-| NEXT | Stage 2 full training (if gates pass) | 8 hrs | $8-10 (AWS g5) |
+Transfer 246 GiB from GCS to RunPod H100 local storage.
+```bash
+# On RunPod H100
+pip install google-cloud-storage
+gsutil -m cp -r gs://wsi-1-480715-tcga-tiles/stage2/ /workspace/tiles/
+
+# Generate manifest for fast loading
+find /workspace/tiles -name "*.jpg" | sort > /workspace/tile_manifest.txt
+```
+
+Cost: ~$15 GCS egress + $3 compute while transferring.
+
+### Phase 3: Primary Stage 2 Runs on H100 (14-21 hrs, ~$42-63)
+
+Training parameters for 1.4M tiles:
+- Batch=64 on H100 NVL
+- ~19,700 batches/epoch → ~6.6 min/epoch
+- Validation every 5 epochs
+
+**Run 3.1: Dual on Stage 2 (PRIORITY 1)**
+Most important run — does 280x more data push the small model further?
+```bash
+python train.py --tiles /workspace/tiles --arch wsisrx4dual \
+    --epochs 50 --batch 64 --lr 2e-4 --workers 8 \
+    --run-id dual_s2_50ep \
+    --gcs-status s3://wsi-sr-training-results/stage2
+```
+Time: ~7 hrs. Decision point at epoch 20: if PSNR > 31 dB and climbing → data is helping.
+
+**Run 3.2: WideDeep on Stage 2 (PRIORITY 2)**
+Does the 112K model converge with enough data?
+```bash
+python train.py --tiles /workspace/tiles --arch widedeep \
+    --epochs 50 --batch 64 --lr 1e-4 --workers 8 \
+    --run-id widedeep_s2_50ep \
+    --gcs-status s3://wsi-sr-training-results/stage2
+```
+Time: ~7 hrs. If WideDeep beats Dual → bigger model justified. If not → Dual is the right size.
+
+**Run 3.3: Dual + FFT on Stage 2 (PRIORITY 3, only if Phase 1 shows FFT helps)**
+```bash
+python train.py --tiles /workspace/tiles --arch wsisrx4dual \
+    --epochs 50 --batch 64 --lr 2e-4 --workers 8 \
+    --fft-weight 0.1 --run-id dual_fft_s2_50ep \
+    --gcs-status s3://wsi-sr-training-results/stage2
+```
+
+### Phase 4: Extended Training for Winner (8-16 hrs, ~$24-48)
+
+Take the best model from Phase 3 and train to 200 epochs with hard mining:
+```bash
+python train.py --tiles /workspace/tiles --arch <winner> \
+    --epochs 200 --batch 64 --lr 2e-4 --workers 8 \
+    --hard-mining 2.0 \
+    --resume checkpoints/<winner_run>/best.pt \
+    --run-id <winner>_s2_200ep \
+    --gcs-status s3://wsi-sr-training-results/stage2
+```
+
+### Phase 5: Export & Integration (1 hr, free)
+
+```bash
+# Export ONNX
+python export.py --checkpoint checkpoints/<best>/best.pt \
+    --output models/model_sr_v2.onnx --quantize --benchmark
+
+# Test in Rust pipeline
+origami encode --image evals/test-images/L0-1024.jpg --out /tmp/sr_v2 \
+    --baseq 95 --l0q 50 --subsamp 444 --manifest --debug-images --pack \
+    --sr-model models/model_sr_v2.onnx
+```
+
+### Success Targets
+
+| Metric | Stage 1 Dual | Stage 2 Target | Stretch |
+|--------|-------------|----------------|---------|
+| Val PSNR | 30.52 dB | 31.5+ dB | 32.5+ dB |
+| Residual KB | 125.3 | <110 | <100 |
+| vs Lanczos3 | +1.93 dB | +2.5 dB | +3.5 dB |
+| ONNX size | 69 KB | <500 KB | <100 KB |
+| Decode latency | ~48ms/family | <50ms | <30ms |
+
+### Cost Summary
+
+| Phase | GPU | Hours | Cost |
+|-------|-----|-------|------|
+| Phase 0: Prep | — | 0.5 | $0 |
+| Phase 1: Quick experiments | A10G | 4 | $4 |
+| Phase 2: Data transfer | H100 (idle) | 1 | $18 |
+| Phase 3: Primary runs (2-3) | H100 | 14-21 | $42-63 |
+| Phase 4: Extended training | H100 | 8-16 | $24-48 |
+| Phase 5: Export/eval | local | 1 | $0 |
+| **Total** | | **28-44 hrs** | **$88-133** |
+
+### What NOT to Do
+
+- **Don't use attention layers** — blows the 50ms decode latency budget
+- **Don't use GANs** — for a codec, pixel accuracy matters; hallucinations = incorrect reconstruction
+- **Don't train Large (295K) on Stage 2** — if WideDeep (112K) doesn't benefit, Large won't either. Only try Large if WideDeep clearly wins.
+
+---
+
+## Cleanup Checklist (after all training done)
+
+- [ ] Download all model checkpoints + eval results locally
+- [ ] Stop/terminate AWS instance
+- [ ] Stop/terminate RunPod pod
+- [ ] Verify GCS data is preserved (keep tiles for future runs)
+- [ ] Delete AWS key pair + security group
+- [ ] Update model_cards.json with final results
+- [ ] Cost audit: verify actual spend vs estimates

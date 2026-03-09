@@ -1,0 +1,250 @@
+{
+  "models": [
+    {
+      "file": "wsisrx4_v2_best.pt",
+      "architecture": "WSISRX4",
+      "description": "RGB single-branch 4x SR with collapsible blocks and bilinear global residual",
+      "params_training": 20688,
+      "params_collapsed": 19008,
+      "size_collapsed_kb": 74.2,
+      "y_channels": 16,
+      "y_blocks": 5,
+      "receptive_field": "15x15",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1 (5 cancer types: BRCA, GBM, KIRC, LUAD, SKCM)",
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 16,
+        "lr": 2e-4,
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G",
+        "time_per_epoch_s": 20.7
+      },
+      "eval": {
+        "val_psnr": 30.38,
+        "val_mse": 81.6,
+        "val_ssim": 0.8584,
+        "val_delta_e": 2.55,
+        "residual_kb": 127.0,
+        "max_deviation": 79,
+        "p99_deviation": 26.2,
+        "outlier_pct_gt20": 4.41
+      },
+      "baselines": {
+        "lanczos3": {"psnr": 28.59, "ssim": 0.830, "delta_e": 2.80, "residual_kb": 141.4},
+        "bicubic": {"psnr": 28.34, "ssim": 0.822, "delta_e": 2.87, "residual_kb": 142.5},
+        "bilinear": {"psnr": 27.02, "ssim": 0.776, "delta_e": 3.30, "residual_kb": 150.5}
+      },
+      "notes": "First successful SR model. Beats lanczos3 by +1.8 dB PSNR, 10% smaller residuals."
+    },
+    {
+      "file": "espcnr_best.pt",
+      "architecture": "ESPCNR",
+      "description": "Classic ESPCN with global residual (bilinear upsample + correction). 3 conv layers with tanh activation.",
+      "params": 37200,
+      "size_kb": 145.3,
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1 (5 cancer types: BRCA, GBM, KIRC, LUAD, SKCM)",
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 16,
+        "lr": 2e-4,
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G",
+        "time_per_epoch_s": 20.1
+      },
+      "eval": {
+        "val_psnr": 30.49,
+        "val_mse": 80.4,
+        "val_ssim": 0.8608,
+        "val_delta_e": 2.41,
+        "residual_kb": 126.7,
+        "max_deviation": 77,
+        "p99_deviation": 26.5,
+        "outlier_pct_gt20": 4.57
+      },
+      "notes": "Best Delta E (2.41) and SSIM (0.861). But 2x params vs WSISRX4 for only +0.11 dB. Not collapsible."
+    },
+    {
+      "file": "dual_best.pt",
+      "architecture": "WSISRX4Dual",
+      "description": "Dual-branch 4x SR: heavy Y branch (16ch, 5 blocks) + lightweight CbCr branch (8ch, 2 blocks). RGB in/out with internal YCbCr.",
+      "params_training": 19624,
+      "params_collapsed": 17736,
+      "size_collapsed_kb": 69.3,
+      "y_channels": 16,
+      "y_blocks": 5,
+      "c_channels": 8,
+      "c_blocks": 2,
+      "receptive_field": "15x15",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1 (5 cancer types: BRCA, GBM, KIRC, LUAD, SKCM)",
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 16,
+        "lr": 2e-4,
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G",
+        "time_per_epoch_s": 22.2
+      },
+      "eval": {
+        "val_psnr": 30.52,
+        "val_mse": 79.1,
+        "val_ssim": 0.8604,
+        "val_delta_e": 2.54,
+        "residual_kb": 125.3,
+        "max_deviation": 77,
+        "p99_deviation": 25.6,
+        "outlier_pct_gt20": 4.13
+      },
+      "notes": "Stage 1 winner. Best PSNR (30.52), smallest residuals (125.3 KB), fewest outliers (4.13%). Smallest model at 18K params."
+    },
+    {
+      "file": "stage1_best.pt",
+      "architecture": "WSISRX4",
+      "description": "Earlier WSISRX4 training run (same architecture as wsisrx4_v2_best.pt, earlier training session).",
+      "params_training": 20688,
+      "params_collapsed": 19008,
+      "size_collapsed_kb": 74.2,
+      "y_channels": 16,
+      "y_blocks": 5,
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1",
+        "tiles": 5180,
+        "epochs": 50
+      },
+      "eval": {
+        "val_psnr": 30.38,
+        "val_ssim": 0.858,
+        "val_delta_e": 2.55,
+        "residual_kb": 127.0
+      },
+      "notes": "Predecessor to wsisrx4_v2_best.pt. Same results — confirms reproducibility."
+    },
+    {
+      "file": "model_sr.onnx",
+      "architecture": "WSISRX4 (collapsed, ONNX)",
+      "description": "ONNX export of collapsed WSISRX4 for Rust inference via ort crate. Float32.",
+      "params_collapsed": 19008,
+      "size_kb": 97,
+      "format": "ONNX",
+      "precision": "float32",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "notes": "Used in server/src/core/sr_model.rs. SR pool=8 matches lanczos3 throughput. Quality within 0.1 dB of lanczos3+residual."
+    },
+    {
+      "file": "model_sr_int8.onnx",
+      "architecture": "WSISRX4 (collapsed, ONNX, INT8)",
+      "description": "INT8 quantized ONNX export for faster inference. ~2x speedup vs float32.",
+      "params_collapsed": 19008,
+      "size_kb": 40,
+      "format": "ONNX",
+      "precision": "int8",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "notes": "Quantized from model_sr.onnx. Fits comfortably in L1 cache."
+    },
+    {
+      "file": "widedeep_best.pt",
+      "architecture": "WSISRX4WideDeep",
+      "description": "Wide+Deep dual-branch 4x SR: Y(32ch, 10 blocks) + CbCr(16ch, 4 blocks). 6x params vs Dual.",
+      "params_collapsed": 111648,
+      "size_collapsed_kb": 436.1,
+      "y_channels": 32,
+      "y_blocks": 10,
+      "c_channels": 16,
+      "c_blocks": 4,
+      "receptive_field": "25x25",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1 (5 cancer types: BRCA, GBM, KIRC, LUAD, SKCM)",
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 16,
+        "lr": 2e-4,
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G",
+        "time_per_epoch_s": 23.0
+      },
+      "eval": {
+        "val_psnr": 29.57,
+        "val_mse": 92.3,
+        "val_ssim": 0.8545,
+        "val_delta_e": 2.63,
+        "residual_kb": 127.2,
+        "max_deviation": 83,
+        "p99_deviation": 26.5,
+        "outlier_pct_gt20": 4.53
+      },
+      "notes": "6x larger than Dual but WORSE by -0.95 dB PSNR on 50 epochs. Underfitting — needs more data or epochs. Not worth the size tradeoff on Stage 1 data."
+    },
+    {
+      "file": "large_best.pt",
+      "architecture": "WSISRX4Large",
+      "description": "Large dual-branch 4x SR: Y(48ch, 12 blocks) + CbCr(24ch, 6 blocks). 17x params vs Dual.",
+      "params_collapsed": 295464,
+      "size_collapsed_kb": 1154.2,
+      "y_channels": 48,
+      "y_blocks": 12,
+      "c_channels": 24,
+      "c_blocks": 6,
+      "receptive_field": "29x29",
+      "input_shape": [1, 3, 256, 256],
+      "output_shape": [1, 3, 1024, 1024],
+      "training": {
+        "stage": 1,
+        "dataset": "TCGA Stage 1 (5 cancer types: BRCA, GBM, KIRC, LUAD, SKCM)",
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 64,
+        "lr": 2e-4,
+        "scheduler": "cosine",
+        "gpu": "NVIDIA H100 NVL",
+        "time_per_epoch_s": 16.4
+      },
+      "eval": {
+        "val_psnr": 29.67,
+        "val_mse": 89.5,
+        "val_ssim": null,
+        "val_delta_e": null,
+        "residual_kb": 127.0,
+        "max_deviation": 82,
+        "p99_deviation": 26.2,
+        "outlier_pct_gt20": 4.39
+      },
+      "notes": "17x larger than Dual but WORSE by -0.85 dB PSNR on 50 epochs. Still converging at epoch 50. Better than WideDeep but far from justifying 1.1 MB model size on Stage 1 data."
+    }
+  ],
+  "stage1_comparison": {
+    "dataset": "TCGA Stage 1: 5,180 tiles from 5 cancer types (BRCA, GBM, KIRC, LUAD, SKCM)",
+    "lanczos3_baseline_psnr": 28.59,
+    "ranking_by_psnr": [
+      {"model": "WSISRX4Dual", "psnr": 30.52, "delta_vs_lanczos": "+1.93 dB", "params": "18K"},
+      {"model": "ESPCNR", "psnr": 30.49, "delta_vs_lanczos": "+1.90 dB", "params": "37K"},
+      {"model": "WSISRX4", "psnr": 30.38, "delta_vs_lanczos": "+1.79 dB", "params": "19K"},
+      {"model": "WSISRX4Large", "psnr": 29.67, "delta_vs_lanczos": "+1.08 dB", "params": "295K"},
+      {"model": "WSISRX4WideDeep", "psnr": 29.57, "delta_vs_lanczos": "+0.98 dB", "params": "112K"}
+    ],
+    "ranking_by_residual_kb": [
+      {"model": "WSISRX4Dual", "residual_kb": 125.3, "reduction_vs_lanczos": "11.4%"},
+      {"model": "ESPCNR", "residual_kb": 126.7, "reduction_vs_lanczos": "10.4%"},
+      {"model": "WSISRX4", "residual_kb": 127.0, "reduction_vs_lanczos": "10.2%"},
+      {"model": "WSISRX4Large", "residual_kb": 127.0, "reduction_vs_lanczos": "10.2%"},
+      {"model": "WSISRX4WideDeep", "residual_kb": 127.2, "reduction_vs_lanczos": "10.0%"}
+    ],
+    "conclusion": "WSISRX4Dual (18K params) decisively wins Stage 1. Larger models (WideDeep 112K, Large 295K) are WORSE — they underfit on 5K tiles in 50 epochs. The small Dual model converges faster and generalizes better on limited data. Larger models may benefit from Stage 2 (1.4M tiles) or more epochs."
+  }
+}

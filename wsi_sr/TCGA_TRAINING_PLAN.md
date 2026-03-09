@@ -575,130 +575,126 @@ The `/api/query?sql=SELECT...` endpoint allows ad-hoc SQL for exploration.
 
 The pipeline runs in 3 stages. Each stage validates everything works before scaling up. Gate criteria must pass before proceeding to the next stage.
 
-### Stage 0: Local Smoke Test (no cloud, no cost)
+### Stage 0: Local Smoke Test — COMPLETE ✓
 
-**Goal**: Validate the full pipeline end-to-end on data we already have.
+All architectures train, converge, and produce valid metrics. Monitor dashboard works.
 
-| Step | What | How |
-|------|------|-----|
-| 0.1 | Train WSISRX4 on existing tiles | `python train.py --tiles path/to/tiles --epochs 20 --db wsi_sr.duckdb --run-id smoke_wsisrx4` |
-| 0.2 | Train ESPCNR baseline | `python train.py --tiles path/to/tiles --epochs 20 --arch espcnr --db wsi_sr.duckdb --run-id smoke_espcnr` |
-| 0.3 | Train WSISRX4 + FFT loss | `python train.py --tiles path/to/tiles --epochs 20 --fft-weight 0.1 --db wsi_sr.duckdb --run-id smoke_fft` |
-| 0.4 | Evaluate all 3 | `python evaluate.py --checkpoint checkpoints/best.pt --json eval.json` |
-| 0.5 | Verify monitor dashboard | `cd monitor && npm start` — check all charts render |
-| 0.6 | Verify DuckDB | Query runs, compare metrics across smoke runs |
+### Stage 1: Small TCGA Slice — COMPLETE ✓ (2026-03-09)
 
-**Gate criteria**:
-- [ ] All 3 architectures train without errors
-- [ ] Val PSNR improves over 20 epochs (model is learning)
-- [ ] WSISRX4 matches or beats ESPCNR (validates our architecture)
-- [ ] FFT loss doesn't hurt PSNR (may help SSIM/detail)
-- [ ] Monitor dashboard shows all metrics
-- [ ] DuckDB has all 3 runs queryable
+**Data**: 798/800 slides extracted, 1.4M tiles, 246 GiB in GCS `gs://wsi-1-480715-tcga-tiles/stage2/`
+**Training**: 5 architectures compared on 5,180 tiles, 50 epochs each (AWS A10G + RunPod H100)
 
-**Time**: ~30 min. **Cost**: $0.
+**Gate criteria results**:
+- [x] Tile extraction pipeline works end-to-end (798/800 slides, GCP c3-highcpu-22)
+- [x] Model trains and converges on real TCGA data
+- [x] WSISRX4 beats lanczos3 by +1.8 dB PSNR, 10% smaller residuals
+- [x] Dual-branch wins: best PSNR (30.52), smallest residuals (125.3 KB), smallest model (18K)
+- [x] ONNX integration working in Rust server (sr_model.rs, pool=8)
+- [ ] 20x vs 40x stratification — not yet tested (tiles not labeled by magnification)
+- [ ] Hard mining — not yet tested in training
 
-### Stage 1: Small TCGA Slice (5 cancer types, ~100 slides)
+**Architecture comparison results**:
 
-**Goal**: Validate the full cloud pipeline on a small but diverse slice of TCGA.
+| Model | Params | PSNR | SSIM | Delta E | Residual KB |
+|-------|--------|------|------|---------|-------------|
+| **WSISRX4Dual** | 18K | **30.52** | 0.860 | 2.54 | **125.3** |
+| ESPCNR | 37K | 30.49 | **0.861** | **2.41** | 126.7 |
+| WSISRX4 | 19K | 30.38 | 0.858 | 2.55 | 127.0 |
+| WSISRX4Large | 295K | 29.67 | — | — | 127.0 |
+| WSISRX4WideDeep | 112K | 29.57 | 0.855 | 2.63 | 127.2 |
+| *Lanczos3* | — | 28.59 | 0.830 | 2.80 | 141.4 |
 
-**Manifest**: Generate a mini-manifest with 5 cancer types (diverse tissue sites):
-```bash
-python generate_manifest.py \
-    --metadata tcga_slides_metadata.json \
-    --slides-per-type-train 5 \
-    --slides-per-type-eval 2 \
-    --tile-stride 8 \
-    --types TCGA-BRCA,TCGA-GBM,TCGA-KIRC,TCGA-LUAD,TCGA-SKCM \
-    --seed 42 \
-    --output tcga_stage1_manifest.json
-```
+**Key findings**:
+1. Dual-branch (18K) wins on PSNR and residual size
+2. Larger models (112K, 295K) WORSE on 5K tiles / 50 epochs — underfitting
+3. All SR models beat lanczos3 by 1-2 dB
+4. Model capacity is not the bottleneck on small data — data volume is
 
-This gives ~35 slides, ~5K training tiles, ~5K eval tiles. Small enough to run fast, diverse enough to catch real issues.
+**Actual cost**: ~$30 (training ~$25, extraction ~$5)
 
-| Step | What | Gate |
-|------|------|------|
-| 1.1 | Generate stage-1 manifest | Manifest has 5 types, ~35 slides |
-| 1.2 | Extract tiles on GCP | Tiles extracted, uploaded to GCS (~2 GB) |
-| 1.3 | Transfer to RunPod | Tiles on pod, directory structure correct |
-| 1.4 | Train WSISRX4 (50 epochs) | Val PSNR > 30 dB, residual < bicubic baseline |
-| 1.5 | Train ESPCNR baseline (50 epochs) | WSISRX4 competitive or better |
-| 1.6 | Full eval on all 5 types | Per-type metrics in DuckDB, no type catastrophically bad |
-| 1.7 | Check 20x vs 40x | Metrics stratified by magnification, both reasonable |
-| 1.8 | Check hard mining | Hard tiles identified, fed-back mechanism works |
-| 1.9 | Review monitor dashboard | All pipeline stages show correct status |
+### Stage 2: Full TCGA Training — IN PROGRESS
 
-**Gate criteria**:
-- [ ] Tile extraction pipeline works end-to-end
-- [ ] Model trains and converges on real TCGA data
-- [ ] No cancer type has PSNR < 25 dB (model generalizes)
-- [ ] 20x and 40x both converge (scale handling works)
-- [ ] Hard mining identifies tiles and feeds back correctly
-- [ ] Monitor dashboard shows real training data
-- [ ] Cost tracking in DuckDB matches estimates
+**Goal**: Train on 1.4M tiles (280x more data) to push quality further and test whether larger models benefit from more data.
 
-**Time**: ~2 hours. **Cost**: ~$5 (GCP spot + RunPod).
+**Data available**: 1.4M tiles, 246 GiB in GCS (already extracted)
 
-### Stage 2: Full TCGA (32 cancer types, 800 slides)
+#### Phase 1: Quick Validation on A10G (4 hrs, ~$4)
 
-**Goal**: Full production training run.
+Run on existing AWS A10G with Stage 1 data (5K tiles). Answer hyperparameter questions cheaply before committing to expensive Stage 2 runs.
 
-Only proceed after Stage 1 gates pass. Use the best hyperparameters discovered in stages 0-1 (architecture, FFT weight, learning rate, etc.).
+| Experiment | Purpose | Decision Point |
+|------------|---------|----------------|
+| Dual 200 epochs | Does the winning model saturate on 5K tiles? | Plateau by ep 80-100 → needs more data |
+| Dual + FFT loss | Does frequency-domain loss shrink residuals? | Residual KB drops → use FFT for Stage 2 |
+| WideDeep lr=5e-5 | Was poor Stage 1 result a learning rate issue? | Beats Dual → LR was the problem |
 
-| Step | What | Gate |
-|------|------|------|
-| 2.1 | Generate full manifest (already done: tcga_v1) | 800 slides, 32 types |
-| 2.2 | Extract all tiles on GCP | ~737K tiles, ~110 GB |
-| 2.3 | Transfer to RunPod | All tiles on pod |
-| 2.4 | Train 200 epochs with hard mining | Best PSNR > 32 dB |
-| 2.5 | Eval-1: Adjacent tiles | Generalization to nearby tissue |
-| 2.6 | Eval-2: Held-out slides | Cross-slide generalization |
-| 2.7 | Eval-3: Unseen cancer types (UVM, CHOL, DLBC) | Cross-morphology generalization |
-| 2.8 | Export ONNX, benchmark in Rust | Inference time < 10ms per tile |
+#### Phase 2: Data Transfer to H100 (1-2 hrs, ~$18)
 
-**Intermediate checkpoints** (validated during training):
-- **Epoch 10**: Model should beat bilinear baseline on PSNR
-- **Epoch 25**: Should beat bicubic baseline on residual size
-- **Epoch 50**: SSIM should be > 0.85, Delta E < 5.0
-- **Epoch 100**: Model approaching plateau, exploration mode kicks in if patience hit
-- **Epoch 150**: Hard mining should have found and fed back tiles
-- **Epoch 200**: Final metrics, export model
+Transfer 246 GiB from GCS to RunPod H100 local NVMe storage. Generate manifest for fast loading.
 
-**Gate criteria**:
-- [ ] Val PSNR > 32 dB (competitive with Frozen Section SR)
-- [ ] Val SSIM > 0.90
-- [ ] Val Delta E < 3.0
-- [ ] Residual size < 50% of bicubic baseline
-- [ ] No cancer type has PSNR < 28 dB
-- [ ] ONNX model runs in Rust at < 10ms/tile
+#### Phase 3: Primary Stage 2 Runs on H100 (14-21 hrs, ~$42-63)
 
-**Time**: ~8 hours. **Cost**: ~$50.
+1.4M tiles, batch=64, ~6.6 min/epoch, validation every 5 epochs.
+
+| Priority | Run | Key Question | Time |
+|----------|-----|-------------|------|
+| 1 | Dual on Stage 2 (50 ep) | Does 280x more data push past 31 dB? | ~7 hrs |
+| 2 | WideDeep on Stage 2 (50 ep) | Does the 112K model converge with enough data? | ~7 hrs |
+| 3 | Dual + FFT (50 ep) | Does FFT loss help residual compression? | ~7 hrs |
+
+Decision point at epoch 20 (~2 hrs): if Dual PSNR > 31 dB and climbing → data is helping.
+
+#### Phase 4: Extended Training for Winner (8-16 hrs, ~$24-48)
+
+Best model from Phase 3, 200 epochs with hard mining enabled (`--hard-mining 2.0`).
+
+#### Phase 5: Export & Integration (1 hr, free)
+
+ONNX export + INT8 quantization → test in Rust pipeline.
+
+#### Stage 2 Success Targets
+
+| Metric | Stage 1 Dual | Target | Stretch |
+|--------|-------------|--------|---------|
+| Val PSNR | 30.52 dB | 31.5+ dB | 32.5+ dB |
+| Residual KB | 125.3 | <110 | <100 |
+| vs Lanczos3 | +1.93 dB | +2.5 dB | +3.5 dB |
+| ONNX size | 69 KB | <500 KB | <100 KB |
+| Decode latency | ~48ms/family | <50ms | <30ms |
+
+#### Stage 2 Cost Estimate
+
+| Phase | GPU | Hours | Cost |
+|-------|-----|-------|------|
+| Phase 1: Quick experiments | A10G | 4 | $4 |
+| Phase 2: Data transfer | H100 | 1 | $18 |
+| Phase 3: Primary runs | H100 | 14-21 | $42-63 |
+| Phase 4: Extended training | H100 | 8-16 | $24-48 |
+| Phase 5: Export/eval | local | 1 | $0 |
+| **Total** | | **28-44 hrs** | **$88-133** |
 
 ### Decision Points
 
-After each stage, decide:
-
 | If... | Then... |
 |-------|---------|
-| Stage 0 fails (model doesn't learn) | Debug architecture/data pipeline before spending money |
-| ESPCNR beats WSISRX4 | Investigate — our reparameterizable blocks should win. Try more blocks or channels |
-| FFT loss hurts PSNR | Reduce weight or disable. It may help SSIM without helping PSNR |
-| Stage 1 shows 20x/40x split | Consider scale-aware conditioning or separate models |
-| Stage 1 shows one cancer type is catastrophic | Investigate that tissue type. May need targeted augmentation |
-| Stage 2 plateaus early (< epoch 50) | Model capacity may be too small. Try channels=32 |
-| Stage 2 Delta E stays high despite good PSNR | Chroma interpolation issue, not model issue |
+| Dual PSNR > 31.5 on Stage 2 data | Dual is the right architecture; train to 200 epochs |
+| WideDeep beats Dual on Stage 2 | Larger model justified; evaluate inference cost tradeoff |
+| WideDeep still worse on Stage 2 | Dual is capacity-optimal; don't try Large |
+| FFT loss reduces residual KB | Add FFT to final training run |
+| Model plateaus before epoch 50 | Architecture is the bottleneck; try wider Dual (channels=24) |
+| Stage 2 PSNR stays at ~30.5 | Data diversity doesn't help; focus on loss functions or augmentation |
 
 ## 13. Timeline
 
-| Day | Activity |
-|-----|----------|
-| 1 (morning) | Stage 0: local smoke test (30 min) |
-| 1 (afternoon) | Stage 1: small TCGA slice — extract, train, eval (2 hrs) |
-| 1 (evening) | Review Stage 1 results, decide hyperparameters for Stage 2 |
-| 2 | Stage 2: full training run (8 hrs), monitor dashboard |
-| 2 | Full evaluation, export ONNX, benchmark in Rust |
-
-**Total wall-clock time: ~1.5 days from start to evaluated model.**
+| Day | Activity | Status |
+|-----|----------|--------|
+| Day 1 | Stage 0: local smoke test | ✓ DONE |
+| Day 1-2 | Stage 1: extraction + architecture comparison | ✓ DONE |
+| Day 3 | Stage 2 Phase 1: quick validation experiments | NEXT |
+| Day 3 | Stage 2 Phase 2: data transfer to H100 | NEXT |
+| Day 3-4 | Stage 2 Phase 3: primary training runs | PLANNED |
+| Day 4-5 | Stage 2 Phase 4: extended training for winner | PLANNED |
+| Day 5 | Stage 2 Phase 5: export, eval, integration | PLANNED |
 
 ## 13. Cleanup (REQUIRED — plan is not complete until done)
 

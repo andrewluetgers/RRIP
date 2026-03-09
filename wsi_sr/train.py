@@ -392,6 +392,10 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
+    # Auto-namespace outdir by run_id to prevent overwriting between runs
+    if args.run_id and args.outdir == "checkpoints":
+        args.outdir = os.path.join("checkpoints", args.run_id)
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
