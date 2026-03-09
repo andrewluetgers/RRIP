@@ -248,8 +248,52 @@ L2 JPEG → SR model → SR prediction (1024×1024)
 
 This gives the best of both worlds: the SR model handles most of the reconstruction, and a lightweight residual corrects the remaining error for tiles where the model struggles.
 
+## Model Variants
+
+### WSISRX4 (baseline, RGB)
+- 19,008 params collapsed, 74.2 KB float32
+- Input: RGB 256×256 → Output: RGB 1024×1024
+- Global residual: bilinear upsample + model correction
+- Stage 1 results: PSNR 30.38, SSIM 0.858, Delta E 2.55
+
+### WSISRX4Dual (Y-heavy + CbCr-light)
+- 17,736 params collapsed, 69.3 KB float32
+- Internal: RGB → YCbCr, Y branch (5 blocks, 16ch) + CbCr branch (2 blocks, 8ch) → YCbCr → RGB
+- Allocates capacity to luma (residual quality) while learning chroma (Delta E)
+- Potentially better Delta E at same or smaller model size
+
+### ESPCNR (comparison baseline)
+- 37,200 params, 145.3 KB float32
+- Classic ESPCN + global residual
+- 2x larger than our models — if it doesn't beat WSISRX4, our architecture wins
+
+### Rust Integration Notes
+
+For the dual-branch model, the ONNX graph handles the YCbCr conversion internally — the Rust code just feeds RGB and gets RGB back. No special handling needed. The ONNX export includes the `rgb_to_ycbcr` and `ycbcr_to_rgb` ops as part of the graph.
+
+For INT8 quantization, the dual-branch Y path benefits more from quantization (luma is less sensitive to quantization noise than chroma). Consider quantizing Y branch to INT8 and keeping CbCr branch at float32 — mixed precision.
+
+## Decode Integration Strategy
+
+### Phase 1: Side-by-side comparison
+- Add `--sr-model` flag to `origami serve` and `origami decode`
+- When both SR model and residual packs exist, run both and compare quality
+- Log per-tile PSNR difference: SR-only vs residual-corrected
+
+### Phase 2: SR-only mode
+- For slides where SR quality is sufficient (PSNR > threshold), skip residuals entirely
+- Zero storage cost per family — only the L2 baseline JPEG
+- Massive storage reduction for the entire pyramid
+
+### Phase 3: Hybrid mode
+- SR model provides the base prediction
+- Lightweight residual corrects only where SR is wrong
+- Residuals become much smaller (SR catches most of the detail)
+- Best quality with minimal storage
+
 ## Dependencies
 
 - `ort` crate v2.x — Rust bindings for ONNX Runtime
 - ONNX Runtime 1.17+ — system library or auto-downloaded
 - Trained ONNX model — `wsi_sr/model_sr.onnx` (77 KB) or `model_sr_int8.onnx` (32 KB)
+- For dual-branch: same ONNX format, YCbCr ops baked into graph
