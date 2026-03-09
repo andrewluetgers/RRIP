@@ -1,11 +1,14 @@
 """
 Reparameterizable models for WSI tile enhancement.
 
-Two architectures:
-  WSISRX4:      4x super-resolution (256x256 → 1024x1024)
-  WSIEnhanceNet: Same-resolution refinement (1024x1024 → 1024x1024)
+Architectures (all 4x SR: 256x256 → 1024x1024):
+  WSISRX4:         RGB, single branch (19K params collapsed)
+  WSISRX4Dual:     Y-heavy + CbCr-light dual branch (18K params collapsed)
+  WSISRX4WideDeep: Scaled dual branch, 32ch Y/10blk + 16ch CbCr/4blk (120K collapsed)
+  WSISRX4Large:    Large dual branch, 48ch Y/12blk + 24ch CbCr/6blk (290K collapsed)
+  WSIEnhanceNet:   Same-resolution refinement (1024x1024 → 1024x1024)
 
-Both use collapsible linear blocks:
+All use collapsible linear blocks:
   Training mode:  multi-branch blocks (3x3 + 1x1 + identity + BN) for better learning
   Inference mode: collapsed to plain 3x3 conv + ReLU stack for maximum speed
 
@@ -224,6 +227,130 @@ class WSISRX4Dual(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Scaled dual-branch variants
+# ---------------------------------------------------------------------------
+
+class WSISRX4WideDeep(nn.Module):
+    """Wide+Deep dual-branch 4x SR.
+
+    Scaled-up WSISRX4Dual with more channels and deeper networks.
+    ~120K collapsed params, 469 KB float32. Fits in L2 cache.
+
+    Y branch:    1→32 channels, 10 CollapsibleBlocks → pixel_shuffle(4)
+    CbCr branch: 2→16 channels, 4 CollapsibleBlocks → pixel_shuffle(4)
+
+    Receptive field: 25×25 (Y branch), captures nuclei + surrounding context.
+    Estimated inference: ~25ms on AVX2 (within 48ms lanczos3 budget).
+    """
+
+    def __init__(self, y_channels: int = 32, y_blocks: int = 10,
+                 c_channels: int = 16, c_blocks: int = 4):
+        super().__init__()
+        # Y branch (wide + deep)
+        self.y_head = nn.Sequential(
+            nn.Conv2d(1, y_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.y_body = nn.Sequential(
+            *[CollapsibleBlock(y_channels) for _ in range(y_blocks)]
+        )
+        self.y_tail = nn.Conv2d(y_channels, 1 * 16, 3, padding=1)  # 1 * 4^2
+
+        # CbCr branch (moderate)
+        self.c_head = nn.Sequential(
+            nn.Conv2d(2, c_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.c_body = nn.Sequential(
+            *[CollapsibleBlock(c_channels) for _ in range(c_blocks)]
+        )
+        self.c_tail = nn.Conv2d(c_channels, 2 * 16, 3, padding=1)  # 2 * 4^2
+
+        self.shuffle = nn.PixelShuffle(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        ycbcr = rgb_to_ycbcr(x)
+        y_in = ycbcr[:, 0:1]
+        cbcr_in = ycbcr[:, 1:3]
+
+        y_base = F.interpolate(y_in, scale_factor=4, mode="bilinear", align_corners=False)
+        cbcr_base = F.interpolate(cbcr_in, scale_factor=4, mode="bilinear", align_corners=False)
+
+        hy = self.y_head(y_in)
+        hy = self.y_body(hy)
+        hy = self.shuffle(self.y_tail(hy))
+        y_out = y_base + hy
+
+        hc = self.c_head(cbcr_in)
+        hc = self.c_body(hc)
+        hc = self.shuffle(self.c_tail(hc))
+        cbcr_out = cbcr_base + hc
+
+        ycbcr_out = torch.cat([y_out, cbcr_out], dim=1)
+        return ycbcr_to_rgb(ycbcr_out)
+
+
+class WSISRX4Large(nn.Module):
+    """Large dual-branch 4x SR.
+
+    Maximum capacity within the lanczos3 decode latency budget.
+    ~290K collapsed params, 1.1 MB float32. Fits in L2/L3 cache.
+
+    Y branch:    1→48 channels, 12 CollapsibleBlocks → pixel_shuffle(4)
+    CbCr branch: 2→24 channels, 6 CollapsibleBlocks → pixel_shuffle(4)
+
+    Receptive field: 29×29 (Y branch), captures small tissue structures.
+    Estimated inference: ~50ms on AVX2 (matches lanczos3 budget).
+    """
+
+    def __init__(self, y_channels: int = 48, y_blocks: int = 12,
+                 c_channels: int = 24, c_blocks: int = 6):
+        super().__init__()
+        # Y branch (large)
+        self.y_head = nn.Sequential(
+            nn.Conv2d(1, y_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.y_body = nn.Sequential(
+            *[CollapsibleBlock(y_channels) for _ in range(y_blocks)]
+        )
+        self.y_tail = nn.Conv2d(y_channels, 1 * 16, 3, padding=1)
+
+        # CbCr branch (moderate-large)
+        self.c_head = nn.Sequential(
+            nn.Conv2d(2, c_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.c_body = nn.Sequential(
+            *[CollapsibleBlock(c_channels) for _ in range(c_blocks)]
+        )
+        self.c_tail = nn.Conv2d(c_channels, 2 * 16, 3, padding=1)
+
+        self.shuffle = nn.PixelShuffle(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        ycbcr = rgb_to_ycbcr(x)
+        y_in = ycbcr[:, 0:1]
+        cbcr_in = ycbcr[:, 1:3]
+
+        y_base = F.interpolate(y_in, scale_factor=4, mode="bilinear", align_corners=False)
+        cbcr_base = F.interpolate(cbcr_in, scale_factor=4, mode="bilinear", align_corners=False)
+
+        hy = self.y_head(y_in)
+        hy = self.y_body(hy)
+        hy = self.shuffle(self.y_tail(hy))
+        y_out = y_base + hy
+
+        hc = self.c_head(cbcr_in)
+        hc = self.c_body(hc)
+        hc = self.shuffle(self.c_tail(hc))
+        cbcr_out = cbcr_base + hc
+
+        ycbcr_out = torch.cat([y_out, cbcr_out], dim=1)
+        return ycbcr_to_rgb(ycbcr_out)
+
+
+# ---------------------------------------------------------------------------
 # Enhance model: 1024x1024 → 1024x1024
 # ---------------------------------------------------------------------------
 
@@ -334,7 +461,7 @@ def _collapse_sequential(seq: nn.Sequential) -> nn.Sequential:
 def collapse_model(model: nn.Module) -> nn.Module:
     """Collapse all multi-branch blocks to plain convs for fast inference."""
     collapsed = copy.deepcopy(model)
-    if isinstance(model, WSISRX4Dual):
+    if isinstance(model, (WSISRX4Dual, WSISRX4WideDeep, WSISRX4Large)):
         collapsed.y_body = _collapse_sequential(collapsed.y_body)
         collapsed.c_body = _collapse_sequential(collapsed.c_body)
     elif hasattr(collapsed, 'body'):
@@ -413,9 +540,41 @@ if __name__ == "__main__":
 
     print()
     print("=" * 60)
+    print("Wide+Deep Dual-Branch SR (256→1024)")
+    print("=" * 60)
+    wd = WSISRX4WideDeep()
+    print(f"  Training: {count_params(wd):,} params, {model_size_kb(wd):.1f} KB")
+    y_wd = wd(x)
+    print(f"  Input: {x.shape} → Output: {y_wd.shape}")
+    wd.eval()
+    wd_c = collapse_model(wd)
+    print(f"  Collapsed: {count_params(wd_c):,} params, {model_size_kb(wd_c):.1f} KB")
+    with torch.no_grad():
+        diff_wd = (wd(x) - wd_c(x)).abs().max().item()
+    print(f"  Collapse error: {diff_wd:.2e}")
+
+    print()
+    print("=" * 60)
+    print("Large Dual-Branch SR (256→1024)")
+    print("=" * 60)
+    lg = WSISRX4Large()
+    print(f"  Training: {count_params(lg):,} params, {model_size_kb(lg):.1f} KB")
+    y_lg = lg(x)
+    print(f"  Input: {x.shape} → Output: {y_lg.shape}")
+    lg.eval()
+    lg_c = collapse_model(lg)
+    print(f"  Collapsed: {count_params(lg_c):,} params, {model_size_kb(lg_c):.1f} KB")
+    with torch.no_grad():
+        diff_lg = (lg(x) - lg_c(x)).abs().max().item()
+    print(f"  Collapse error: {diff_lg:.2e}")
+
+    print()
+    print("=" * 60)
     print("Comparison")
     print("=" * 60)
-    print(f"  WSISRX4 (collapsed):  {count_params(sr_c):,} params, {model_size_kb(sr_c):.1f} KB — RGB, reparameterizable blocks")
-    print(f"  WSISRX4Dual (collapsed): {count_params(dual_c):,} params, {model_size_kb(dual_c):.1f} KB — Y(5blk) + CbCr(2blk)")
-    print(f"  ESPCN:                {count_params(espcn):,} params, {model_size_kb(espcn):.1f} KB — classic baseline (tanh)")
-    print(f"  ESPCNR:               {count_params(espcnr):,} params, {model_size_kb(espcnr):.1f} KB — baseline + global residual")
+    print(f"  WSISRX4 (collapsed):     {count_params(sr_c):>8,} params, {model_size_kb(sr_c):>7.1f} KB — RGB, 5 blocks, 16ch")
+    print(f"  WSISRX4Dual (collapsed): {count_params(dual_c):>8,} params, {model_size_kb(dual_c):>7.1f} KB — Y(5blk,16ch) + CbCr(2blk,8ch)")
+    print(f"  WideDeep (collapsed):    {count_params(wd_c):>8,} params, {model_size_kb(wd_c):>7.1f} KB — Y(10blk,32ch) + CbCr(4blk,16ch)")
+    print(f"  Large (collapsed):       {count_params(lg_c):>8,} params, {model_size_kb(lg_c):>7.1f} KB — Y(12blk,48ch) + CbCr(6blk,24ch)")
+    print(f"  ESPCN:                   {count_params(espcn):>8,} params, {model_size_kb(espcn):>7.1f} KB — classic baseline (tanh)")
+    print(f"  ESPCNR:                  {count_params(espcnr):>8,} params, {model_size_kb(espcnr):>7.1f} KB — baseline + global residual")

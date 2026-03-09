@@ -34,7 +34,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split, WeightedRandomSampler
 
-from model import WSISRX4, WSISRX4Dual, WSIEnhanceNet, ESPCN, ESPCNR, collapse_model, count_params, model_size_kb
+from model import (WSISRX4, WSISRX4Dual, WSISRX4WideDeep, WSISRX4Large,
+                    WSIEnhanceNet, ESPCN, ESPCNR, collapse_model, count_params, model_size_kb)
 from dataset import WSISRDataset
 
 
@@ -366,8 +367,10 @@ def main():
     ap.add_argument("--fft-weight", type=float, default=0.0,
                     help="Weight for FFT frequency loss (0=disable, 0.1=recommended). "
                          "Emphasizes high-frequency detail: edges, texture, cell boundaries.")
-    ap.add_argument("--arch", choices=["wsisrx4", "wsisrx4dual", "espcn", "espcnr"], default="wsisrx4",
-                    help="Model architecture: wsisrx4 (RGB), wsisrx4dual (Y-heavy+CbCr-light), "
+    ap.add_argument("--arch", choices=["wsisrx4", "wsisrx4dual", "widedeep", "large", "espcn", "espcnr"],
+                    default="wsisrx4",
+                    help="Model architecture: wsisrx4 (RGB,19K), wsisrx4dual (Y+CbCr,18K), "
+                         "widedeep (scaled dual,120K), large (max dual,290K), "
                          "espcn (baseline), espcnr (baseline+residual)")
     ap.add_argument("--val-split", type=float, default=0.1)
     ap.add_argument("--workers", type=int, default=4)
@@ -502,6 +505,10 @@ def main():
         elif args.arch == "wsisrx4dual":
             model = WSISRX4Dual(y_channels=args.channels, y_blocks=args.blocks,
                                 c_channels=max(args.channels // 2, 4), c_blocks=2).to(device)
+        elif args.arch == "widedeep":
+            model = WSISRX4WideDeep().to(device)
+        elif args.arch == "large":
+            model = WSISRX4Large().to(device)
         else:
             model = WSISRX4(channels=args.channels, num_blocks=args.blocks).to(device)
     else:
