@@ -355,8 +355,12 @@ def main():
                     help="sr: 256→1024 upscale. enhance: 1024→1024 refinement.")
     ap.add_argument("--jpeg-quality", type=int, default=None,
                     help="Simulate JPEG compression on input (e.g., 95)")
-    ap.add_argument("--channels", type=int, default=16, help="Model channels")
-    ap.add_argument("--blocks", type=int, default=5, help="Number of collapsible blocks")
+    ap.add_argument("--channels", type=int, default=16, help="Model channels (used by non-dual architectures)")
+    ap.add_argument("--blocks", type=int, default=5, help="Number of collapsible blocks (used by non-dual architectures)")
+    ap.add_argument("--y-channels", type=int, default=None, help="Dual Y branch channels (default: --channels)")
+    ap.add_argument("--y-blocks", type=int, default=None, help="Dual Y branch blocks (default: --blocks)")
+    ap.add_argument("--c-channels", type=int, default=None, help="Dual CbCr branch channels (default: --channels//2)")
+    ap.add_argument("--c-blocks", type=int, default=None, help="Dual CbCr branch blocks (default: 2)")
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--crop", type=int, default=256,
@@ -367,6 +371,14 @@ def main():
     ap.add_argument("--fft-weight", type=float, default=0.0,
                     help="Weight for FFT frequency loss (0=disable, 0.1=recommended). "
                          "Emphasizes high-frequency detail: edges, texture, cell boundaries.")
+    ap.add_argument("--edge-weight", type=float, default=0.0,
+                    help="Weight for edge-aware gradient penalty (0=disable, 0.05=recommended). "
+                         "Penalizes spatial derivatives of prediction error — targets Butteraugli.")
+    ap.add_argument("--ycbcr-loss", action="store_true",
+                    help="Use separate Y and CbCr losses instead of RGB L1. "
+                         "Weights Y branch more heavily since it drives PSNR/residual size.")
+    ap.add_argument("--cbcr-weight", type=float, default=0.5,
+                    help="Weight for CbCr loss when using --ycbcr-loss (default: 0.5, Y gets 1.0)")
     ap.add_argument("--arch", choices=["wsisrx4", "wsisrx4dual", "widedeep", "large", "espcn", "espcnr"],
                     default="wsisrx4",
                     help="Model architecture: wsisrx4 (RGB,19K), wsisrx4dual (Y+CbCr,18K), "
@@ -507,8 +519,12 @@ def main():
         elif args.arch == "espcnr":
             model = ESPCNR(upscale_factor=4).to(device)
         elif args.arch == "wsisrx4dual":
-            model = WSISRX4Dual(y_channels=args.channels, y_blocks=args.blocks,
-                                c_channels=max(args.channels // 2, 4), c_blocks=2).to(device)
+            yc = args.y_channels if args.y_channels is not None else args.channels
+            yb = args.y_blocks if args.y_blocks is not None else args.blocks
+            cc = args.c_channels if args.c_channels is not None else max(yc // 2, 4)
+            cb = args.c_blocks if args.c_blocks is not None else 2
+            model = WSISRX4Dual(y_channels=yc, y_blocks=yb,
+                                c_channels=cc, c_blocks=cb).to(device)
         elif args.arch == "widedeep":
             model = WSISRX4WideDeep().to(device)
         elif args.arch == "large":
@@ -530,6 +546,11 @@ def main():
     if args.fft_weight > 0:
         fft_loss = FFTLoss(weight=args.fft_weight).to(device)
         print(f"FFT frequency loss weight: {args.fft_weight}")
+    if args.edge_weight > 0:
+        print(f"Edge gradient penalty weight: {args.edge_weight}")
+    if args.ycbcr_loss:
+        from model import rgb_to_ycbcr
+        print(f"YCbCr separate loss: Y weight=1.0, CbCr weight={args.cbcr_weight}")
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))
@@ -696,11 +717,26 @@ def main():
             # Clamp to valid range for loss computation
             pred_clamped = pred.clamp(0, 1)
 
-            loss = l1_loss(pred_clamped, hr_img)
+            if args.ycbcr_loss:
+                # Separate Y and CbCr losses for targeted optimization
+                pred_ycc = rgb_to_ycbcr(pred_clamped)
+                gt_ycc = rgb_to_ycbcr(hr_img)
+                loss_y = l1_loss(pred_ycc[:, 0:1], gt_ycc[:, 0:1])
+                loss_cbcr = l1_loss(pred_ycc[:, 1:3], gt_ycc[:, 1:3])
+                loss = loss_y + args.cbcr_weight * loss_cbcr
+            else:
+                loss = l1_loss(pred_clamped, hr_img)
             if perceptual_loss is not None:
                 loss = loss + args.perceptual_weight * perceptual_loss(pred_clamped, hr_img)
             if fft_loss is not None:
                 loss = loss + fft_loss(pred_clamped, hr_img)
+            if args.edge_weight > 0:
+                # Edge-aware gradient penalty — penalizes spatial derivatives of error
+                error = pred_clamped - hr_img
+                grad_x = torch.diff(error, dim=-1)
+                grad_y = torch.diff(error, dim=-2)
+                edge_loss = grad_x.abs().mean() + grad_y.abs().mean()
+                loss = loss + args.edge_weight * edge_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -830,8 +866,13 @@ def main():
                 "residual_stats": res_stats_dict,
                 "config": {
                     "mode": args.mode,
+                    "arch": args.arch,
                     "channels": args.channels,
                     "blocks": args.blocks,
+                    "y_channels": getattr(args, 'y_channels', None) or args.channels,
+                    "y_blocks": getattr(args, 'y_blocks', None) or args.blocks,
+                    "c_channels": getattr(args, 'c_channels', None) or max(args.channels // 2, 4),
+                    "c_blocks": getattr(args, 'c_blocks', None) or 2,
                 },
             }
             torch.save(ckpt, os.path.join(args.outdir, "latest.pt"))
