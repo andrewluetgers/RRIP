@@ -560,12 +560,27 @@ def main():
     if not _has_ssimulacra2:
         print("SSIMULACRA2: skipped (pip install ssimulacra2 or ssimulacra2-py)")
 
-    # Compute baseline residual stats + visual metrics (bilinear/bicubic) for reference
+    # Compute baseline residual stats + visual metrics for reference
+    # Includes lanczos3 (what ORIGAMI actually uses for upsampling)
     # Sample up to 20 val tiles to keep this fast (SSIM/Delta E are CPU-intensive)
     max_baseline_samples = min(20, len(val_loader))
     print(f"\nBaseline stats (q80, {max_baseline_samples} val samples):")
-    baseline_stats = {"bilinear": [], "bicubic": []}
-    baseline_metrics = {"bilinear": [], "bicubic": []}
+    baseline_stats = {"bilinear": [], "bicubic": [], "lanczos3": []}
+    baseline_metrics = {"bilinear": [], "bicubic": [], "lanczos3": []}
+
+    def _lanczos3_upsample(lr_tensor: torch.Tensor) -> torch.Tensor:
+        """Upsample using PIL Lanczos (matches ORIGAMI's actual pipeline)."""
+        from PIL import Image as PILImage
+        import torchvision.transforms.functional as TF
+        # lr_tensor is [B,C,H,W] float [0,1]
+        imgs = []
+        for i in range(lr_tensor.shape[0]):
+            pil = TF.to_pil_image(lr_tensor[i].clamp(0, 1))
+            w, h = pil.size
+            pil_up = pil.resize((w * 4, h * 4), PILImage.LANCZOS)
+            imgs.append(TF.to_tensor(pil_up))
+        return torch.stack(imgs)
+
     with torch.no_grad():
         for bi, (lr_img, hr_img, _) in enumerate(val_loader):
             if bi >= max_baseline_samples:
@@ -580,6 +595,11 @@ def main():
             baseline_stats["bicubic"].append(compute_residual_stats(bicubic_up, hr_img, jpeg_quality=80))
             baseline_metrics["bicubic"].append(compute_val_metrics(
                 tensor_to_uint8(bicubic_up), tensor_to_uint8(hr_img),
+                has_ssimulacra2=_has_ssimulacra2))
+            lanczos_up = _lanczos3_upsample(lr_img)
+            baseline_stats["lanczos3"].append(compute_residual_stats(lanczos_up, hr_img, jpeg_quality=80))
+            baseline_metrics["lanczos3"].append(compute_val_metrics(
+                tensor_to_uint8(lanczos_up), tensor_to_uint8(hr_img),
                 has_ssimulacra2=_has_ssimulacra2))
     baseline_summary = {}
     for method in baseline_stats:
