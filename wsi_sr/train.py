@@ -106,45 +106,89 @@ def _json_safe(obj):
     return obj
 
 
+def _cloud_upload(local_path: str, remote_path: str, timeout: int = 30) -> bool:
+    """Upload a file to GCS or S3. Tries gsutil first, falls back to aws s3."""
+    import subprocess
+    for cmd in [
+        ["gsutil", "-q", "cp", local_path, remote_path],
+        ["aws", "s3", "cp", local_path, remote_path.replace("gs://", "s3://wsi-sr-training-results/").lstrip("s3://wsi-sr-training-results/") if remote_path.startswith("gs://") else remote_path],
+    ]:
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            if r.returncode == 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def write_gcs_status(gcs_bucket: str, filename: str, data: dict):
-    """Write a JSON status file to GCS for live monitoring. Best-effort."""
+    """Write a JSON status file to cloud storage for live monitoring."""
     if not gcs_bucket:
         return
-    import tempfile, subprocess
+    import tempfile
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(data, f)
             tmp = f.name
-        subprocess.run(
-            ["gsutil", "-q", "cp", tmp, f"{gcs_bucket}/status/{filename}"],
-            capture_output=True, timeout=15)
+        # Try GCS, then S3
+        gcs_path = f"{gcs_bucket}/status/{filename}"
+        s3_path = f"s3://wsi-sr-training-results/{gcs_bucket.split('/')[-1]}/status/{filename}" if "gs://" in gcs_bucket else f"{gcs_bucket}/status/{filename}"
+        import subprocess
+        ok = False
+        for cmd in [
+            ["gsutil", "-q", "cp", tmp, gcs_path],
+            ["aws", "s3", "cp", tmp, s3_path],
+        ]:
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=15)
+                if r.returncode == 0:
+                    ok = True
+                    break
+            except Exception:
+                continue
         os.unlink(tmp)
     except Exception:
         pass
 
 
 def upload_checkpoint_gcs(gcs_bucket: str, local_path: str, name: str, metrics: dict):
-    """Upload a checkpoint + its metadata to GCS."""
+    """Upload a checkpoint + its metadata to cloud storage (GCS or S3)."""
     if not gcs_bucket:
         return
-    import subprocess
+    import subprocess, tempfile
     try:
-        # Upload the .pt file
-        subprocess.run(
-            ["gsutil", "-q", "cp", local_path, f"{gcs_bucket}/checkpoints/{name}.pt"],
-            capture_output=True, timeout=120)
+        # Determine paths
+        stage = gcs_bucket.rstrip("/").split("/")[-1]  # e.g. "stage1"
+        gcs_pt = f"{gcs_bucket}/checkpoints/{name}.pt"
+        s3_pt = f"s3://wsi-sr-training-results/{stage}/checkpoints/{name}.pt"
+        gcs_json = f"{gcs_bucket}/checkpoints/{name}.json"
+        s3_json = f"s3://wsi-sr-training-results/{stage}/checkpoints/{name}.json"
+
+        # Upload .pt
+        for cmd in [["gsutil", "-q", "cp", local_path, gcs_pt], ["aws", "s3", "cp", local_path, s3_pt]]:
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=120)
+                if r.returncode == 0:
+                    break
+            except Exception:
+                continue
+
         # Upload metadata JSON
-        import tempfile
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(metrics, f, indent=2)
             tmp = f.name
-        subprocess.run(
-            ["gsutil", "-q", "cp", tmp, f"{gcs_bucket}/checkpoints/{name}.json"],
-            capture_output=True, timeout=15)
+        for cmd in [["gsutil", "-q", "cp", tmp, gcs_json], ["aws", "s3", "cp", tmp, s3_json]]:
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=15)
+                if r.returncode == 0:
+                    break
+            except Exception:
+                continue
         os.unlink(tmp)
-        print(f"  Uploaded checkpoint to GCS: {name}")
+        print(f"  Uploaded checkpoint: {name}")
     except Exception as e:
-        print(f"  GCS checkpoint upload failed: {e}")
+        print(f"  Checkpoint upload failed: {e}")
 
 
 def psnr(pred: torch.Tensor, target: torch.Tensor) -> float:

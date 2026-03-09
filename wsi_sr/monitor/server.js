@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 8090;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "wsi_sr.duckdb");
 const BUCKET = process.env.GCS_BUCKET || "gs://wsi-1-480715-tcga-tiles";
+const S3_BUCKET = process.env.S3_BUCKET || "s3://wsi-sr-training-results";
 const POLL_INTERVAL = 5_000; // 5s
 
 // Open DuckDB in read-write mode (monitor is the primary DB owner)
@@ -43,6 +44,42 @@ function query(sql, params = []) {
 
 // --- GCS Polling ---
 // Remote processes write JSON status files to GCS. We poll them.
+
+function cloudRead(path) {
+  // Works with both gs:// and s3:// paths
+  const cmd = path.startsWith("s3://")
+    ? `aws s3 cp ${path} - 2>/dev/null`
+    : `gsutil -q cat ${path} 2>/dev/null`;
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 15_000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      try { resolve(JSON.parse(stdout)); } catch { resolve(null); }
+    });
+  });
+}
+
+function cloudLs(path) {
+  const cmd = path.startsWith("s3://")
+    ? `aws s3 ls ${path} 2>/dev/null`
+    : `gsutil -q ls ${path} 2>/dev/null`;
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 15_000 }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      if (path.startsWith("s3://")) {
+        // aws s3 ls output: "2026-03-08 12:00:00  123 filename"
+        const bucket = path.replace("s3://","").split("/")[0];
+        const prefix = path.replace(`s3://${bucket}/`, "");
+        resolve(stdout.trim().split("\n").filter(Boolean).map(line => {
+          const parts = line.trim().split(/\s+/);
+          const name = parts[parts.length - 1];
+          return `s3://${bucket}/${prefix}${name}`;
+        }));
+      } else {
+        resolve(stdout.trim().split("\n").filter(Boolean));
+      }
+    });
+  });
+}
 
 function gsutilRead(gcsPath) {
   return new Promise((resolve) => {
@@ -126,25 +163,26 @@ async function pollVMs() {
 }
 
 async function pollGCS() {
-  // Try multiple stage prefixes for progress files
-  for (const prefix of ["stage1", "stage2", ""]) {
-    const base = prefix ? `${BUCKET}/${prefix}` : BUCKET;
+  // Poll both GCS and S3 for status files
+  for (const bucket of [BUCKET, S3_BUCKET]) {
+    for (const prefix of ["stage1", "stage2", ""]) {
+      const base = prefix ? `${bucket}/${prefix}` : bucket;
 
-    if (!remoteStatus.extract) {
-      remoteStatus.extract = await gsutilRead(`${base}/status/extract_progress.json`);
-    }
-    if (!remoteStatus.train) {
-      remoteStatus.train = await gsutilRead(`${base}/status/train_progress.json`);
+      const ext = await cloudRead(`${base}/status/extract_progress.json`);
+      if (ext) remoteStatus.extract = ext;
+
+      const trn = await cloudRead(`${base}/status/train_progress.json`);
+      if (trn) remoteStatus.train = trn;
     }
   }
 
-  // Checkpoints from any stage
+  // Checkpoints from GCS and S3
   const ckptLists = await Promise.all([
-    gsutilLs(`${BUCKET}/checkpoints/*.json`),
-    gsutilLs(`${BUCKET}/stage1/checkpoints/*.json`),
-    gsutilLs(`${BUCKET}/stage2/checkpoints/*.json`),
+    cloudLs(`${BUCKET}/checkpoints/`),
+    cloudLs(`${BUCKET}/stage1/checkpoints/`),
+    cloudLs(`${S3_BUCKET}/stage1/checkpoints/`),
   ]);
-  const ckptFiles = ckptLists.flat();
+  const ckptFiles = ckptLists.flat().filter(f => f.endsWith(".json"));
   remoteStatus.checkpoints = ckptFiles.map(f => {
     const name = path.basename(f, ".json");
     return { name, gcs_path: f.replace(".json", ".pt"), meta_path: f };
@@ -395,10 +433,9 @@ app.get("/api/checkpoints/download/:name", (req, res) => {
   res.download(filePath);
 });
 
-// Download a checkpoint from GCS to local, then serve it
+// Download a checkpoint from GCS/S3 to local, then serve it
 app.get("/api/checkpoints/fetch-remote/:name", (req, res) => {
   const name = req.params.name;
-  const gcsPath = `${BUCKET}/checkpoints/${name}`;
   const localDir = path.join(__dirname, "..", "checkpoints");
   const localPath = path.join(localDir, name);
 
@@ -407,7 +444,12 @@ app.get("/api/checkpoints/fetch-remote/:name", (req, res) => {
   }
 
   fs.mkdirSync(localDir, { recursive: true });
-  exec(`gsutil -q cp ${gcsPath} ${localPath}`, { timeout: 120_000 }, (err) => {
+
+  // Try S3 first (AWS instances write here), then GCS
+  const s3Path = `${S3_BUCKET}/stage1/checkpoints/${name}`;
+  const gcsPath = `${BUCKET}/stage1/checkpoints/${name}`;
+
+  exec(`aws s3 cp ${s3Path} ${localPath} 2>/dev/null || gsutil -q cp ${gcsPath} ${localPath}`, { timeout: 120_000 }, (err) => {
     if (err) return res.status(500).json({ error: `Failed to fetch: ${err.message}` });
     res.download(localPath);
   });
