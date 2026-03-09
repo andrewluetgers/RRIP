@@ -128,6 +128,32 @@ async function pollVMs() {
     }
   } catch { /* non-fatal */ }
 
+  // AWS EC2 instances
+  try {
+    const awsOut = await new Promise((resolve) => {
+      exec('aws ec2 describe-instances --region us-east-1 --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].[InstanceId,InstanceType,LaunchTime,PublicIpAddress]" --output json 2>/dev/null',
+        { timeout: 15_000 }, (err, stdout) => {
+          if (err || !stdout) return resolve([]);
+          try { resolve(JSON.parse(stdout).flat()); } catch { resolve([]); }
+        });
+    });
+    for (const inst of awsOut) {
+      if (!inst || !inst[0]) continue;
+      const launched = new Date(inst[2]);
+      const uptimeMin = Math.round((Date.now() - launched.getTime()) / 60000);
+      const itype = inst[1] || "unknown";
+      const hourlyRates = { "g5.xlarge": 1.006, "g5.2xlarge": 1.212, "p3.2xlarge": 3.06, "p3.8xlarge": 12.24 };
+      const rate = hourlyRates[itype] || 1.00;
+      const cost = (uptimeMin / 60) * rate;
+      vms.push({
+        provider: "AWS", name: inst[0], type: itype,
+        status: "RUNNING", spot: false,
+        ip: inst[3], uptime_min: uptimeMin,
+        hourly_rate: rate, cost_usd: Math.round(cost * 100) / 100,
+      });
+    }
+  } catch { /* non-fatal */ }
+
   // RunPod pods
   try {
     const rpOut = await new Promise((resolve) => {
@@ -164,16 +190,35 @@ async function pollVMs() {
 
 async function pollGCS() {
   // Poll both GCS and S3 for status files
+  // Check stage2 extract first (the full 800-slide run), then stage1
   for (const bucket of [BUCKET, S3_BUCKET]) {
-    for (const prefix of ["stage1", "stage2", ""]) {
+    for (const prefix of ["stage2", "stage1", ""]) {
       const base = prefix ? `${bucket}/${prefix}` : bucket;
 
       const ext = await cloudRead(`${base}/status/extract_progress.json`);
-      if (ext) remoteStatus.extract = ext;
+      if (ext) {
+        // Prefer the latest (stage2 over stage1 if both exist)
+        if (!remoteStatus.extract || ext.total_slides > (remoteStatus.extract.total_slides || 0)) {
+          remoteStatus.extract = ext;
+        }
+      }
 
       const trn = await cloudRead(`${base}/status/train_progress.json`);
-      if (trn) remoteStatus.train = trn;
+      if (trn) {
+        // Prefer running over completed, or newer epoch
+        if (!remoteStatus.train ||
+            (trn.status !== "completed" && remoteStatus.train.status === "completed") ||
+            (trn.epoch > (remoteStatus.train.epoch || 0) && trn.status !== "completed")) {
+          remoteStatus.train = trn;
+        }
+      }
     }
+  }
+
+  // Also check for live training logs on AWS (comparison runs don't write status JSON)
+  const awsLog = await cloudRead(`${S3_BUCKET}/stage1/status/active_run.json`);
+  if (awsLog && awsLog.status === "running") {
+    remoteStatus.train = awsLog;
   }
 
   // Checkpoints from GCS and S3
