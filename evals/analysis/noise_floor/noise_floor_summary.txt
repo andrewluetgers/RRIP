@@ -1,0 +1,1665 @@
+========================================================================
+NOISE-FLOOR EVALUATION REPORT
+========================================================================
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 149 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.11
+  Noise-floor score: 0.534
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.449
+    spectral_flatness         0.177
+    block_uniformity          0.393
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1654
+      Per-lag: 0.584, 0.079, 0.073, 0.049, 0.042
+    Spectral flatness:        0.1417
+    Block var uniformity (CV): 0.9103
+    Distribution KS stat:     0.0687 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.58
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.032 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 147 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.11
+  Noise-floor score: 0.534
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.449
+    spectral_flatness         0.177
+    block_uniformity          0.393
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1654
+      Per-lag: 0.584, 0.079, 0.073, 0.049, 0.042
+    Spectral flatness:        0.1417
+    Block var uniformity (CV): 0.9103
+    Distribution KS stat:     0.0687 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.58
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.032 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 152 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.11
+  Noise-floor score: 0.534
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.449
+    spectral_flatness         0.177
+    block_uniformity          0.393
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1654
+      Per-lag: 0.584, 0.079, 0.073, 0.049, 0.042
+    Spectral flatness:        0.1417
+    Block var uniformity (CV): 0.9103
+    Distribution KS stat:     0.0687 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.58
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.032 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 152 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.11
+  Noise-floor score: 0.534
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.449
+    spectral_flatness         0.177
+    block_uniformity          0.393
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1654
+      Per-lag: 0.584, 0.079, 0.073, 0.049, 0.042
+    Spectral flatness:        0.1417
+    Block var uniformity (CV): 0.9103
+    Distribution KS stat:     0.0687 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.58
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.032 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 166 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.11
+  Noise-floor score: 0.534
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.449
+    spectral_flatness         0.177
+    block_uniformity          0.393
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1654
+      Per-lag: 0.584, 0.079, 0.073, 0.049, 0.042
+    Spectral flatness:        0.1417
+    Block var uniformity (CV): 0.9103
+    Distribution KS stat:     0.0687 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.58
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.032 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 161 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.12
+  Noise-floor score: 0.533
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.451
+    spectral_flatness         0.172
+    block_uniformity          0.392
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1648
+      Per-lag: 0.585, 0.083, 0.073, 0.043, 0.039
+    Spectral flatness:        0.1374
+    Block var uniformity (CV): 0.9116
+    Distribution KS stat:     0.0702 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.59
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.12
+  Noise-floor score: 0.533
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.451
+    spectral_flatness         0.172
+    block_uniformity          0.392
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1648
+      Per-lag: 0.585, 0.083, 0.073, 0.043, 0.039
+    Spectral flatness:        0.1374
+    Block var uniformity (CV): 0.9116
+    Distribution KS stat:     0.0702 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.59
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 172 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.12
+  Noise-floor score: 0.533
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.451
+    spectral_flatness         0.172
+    block_uniformity          0.392
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1648
+      Per-lag: 0.585, 0.083, 0.073, 0.043, 0.039
+    Spectral flatness:        0.1374
+    Block var uniformity (CV): 0.9116
+    Distribution KS stat:     0.0702 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.59
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 175 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.12
+  Noise-floor score: 0.533
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.451
+    spectral_flatness         0.172
+    block_uniformity          0.392
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1648
+      Per-lag: 0.585, 0.083, 0.073, 0.043, 0.039
+    Spectral flatness:        0.1374
+    Block var uniformity (CV): 0.9116
+    Distribution KS stat:     0.0702 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.59
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 163 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.12
+  Noise-floor score: 0.533
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.451
+    spectral_flatness         0.172
+    block_uniformity          0.392
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1648
+      Per-lag: 0.585, 0.083, 0.073, 0.043, 0.039
+    Spectral flatness:        0.1374
+    Block var uniformity (CV): 0.9116
+    Distribution KS stat:     0.0702 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.59
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.22
+  Noise-floor score: 0.527
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.435
+    spectral_flatness         0.173
+    block_uniformity          0.371
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1694
+      Per-lag: 0.593, 0.091, 0.073, 0.055, 0.035
+    Spectral flatness:        0.1384
+    Block var uniformity (CV): 0.9433
+    Distribution KS stat:     0.0688 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 150 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.22
+  Noise-floor score: 0.527
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.435
+    spectral_flatness         0.173
+    block_uniformity          0.371
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1694
+      Per-lag: 0.593, 0.091, 0.073, 0.055, 0.035
+    Spectral flatness:        0.1384
+    Block var uniformity (CV): 0.9433
+    Distribution KS stat:     0.0688 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 150 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.22
+  Noise-floor score: 0.527
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.435
+    spectral_flatness         0.173
+    block_uniformity          0.371
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1694
+      Per-lag: 0.593, 0.091, 0.073, 0.055, 0.035
+    Spectral flatness:        0.1384
+    Block var uniformity (CV): 0.9433
+    Distribution KS stat:     0.0688 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 148 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.22
+  Noise-floor score: 0.527
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.435
+    spectral_flatness         0.173
+    block_uniformity          0.371
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1694
+      Per-lag: 0.593, 0.091, 0.073, 0.055, 0.035
+    Spectral flatness:        0.1384
+    Block var uniformity (CV): 0.9433
+    Distribution KS stat:     0.0688 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 161 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.22
+  Noise-floor score: 0.527
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.435
+    spectral_flatness         0.173
+    block_uniformity          0.371
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1694
+      Per-lag: 0.593, 0.091, 0.073, 0.055, 0.035
+    Spectral flatness:        0.1384
+    Block var uniformity (CV): 0.9433
+    Distribution KS stat:     0.0688 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.024 (no)
+  Eval time: 150 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 127.7, Std: 9.90
+  Noise-floor score: 0.519
+  Sub-scores:
+    incompressibility         1.000
+    autocorrelation           0.317
+    spectral_flatness         0.100
+    block_uniformity          0.572
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  1.0001
+    Autocorrelation mean:     0.2048
+      Per-lag: 0.402, 0.207, 0.009, 0.364, 0.042
+    Spectral flatness:        0.0799
+    Block var uniformity (CV): 0.6417
+    Distribution KS stat:     0.0785 (p=0.0000)
+      Laplacian fit: loc=-1.00, scale=7.71
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.025 (no)
+    JPEG artifact period_32: ratio=1.018 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.19
+  Noise-floor score: 0.529
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.441
+    spectral_flatness         0.170
+    block_uniformity          0.384
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1677
+      Per-lag: 0.587, 0.083, 0.079, 0.055, 0.034
+    Spectral flatness:        0.1359
+    Block var uniformity (CV): 0.9241
+    Distribution KS stat:     0.0668 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.64
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 161 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.19
+  Noise-floor score: 0.529
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.441
+    spectral_flatness         0.170
+    block_uniformity          0.384
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1677
+      Per-lag: 0.587, 0.083, 0.079, 0.055, 0.034
+    Spectral flatness:        0.1359
+    Block var uniformity (CV): 0.9241
+    Distribution KS stat:     0.0668 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.64
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.19
+  Noise-floor score: 0.529
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.441
+    spectral_flatness         0.170
+    block_uniformity          0.384
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1677
+      Per-lag: 0.587, 0.083, 0.079, 0.055, 0.034
+    Spectral flatness:        0.1359
+    Block var uniformity (CV): 0.9241
+    Distribution KS stat:     0.0668 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.64
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 177 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.19
+  Noise-floor score: 0.529
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.441
+    spectral_flatness         0.170
+    block_uniformity          0.384
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1677
+      Per-lag: 0.587, 0.083, 0.079, 0.055, 0.034
+    Spectral flatness:        0.1359
+    Block var uniformity (CV): 0.9241
+    Distribution KS stat:     0.0668 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.64
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 166 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.19
+  Noise-floor score: 0.529
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.441
+    spectral_flatness         0.170
+    block_uniformity          0.384
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9989
+    Autocorrelation mean:     0.1677
+      Per-lag: 0.587, 0.083, 0.079, 0.055, 0.034
+    Spectral flatness:        0.1359
+    Block var uniformity (CV): 0.9241
+    Distribution KS stat:     0.0668 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.64
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 161 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.21
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.440
+    spectral_flatness         0.170
+    block_uniformity          0.385
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9994
+    Autocorrelation mean:     0.1679
+      Per-lag: 0.588, 0.085, 0.079, 0.055, 0.033
+    Spectral flatness:        0.1360
+    Block var uniformity (CV): 0.9221
+    Distribution KS stat:     0.0673 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.65
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.029 (no)
+    JPEG artifact period_32: ratio=1.023 (no)
+  Eval time: 151 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 151 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 140 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.382
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9988
+    Autocorrelation mean:     0.1672
+      Per-lag: 0.589, 0.087, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9272
+    Distribution KS stat:     0.0665 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.021 (no)
+  Eval time: 153 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.998
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.382
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9988
+    Autocorrelation mean:     0.1672
+      Per-lag: 0.589, 0.087, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9272
+    Distribution KS stat:     0.0665 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.027 (no)
+    JPEG artifact period_32: ratio=1.021 (no)
+  Eval time: 153 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.383
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1670
+      Per-lag: 0.589, 0.086, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9256
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.028 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 148 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.383
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1670
+      Per-lag: 0.589, 0.086, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9256
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.028 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 155 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.383
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1670
+      Per-lag: 0.589, 0.086, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9256
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.028 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 152 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.383
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1670
+      Per-lag: 0.589, 0.086, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9256
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.028 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 150 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.18
+  Noise-floor score: 0.530
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.443
+    spectral_flatness         0.173
+    block_uniformity          0.383
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1670
+      Per-lag: 0.589, 0.086, 0.072, 0.051, 0.037
+    Spectral flatness:        0.1383
+    Block var uniformity (CV): 0.9256
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.63
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.028 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 135.9, Std: 8.11
+  Noise-floor score: 0.470
+  Sub-scores:
+    incompressibility         1.000
+    autocorrelation           0.229
+    spectral_flatness         0.112
+    block_uniformity          0.345
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  1.0001
+    Autocorrelation mean:     0.2314
+      Per-lag: 0.666, 0.249, 0.088, 0.098, 0.055
+    Spectral flatness:        0.0897
+    Block var uniformity (CV): 0.9819
+    Distribution KS stat:     0.0666 (p=0.0000)
+      Laplacian fit: loc=8.00, scale=6.02
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.014 (no)
+    JPEG artifact period_32: ratio=1.020 (no)
+  Eval time: 153 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 153 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 154 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 149 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 144 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 172 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 177 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 181 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 171 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 154 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 153 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 172 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 146 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 148 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 146 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 144 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 149 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 152 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.80
+  Noise-floor score: 0.508
+  Sub-scores:
+    incompressibility         0.999
+    autocorrelation           0.379
+    spectral_flatness         0.138
+    block_uniformity          0.367
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9993
+    Autocorrelation mean:     0.1862
+      Per-lag: 0.649, 0.176, 0.031, 0.061, 0.013
+    Spectral flatness:        0.1107
+    Block var uniformity (CV): 0.9495
+    Distribution KS stat:     0.0622 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=5.08
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.015 (no)
+    JPEG artifact period_32: ratio=1.022 (no)
+  Eval time: 156 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 157 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 159 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 146 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 146 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 160 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 149 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 144 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 142 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 147 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 139 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 144 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 148 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 146 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 145 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 142 ms
+
+Image: 021_L0_fused_residual_centered.png
+  Shape: [1024, 1024], Mean: 128.0, Std: 6.41
+  Noise-floor score: 0.513
+  Sub-scores:
+    incompressibility         0.997
+    autocorrelation           0.414
+    spectral_flatness         0.149
+    block_uniformity          0.337
+    distribution_fit          0.000
+    run_length                1.000
+  Metrics:
+    Incompressibility ratio:  0.9987
+    Autocorrelation mean:     0.1757
+      Per-lag: 0.618, 0.120, 0.064, 0.068, 0.008
+    Spectral flatness:        0.1195
+    Block var uniformity (CV): 0.9948
+    Distribution KS stat:     0.0637 (p=0.0000)
+      Laplacian fit: loc=0.00, scale=4.76
+    Run-length entropy:       1.0000
+    JPEG artifact period_8: ratio=1.012 (no)
+    JPEG artifact period_32: ratio=1.026 (no)
+  Eval time: 148 ms
+
+------------------------------------------------------------------------
+SUMMARY
+------------------------------------------------------------------------
+  Images evaluated: 72
+  Noise-floor score: mean=0.518, std=0.011, min=0.470, max=0.534
