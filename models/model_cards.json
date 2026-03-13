@@ -246,5 +246,343 @@
       {"model": "WSISRX4WideDeep", "residual_kb": 127.2, "reduction_vs_lanczos": "10.0%"}
     ],
     "conclusion": "WSISRX4Dual (18K params) decisively wins Stage 1. Larger models (WideDeep 112K, Large 295K) are WORSE — they underfit on 5K tiles in 50 epochs. The small Dual model converges faster and generalizes better on limited data. Larger models may benefit from Stage 2 (1.4M tiles) or more epochs."
+  },
+  "extended_training": [
+    {
+      "file": "checkpoints/dual_s1_200ep/best.pt",
+      "run_id": "dual_s1_200ep",
+      "architecture": "WSISRX4Dual",
+      "description": "Dual 200 epochs — saturation test on Stage 1 data",
+      "params_collapsed": 17736,
+      "y_channels": 16,
+      "y_blocks": 5,
+      "c_channels": 8,
+      "c_blocks": 2,
+      "training": {
+        "stage": 1,
+        "tiles": 5180,
+        "epochs": 200,
+        "batch_size": 16,
+        "lr": "2e-4",
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G"
+      },
+      "eval": {
+        "val_psnr": 30.69,
+        "val_mse": 76.6,
+        "val_ssim": 0.8646,
+        "val_delta_e": 2.45,
+        "residual_kb": 125.0,
+        "max_deviation": 76,
+        "p99_deviation": 25.5,
+        "outlier_pct_gt20": 4.09
+      },
+      "notes": "Best model overall. +0.17 dB over 50-epoch Dual (30.52→30.69). Saturated by ~epoch 145. Confirms model capacity is maxed on 5K tiles — needs Stage 2 data for further improvement."
+    },
+    {
+      "file": "checkpoints/dual_fft_s1/best.pt",
+      "run_id": "dual_fft_s1",
+      "architecture": "WSISRX4Dual",
+      "description": "Dual + FFT frequency loss (weight=0.1)",
+      "params_collapsed": 17736,
+      "y_channels": 16,
+      "y_blocks": 5,
+      "c_channels": 8,
+      "c_blocks": 2,
+      "training": {
+        "stage": 1,
+        "tiles": 5180,
+        "epochs": 50,
+        "batch_size": 16,
+        "lr": "2e-4",
+        "scheduler": "cosine",
+        "gpu": "NVIDIA A10G",
+        "loss": "L1 + 0.1*FFT"
+      },
+      "eval": {
+        "val_psnr": 30.15,
+        "val_mse": 86.0,
+        "val_ssim": 0.8532,
+        "val_delta_e": 2.61,
+        "residual_kb": 127.9,
+        "max_deviation": 80,
+        "p99_deviation": 27.0,
+        "outlier_pct_gt20": 4.77
+      },
+      "notes": "FFT loss HURT quality: -0.37 dB vs baseline Dual (30.52→30.15). FFT loss dilutes the L1 gradient signal without improving edge fidelity. Not recommended."
+    }
+  ],
+  "wide_dual_experiments": {
+    "status": "complete",
+    "gpu": "NVIDIA A10G (parallel, 6 concurrent)",
+    "description": "WIDE_DUAL_TRAINING_PLAN.md experiments — loss variants + architecture variants",
+    "experiments": [
+      {
+        "run_id": "dual_combined_s1",
+        "exp": 6,
+        "file": "checkpoints/dual_combined_s1/best.pt",
+        "description": "Combined: Y7C1 + YCbCr loss + FFT + edge (100 epochs)",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 16, "y_blocks": 7, "c_channels": 8, "c_blocks": 1,
+        "training": {"epochs": 100, "loss": "L1 + 0.5*CbCr + 0.1*FFT + 0.05*edge"},
+        "eval": {
+          "val_psnr": 30.63, "val_mse": 77.5, "val_ssim": 0.8639, "val_delta_e": 2.46,
+          "residual_kb": 125.7, "max_deviation": 78, "p99_deviation": 25.6, "outlier_pct_gt20": 4.14
+        },
+        "notes": "Second best overall. Y7C1 architecture helps, but combined loss adds noise. Close to Dual 200ep despite different approach."
+      },
+      {
+        "run_id": "dual_y7c1_s1",
+        "exp": 1,
+        "file": "checkpoints/dual_y7c1_s1/best.pt",
+        "description": "Deeper Y (7 blocks, 1 CbCr block)",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 16, "y_blocks": 7, "c_channels": 8, "c_blocks": 1,
+        "training": {"epochs": 50},
+        "eval": {
+          "val_psnr": 30.31, "val_mse": 83.1, "val_ssim": 0.8567, "val_delta_e": 2.53,
+          "residual_kb": 127.6, "max_deviation": 82, "p99_deviation": 26.7, "outlier_pct_gt20": 4.63
+        },
+        "notes": "Deeper Y branch (7 vs 5 blocks) with minimal CbCr. Larger receptive field didn't help much in 50 epochs."
+      },
+      {
+        "run_id": "dual_wide_s1",
+        "exp": 2,
+        "file": "checkpoints/dual_wide_s1/best.pt",
+        "description": "Wider Y (24ch, 8ch CbCr)",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 24, "y_blocks": 5, "c_channels": 8, "c_blocks": 2,
+        "training": {"epochs": 50},
+        "eval": {
+          "val_psnr": 30.27, "val_mse": 81.3, "val_ssim": 0.8614, "val_delta_e": 2.51,
+          "residual_kb": 125.6, "max_deviation": 83, "p99_deviation": 25.8, "outlier_pct_gt20": 4.20
+        },
+        "notes": "Wider Y (24 vs 16 channels). Best SSIM (0.8614) and residual (125.6 KB) among 50-epoch runs despite lower PSNR. More capacity helps structural quality."
+      },
+      {
+        "run_id": "dual_fft_edge_s1",
+        "exp": 5,
+        "file": "checkpoints/dual_fft_edge_s1/best.pt",
+        "description": "FFT + edge gradient penalty",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 16, "y_blocks": 5, "c_channels": 8, "c_blocks": 2,
+        "training": {"epochs": 50, "loss": "L1 + 0.1*FFT + 0.05*edge"},
+        "eval": {
+          "val_psnr": 30.16, "val_mse": 85.7, "val_ssim": 0.8537, "val_delta_e": 2.61,
+          "residual_kb": 127.6, "max_deviation": 81, "p99_deviation": 26.9, "outlier_pct_gt20": 4.75
+        },
+        "notes": "FFT + edge loss hurt quality vs baseline Dual (30.16 vs 30.52). Same conclusion as dual_fft_s1."
+      },
+      {
+        "run_id": "dual_dw_s1",
+        "exp": 3,
+        "file": "checkpoints/dual_dw_s1/best.pt",
+        "description": "Deep+Wide (24ch, 7 Y blocks, 1 CbCr)",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 24, "y_blocks": 7, "c_channels": 8, "c_blocks": 1,
+        "training": {"epochs": 50},
+        "eval": {
+          "val_psnr": 29.60, "val_mse": 87.7, "val_ssim": 0.8597, "val_delta_e": 2.52,
+          "residual_kb": 126.5, "max_deviation": 83, "p99_deviation": 26.0, "outlier_pct_gt20": 4.33
+        },
+        "notes": "Largest architecture variant (48K params). Underfits on 5K tiles in 50 epochs, same pattern as WideDeep/Large."
+      },
+      {
+        "run_id": "dual_ycloss_s1",
+        "exp": 4,
+        "file": "checkpoints/dual_ycloss_s1/best.pt",
+        "description": "YCbCr separate loss (cbcr_weight=0.5)",
+        "architecture": "WSISRX4Dual",
+        "y_channels": 16, "y_blocks": 5, "c_channels": 8, "c_blocks": 2,
+        "training": {"epochs": 50, "loss": "L1 (ycbcr, cbcr_weight=0.5)"},
+        "eval": {
+          "val_psnr": 28.69, "val_mse": 108.3, "val_ssim": 0.8490, "val_delta_e": 2.72,
+          "residual_kb": 129.0, "max_deviation": 113, "p99_deviation": 26.9, "outlier_pct_gt20": 4.69
+        },
+        "notes": "Worst performer. YCbCr loss with 0.5 CbCr weight significantly hurt convergence. Best at epoch 34/50, still falling behind."
+      }
+    ],
+    "conclusion": "Dual 200ep remains best overall (30.69 PSNR, 125.0 KB). Combined (Exp 6) close second at 30.63 but needed 100 epochs. Architecture changes (deeper, wider) didn't beat baseline Dual in 50 epochs. Loss variants (YCbCr, FFT, edge) all hurt. The 18K Dual with standard L1 loss is the sweet spot."
+  },
+  "extended_widedeep": {
+    "run_id": "widedeep_lr5e5_s1",
+    "file": "checkpoints/widedeep_lr5e5_s1/best.pt",
+    "architecture": "WSISRX4WideDeep",
+    "description": "WideDeep extended to 100 epochs with lower learning rate (5e-5)",
+    "y_channels": 32, "y_blocks": 10, "c_channels": 16, "c_blocks": 4,
+    "params_collapsed": 111648,
+    "training": {"epochs": 100, "lr": "5e-5", "gpu": "NVIDIA A10G"},
+    "eval": {
+      "val_psnr": 29.19, "val_mse": 94.5, "val_ssim": 0.8581, "val_delta_e": 2.60,
+      "residual_kb": 127.4, "max_deviation": 138, "p99_deviation": 25.8, "outlier_pct_gt20": 4.18
+    },
+    "notes": "100 epochs with lower LR recovered some ground vs 50-epoch baseline (29.19 vs 29.57) but still far behind Dual (30.69). 6x model size, worse PSNR. Max deviation of 138 is concerning — suggests overfitting artifacts."
+  },
+  "refiner_experiments": {
+    "status": "complete",
+    "description": "WSIEnhanceNet refinement models — same-resolution (256x256→256x256) that refine lanczos3-upsampled predictions. Applied per-tile at decode time (16 tiles per family, parallel). All trained on TCGA Stage 1, 5,180 tiles, 200 epochs, cosine LR.",
+    "lanczos3_baseline": {"psnr": 29.5, "residual_kb": 128.0},
+    "experiments": [
+      {
+        "run_id": "refine_16ch15b_s1",
+        "exp": "R6",
+        "file": "refine_16ch15b_best.pt",
+        "description": "16 channels, 15 collapsible blocks — quality winner",
+        "architecture": "WSIEnhanceNet",
+        "channels": 16, "blocks": 15,
+        "params_training": 41000,
+        "checkpoint_kb": 636,
+        "training": {"epochs": 200, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA RTX 4090"},
+        "eval": {
+          "best_epoch": 185,
+          "val_psnr": 31.05, "val_mse": 70.6, "val_ssim": 0.8704, "val_delta_e": 2.33,
+          "residual_kb": 123.6, "max_deviation": 73.0, "p99_deviation": 24.4, "outlier_pct_gt20": 3.59
+        },
+        "notes": "Overall quality winner. +1.55 dB over lanczos3 baseline. 3.5% smaller residuals. Best across all metrics."
+      },
+      {
+        "run_id": "refine_8ch15b_s1",
+        "exp": "8ch/15blk",
+        "file": "refine_8ch15b_best.pt",
+        "description": "8 channels, 15 blocks — deployment winner (smallest model, near-best quality)",
+        "architecture": "WSIEnhanceNet",
+        "channels": 8, "blocks": 15,
+        "params_training": 10000,
+        "checkpoint_kb": 294,
+        "training": {"epochs": 200, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA RTX 4090"},
+        "eval": {
+          "best_epoch": 180,
+          "val_psnr": 30.89, "val_mse": 73.0, "val_ssim": 0.8673, "val_delta_e": 2.36,
+          "residual_kb": 124.3, "max_deviation": 76.2, "p99_deviation": 24.8, "outlier_pct_gt20": 3.79
+        },
+        "notes": "Deployment winner. Only 0.16 dB behind R6 with 4x fewer params (~10K vs 41K). Best latency/quality tradeoff."
+      },
+      {
+        "run_id": "refine_32ch5b_s1",
+        "exp": "R2",
+        "file": "refine_32ch5b_best.pt",
+        "description": "32 channels, 5 blocks — width vs depth test",
+        "architecture": "WSIEnhanceNet",
+        "channels": 32, "blocks": 5,
+        "params_training": 55000,
+        "checkpoint_kb": 691,
+        "training": {"epochs": 70, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA A10G"},
+        "eval": {
+          "best_epoch": 70,
+          "val_psnr": 30.72, "val_mse": 74.9, "val_ssim": 0.8645, "val_delta_e": 2.39,
+          "residual_kb": 125.9, "max_deviation": 98.1, "p99_deviation": 25.2, "outlier_pct_gt20": 3.94
+        },
+        "notes": "Width (32ch) can partially compensate for depth (5blk) but still 0.33 dB behind R6 (15blk). Killed early — depth proven more important."
+      },
+      {
+        "run_id": "refine_8ch10b_s1",
+        "exp": "R7",
+        "file": "refine_8ch10b_best.pt",
+        "description": "8 channels, 10 blocks — minimal model",
+        "architecture": "WSIEnhanceNet",
+        "channels": 8, "blocks": 10,
+        "params_training": 7000,
+        "checkpoint_kb": 199,
+        "training": {"epochs": 200, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA RTX 4090"},
+        "eval": {
+          "best_epoch": 190,
+          "val_psnr": 30.71, "val_mse": 75.9, "val_ssim": 0.8634, "val_delta_e": 2.39,
+          "residual_kb": 125.7, "max_deviation": 76.8, "p99_deviation": 25.4, "outlier_pct_gt20": 4.06
+        },
+        "notes": "Remarkably efficient — 7K params, 30.71 PSNR. Only 0.34 dB behind R6. Proves depth (10blk) matters more than width (8ch vs 16ch)."
+      },
+      {
+        "run_id": "refine_16ch10b_s1",
+        "exp": "R3",
+        "file": "refine_16ch10b_best.pt",
+        "description": "16 channels, 10 blocks",
+        "architecture": "WSIEnhanceNet",
+        "channels": 16, "blocks": 10,
+        "params_training": 27000,
+        "checkpoint_kb": 430,
+        "training": {"epochs": 65, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA A10G"},
+        "eval": {
+          "best_epoch": 65,
+          "val_psnr": 30.63, "val_mse": 75.8, "val_ssim": 0.8665, "val_delta_e": 2.38,
+          "residual_kb": 124.8, "max_deviation": 101.5, "p99_deviation": 25.1, "outlier_pct_gt20": 3.86
+        },
+        "notes": "Plateaued early at ep35-60. 10 blocks saturates at ~30.55-30.63 regardless of channels. Killed — proved depth ceiling."
+      },
+      {
+        "run_id": "refine_8ch3b_s1",
+        "exp": "R4",
+        "file": "refine_8ch3b_best.pt",
+        "description": "8 channels, 3 blocks — minimal baseline",
+        "architecture": "WSIEnhanceNet",
+        "channels": 8, "blocks": 3,
+        "params_training": 5000,
+        "checkpoint_kb": 68,
+        "training": {"epochs": 80, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA A10G"},
+        "eval": {
+          "best_epoch": 80,
+          "val_psnr": 30.32, "val_mse": 82.6, "val_ssim": 0.8559, "val_delta_e": 2.48,
+          "residual_kb": 127.7, "max_deviation": 80.1, "p99_deviation": 26.8, "outlier_pct_gt20": 4.65
+        },
+        "notes": "Capacity-limited at 5K params, 3 blocks. Still +0.8 dB over lanczos3 — even tiny refiners help."
+      },
+      {
+        "run_id": "refine_8ch15b_edge_s1",
+        "exp": "8ch/15blk+edge",
+        "file": "refine_8ch15b_edge_best.pt",
+        "description": "8 channels, 15 blocks + gradient magnitude input channel",
+        "architecture": "WSIEnhanceNet",
+        "channels": 8, "blocks": 15, "in_channels": 4,
+        "params_training": 10100,
+        "checkpoint_kb": 295,
+        "training": {"epochs": 200, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA RTX 4090"},
+        "eval": {
+          "best_epoch": 200,
+          "val_psnr": 30.65, "val_mse": 77.0, "val_ssim": 0.8622, "val_delta_e": 2.40,
+          "residual_kb": 125.6, "max_deviation": 77.8, "p99_deviation": 25.7, "outlier_pct_gt20": 4.16
+        },
+        "notes": "Edge input hurt at 8ch — extra channel diluted limited capacity. 0.24 dB worse than 8/15 plain (30.89). Edge input works better at 16ch."
+      },
+      {
+        "run_id": "refine_16ch25b_s1",
+        "exp": "R10",
+        "file": "refine_16ch25b_best.pt",
+        "description": "16 channels, 25 blocks — depth limit test",
+        "architecture": "WSIEnhanceNet",
+        "channels": 16, "blocks": 25,
+        "params_training": 69000,
+        "checkpoint_kb": 1024,
+        "training": {"epochs": 200, "batch_size": 16, "lr": "2e-4", "crop": 256, "gpu": "NVIDIA RTX 4090"},
+        "eval": {
+          "best_epoch": 190,
+          "val_psnr": 29.88, "val_mse": 92.2, "val_ssim": 0.8416, "val_delta_e": 2.55,
+          "residual_kb": 128.4, "max_deviation": 81.5, "p99_deviation": 28.5, "outlier_pct_gt20": 5.61
+        },
+        "notes": "FAILURE — 25 blocks too deep for plain sequential architecture. Never learned (29.88 ≈ lanczos3 baseline). Vanishing gradients without skip connections. 15 blocks is the practical depth limit."
+      }
+    ],
+    "still_running": [
+      {"run_id": "refine_16ch20b_s1", "exp": "R9", "config": "16ch/20blk", "gpu": "A10G", "epoch": 125, "best_psnr": 30.99},
+      {"run_id": "refine_16ch15b_costw_s1", "exp": "CW", "config": "16ch/15blk+cost-weight", "gpu": "A10G", "epoch": 120, "best_psnr": 31.00},
+      {"run_id": "refine_16ch15b_edge_s1", "exp": "EI", "config": "16ch/15blk+edge-input", "gpu": "A10G", "epoch": 120, "best_psnr": 31.02},
+      {"run_id": "refine_16ch15b_cw_edge_s1", "exp": "CE", "config": "16ch/15blk+cost-weight+edge", "gpu": "A10G", "epoch": 120, "best_psnr": 31.00}
+    ],
+    "ranking_by_psnr": [
+      {"model": "16ch/15blk (R6)", "psnr": 31.05, "params": "41K", "residual_kb": 123.6, "delta_vs_lanczos": "+1.55 dB"},
+      {"model": "8ch/15blk", "psnr": 30.89, "params": "10K", "residual_kb": 124.3, "delta_vs_lanczos": "+1.39 dB"},
+      {"model": "32ch/5blk (R2)", "psnr": 30.72, "params": "55K", "residual_kb": 125.9, "delta_vs_lanczos": "+1.22 dB"},
+      {"model": "8ch/10blk (R7)", "psnr": 30.71, "params": "7K", "residual_kb": 125.7, "delta_vs_lanczos": "+1.21 dB"},
+      {"model": "8ch/15blk+edge", "psnr": 30.65, "params": "10K", "residual_kb": 125.6, "delta_vs_lanczos": "+1.15 dB"},
+      {"model": "16ch/10blk (R3)", "psnr": 30.63, "params": "27K", "residual_kb": 124.8, "delta_vs_lanczos": "+1.13 dB"},
+      {"model": "8ch/3blk (R4)", "psnr": 30.32, "params": "5K", "residual_kb": 127.7, "delta_vs_lanczos": "+0.82 dB"},
+      {"model": "16ch/25blk (R10)", "psnr": 29.88, "params": "69K", "residual_kb": 128.4, "delta_vs_lanczos": "+0.38 dB"}
+    ],
+    "conclusions": {
+      "depth_vs_width": "Depth (blocks) matters more than width (channels) for refinement. 15 blocks is the sweet spot — 25 blocks fails to train without skip connections.",
+      "deployment_pick": "8ch/15blk (~10K params, 30.89 PSNR) — 4x fewer params than R6 for only 0.16 dB less. Fastest inference.",
+      "quality_pick": "16ch/15blk (41K params, 31.05 PSNR) — best quality across all metrics.",
+      "edge_input": "Helps at 16ch (EI tracking R6 at ep120) but hurts at 8ch (dilutes limited capacity). Not worth the architectural complexity.",
+      "cost_weighted_loss": "No benefit — converges to same result as plain L1 loss.",
+      "vs_sr_models": "Refiners (31.05 PSNR) outperform SR models (30.52 PSNR best Dual) by +0.53 dB. All model capacity goes to quality improvement rather than upsampling."
+    }
   }
 }

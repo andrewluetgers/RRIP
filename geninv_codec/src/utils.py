@@ -40,15 +40,46 @@ def jpeg_encode_decode_rgb(rgb_u8: np.ndarray, quality: int) -> np.ndarray:
     return np.array(Image.open(buf).convert("RGB"), dtype=np.uint8)
 
 
+def mse01(a01: np.ndarray, b01: np.ndarray) -> float:
+    return float(np.mean((a01 - b01) ** 2, dtype=np.float64))
+
+
 def psnr01(a01: np.ndarray, b01: np.ndarray) -> float:
-    mse = float(np.mean((a01 - b01) ** 2, dtype=np.float64))
-    if mse <= 1e-12:
+    m = mse01(a01, b01)
+    if m <= 1e-12:
         return 99.0
-    return 10.0 * math.log10(1.0 / mse)
+    return 10.0 * math.log10(1.0 / m)
 
 
 def mae01(a01: np.ndarray, b01: np.ndarray) -> float:
     return float(np.mean(np.abs(a01 - b01), dtype=np.float64))
+
+
+def ssim01(a01: np.ndarray, b01: np.ndarray) -> float:
+    from skimage.metrics import structural_similarity
+    return float(structural_similarity(a01, b01, data_range=1.0))
+
+
+def delta_e_rgb(orig_u8: np.ndarray, rec_u8: np.ndarray) -> float:
+    """Mean CIE Delta E 2000 between two RGB uint8 images."""
+    from skimage.color import rgb2lab, deltaE_ciede2000
+    lab1 = rgb2lab(orig_u8)
+    lab2 = rgb2lab(rec_u8)
+    return float(np.mean(deltaE_ciede2000(lab1, lab2)))
+
+
+def lpips_rgb(orig_u8: np.ndarray, rec_u8: np.ndarray, _cache={}) -> float:
+    """LPIPS (AlexNet) between two RGB uint8 images. Model is cached."""
+    import torch
+    import lpips as lpips_mod
+    if "fn" not in _cache:
+        _cache["fn"] = lpips_mod.LPIPS(net="alex", verbose=False)
+    fn = _cache["fn"]
+    def to_tensor(img):
+        t = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        return t * 2.0 - 1.0  # scale to [-1, 1]
+    with torch.no_grad():
+        return float(fn(to_tensor(orig_u8), to_tensor(rec_u8)).item())
 
 
 def quantize_residual_int8(residual_float: np.ndarray) -> np.ndarray:

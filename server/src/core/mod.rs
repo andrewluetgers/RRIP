@@ -8,8 +8,11 @@ pub mod reconstruct;
 pub mod optimize_chroma;
 pub mod optimize_l2;
 pub mod sharpen;
+pub mod wavelet;
 
 pub mod libjpeg_ffi;
+#[cfg(feature = "sr-model")]
+pub mod sr_model;
 
 use std::fmt;
 use std::str::FromStr;

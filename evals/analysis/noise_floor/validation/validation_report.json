@@ -1,0 +1,257 @@
+[
+  {
+    "image": "synthetic_laplacian_noise.png",
+    "path": "evals/analysis/noise_floor/validation/synthetic_laplacian_noise.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.50274562835693,
+    "std": 6.505907902098854,
+    "incompressibility_ratio": 1.0000791549682617,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.0007638676090932289,
+      "per_lag": [
+        0.0014419204229924607,
+        0.00048013314098699713,
+        0.0007994115894619088,
+        0.0008621356688499768,
+        0.00023573722317480106
+      ]
+    },
+    "power_spectrum_flatness": 0.5620849729958228,
+    "block_variance_uniformity": 0.27979791164398193,
+    "distribution_normality": {
+      "ks_statistic": 0.09794044494628906,
+      "p_value": 0.0,
+      "laplacian_loc": -1.0,
+      "laplacian_scale": 4.612669944763184
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0204334471301164,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0045274424113035,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.8120322070118287,
+    "sub_scores": {
+      "incompressibility": 1.0,
+      "autocorrelation": 0.9974537746363559,
+      "spectral_flatness": 0.7026062162447785,
+      "block_uniformity": 0.8134680589040121,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 168.0150032043457,
+    "control": "positive_laplacian_noise"
+  },
+  {
+    "image": "synthetic_uniform_noise.png",
+    "path": "evals/analysis/noise_floor/validation/synthetic_uniform_noise.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.51835346221924,
+    "std": 73.94690316796313,
+    "incompressibility_ratio": 1.0000791549682617,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.0008526683604869181,
+      "per_lag": [
+        0.0015067616620457456,
+        0.00018600898790441473,
+        0.001020516839338795,
+        0.0007243486127515136,
+        0.0008257057003941214
+      ]
+    },
+    "power_spectrum_flatness": 0.5614981038387362,
+    "block_variance_uniformity": 0.11368606239557266,
+    "distribution_normality": {
+      "ks_statistic": 0.08046652631846518,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 64.05065059661865
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 0.9986665787035122,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 0.9977644002658437,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.8284374741464688,
+    "sub_scores": {
+      "incompressibility": 1.0,
+      "autocorrelation": 0.9971577721317103,
+      "spectral_flatness": 0.7018726297984202,
+      "block_uniformity": 0.9242092917362849,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 169.2218780517578,
+    "control": "positive_uniform_noise"
+  },
+  {
+    "image": "synthetic_gradient.png",
+    "path": "evals/analysis/noise_floor/validation/synthetic_gradient.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.001953125,
+    "std": 73.70738967742857,
+    "incompressibility_ratio": 0.0051136016845703125,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.997055146711719,
+      "per_lag": [
+        0.9990147764987599,
+        0.9980391515450704,
+        0.9970616154749192,
+        0.9960821626673755,
+        0.9950780273724693
+      ]
+    },
+    "power_spectrum_flatness": 0.011495274726674363,
+    "block_variance_uniformity": 0.07960201054811478,
+    "distribution_normality": {
+      "ks_statistic": 0.07906046345951712,
+      "p_value": 0.0,
+      "laplacian_loc": -1.0,
+      "laplacian_scale": 63.83203125
+    },
+    "run_length_entropy": -0.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 0.9990165191884544,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 0.9842947757122102,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.14491361762685712,
+    "sub_scores": {
+      "incompressibility": 0.0,
+      "autocorrelation": 0.0,
+      "spectral_flatness": 0.014369093408342953,
+      "block_uniformity": 0.9469319929679235,
+      "distribution_fit": 0.0,
+      "run_length": -0.0
+    },
+    "eval_time_ms": 108.69717597961426,
+    "control": "negative_gradient"
+  },
+  {
+    "image": "synthetic_checkerboard.png",
+    "path": "evals/analysis/noise_floor/validation/synthetic_checkerboard.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0,
+    "std": 72.0,
+    "incompressibility_ratio": 0.004462242126464844,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.8177063596363698,
+      "per_lag": [
+        0.9393939393939394,
+        0.8786692759295498,
+        0.8178256611165523,
+        0.7568627450980392,
+        0.6957801766437685
+      ]
+    },
+    "power_spectrum_flatness": 0.014328188175072986,
+    "block_variance_uniformity": 0.0,
+    "distribution_normality": {
+      "ks_statistic": 0.31606027941427883,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 72.0
+    },
+    "run_length_entropy": 0.00543849387808191,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.15412589643157643,
+    "sub_scores": {
+      "incompressibility": 0.0,
+      "autocorrelation": 0.0,
+      "spectral_flatness": 0.01791023521884123,
+      "block_uniformity": 1.0,
+      "distribution_fit": 0.0,
+      "run_length": 0.00543849387808191
+    },
+    "eval_time_ms": 102.22911834716797,
+    "control": "negative_checkerboard"
+  },
+  {
+    "image": "synthetic_edges.png",
+    "path": "evals/analysis/noise_floor/validation/synthetic_edges.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 132.4296875,
+    "std": 17.3007331825083,
+    "incompressibility_ratio": 0.004275321960449219,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.5297924077060339,
+      "per_lag": [
+        0.7390414726522947,
+        0.4775722632549853,
+        0.47751092896585934,
+        0.47744947441342134,
+        0.4773878992436085
+      ]
+    },
+    "power_spectrum_flatness": 0.006606955568825798,
+    "block_variance_uniformity": 1.814261555671692,
+    "distribution_normality": {
+      "ks_statistic": 0.5,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.4296875
+    },
+    "run_length_entropy": 0.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.0016517388922064496,
+    "sub_scores": {
+      "incompressibility": 0.0,
+      "autocorrelation": 0.0,
+      "spectral_flatness": 0.008258694461032248,
+      "block_uniformity": 0.0,
+      "distribution_fit": 0.0,
+      "run_length": 0.0
+    },
+    "eval_time_ms": 102.21409797668457,
+    "control": "negative_edges"
+  }
+]

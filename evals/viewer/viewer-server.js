@@ -25,9 +25,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── Run name generation (shared convention) ───
 
 /**
- * Check if a baseq value represents lossless mode.
+ * Check if a seedq (seed quality) value represents lossless mode.
  */
-function isLosslessBaseQ(val) {
+function isLosslessSeedQ(val) {
   if (typeof val === 'string') {
     const v = val.trim().toLowerCase();
     return v === 'l' || v === 'lossless';
@@ -42,16 +42,46 @@ function isLosslessBaseQ(val) {
  */
 function generateRunName(params) {
   if (params.type === 'jpeg_baseline') {
-    return `jpeg_q${params.baseq || params.quality}`;
+    return `jpeg_q${params.seedq || params.baseq || params.quality}`;
   }
-  // V2 fused pipeline: no L1 residuals
-  const bq = isLosslessBaseQ(params.baseq) ? 'L' : params.baseq;
-  let name = `v2_b${bq}_l0q${params.l0q}`;
-  if (params.optl2) name += '_optl2';
-  if (params.optl2 && params.max_delta && params.max_delta !== 20) name += `_d${params.max_delta}`;
+
+  // V4 split-seed mode: separate luma/chroma seed sizes and qualities
+  if (params.seed_luma_size || params.seed_luma_q || params.seed_chroma_size || params.seed_chroma_q) {
+    const lq = params.seed_luma_q || params.seedq || params.baseq || 90;
+    const ls = params.seed_luma_size || 256;
+    const cq = params.seed_chroma_q || params.seedq || params.baseq || 70;
+    const cs = params.seed_chroma_size || 128;
+    let name = `v4_sl${lq}x${ls}_sc${cq}x${cs}_l0q${params.l0q}`;
+    if (params.optl2) name += '_optl2';
+    if (params.optl2 && params.max_delta && params.max_delta !== 20) name += `_d${params.max_delta}`;
+    if (params.l0_scale && params.l0_scale < 100) name += `_l0s${params.l0_scale}`;
+    if (params.l0_sharpen) name += `_l0sh${Math.round(params.l0_sharpen * 10)}`;
+    return name;
+  }
+
+  // V2/V3 fused pipeline: no L1 residuals
+  const sq = isLosslessSeedQ(params.seedq || params.baseq) ? 'L' : (params.seedq || params.baseq);
+  let name = `v2_b${sq}_l0q${params.l0q}`;
+  if (params.seed_size) name += `_ss${params.seed_size}`;
+  if (params.optl2) {
+    name += '_optl2';
+    if (params.max_delta && params.max_delta !== 20) name += `_d${params.max_delta}`;
+  } else {
+    name += '_nooptl2';
+  }
   if (params.sharpen) name += `_sh${Math.round(params.sharpen * 10)}`;
   if (params.l0_scale && params.l0_scale < 100) name += `_l0s${params.l0_scale}`;
   if (params.l0_sharpen) name += `_l0sh${Math.round(params.l0_sharpen * 10)}`;
+  if (params.sr) name += '_sr';
+  if (params.enhance) name += '_enh';
+  if (params.denoise) {
+    const dw = params.denoise_weight != null ? Math.round(params.denoise_weight * 100) : 100;
+    name += `_dn${dw}`;
+  }
+  if (params.synth_noise && params.synth_strength != null) {
+    name += `_sn${Math.round(params.synth_strength * 100)}`;
+  }
+  if (params.tile_sharpen) name += `_tsh${Math.round(params.tile_sharpen * 10)}`;
   return name;
 }
 
@@ -139,7 +169,12 @@ async function scanRuns() {
     if (hasManifest) {
       try {
         manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-        run.baseq = manifest.baseq;
+        run.seedq = manifest.seedq || manifest.baseq;
+        run.seed_size = manifest.seed_size || null;
+        run.seed_luma_size = manifest.seed_luma_size || null;
+        run.seed_luma_q = manifest.seed_luma_q || null;
+        run.seed_chroma_size = manifest.seed_chroma_size || null;
+        run.seed_chroma_q = manifest.seed_chroma_q || null;
         run.l1q = manifest.l1q;
         run.l0q = manifest.l0q;
         run.optl2 = manifest.optl2 || false;
@@ -183,27 +218,63 @@ async function scanRuns() {
 
     // Generate display name
     // V2 fused pipeline: v2_b{baseq}_l0q{N}[_optl2[_d{N}]][_l0s{N}][_l0sh{N}]
-    const v2Match = dirName.match(/^v2_b(\d+)_l0q(\d+)(?:_(optl2))?(?:_d(\d+))?(?:_l0s(\d+))?(?:_l0sh(\d+))?$/);
+    // V4 split-seed naming: v4_sl{lq}x{ls}_sc{cq}x{cs}_l0q{N}[_optl2][_d{N}][_l0s{N}][_l0sh{N}]
+    const v4Match = dirName.match(/^v4_sl(\d+)x(\d+)_sc(\d+)x(\d+)_l0q(\d+)(?:_(optl2))?(?:_d(\d+))?(?:_l0s(\d+))?(?:_l0sh(\d+))?$/);
+    // V2/V3 naming: v2_b{seedq}_l0q{N}[_ss{N}][_optl2|_optl2luma|_nooptl2][_d{N}][_l0s{N}][_l0sh{N}][_sr][_enh][_dn{W}][_sn{S}][_tsh{S}]
+    const v2Match = dirName.match(/^v2_b(\d+|L)_l0q(\d+)(?:_ss(\d+))?(?:_(optl2|optl2luma|nooptl2))?(?:_d(\d+))?(?:_l0s(\d+))?(?:_l0sh(\d+))?(?:_(sr))?(?:_(enh))?(?:_dn(\d+))?(?:_sn(\d+))?(?:_tsh(\d+))?$/);
     // V1 naming: b{baseq}_l1q{N}_l0q{N}[_optl2]...
     const newNameMatch = dirName.match(/^b(\d+)_l1q(\d+)_l0q(\d+)(?:_(optl2))?(?:_sh(\d+))?(?:_l1s(\d+))?(?:_l0s(\d+))?(?:_l1sh(\d+))?(?:_l0sh(\d+))?$/);
     const jpegBaselineMatch = dirName.match(/^jpeg_q(\d+)$/);
 
-    if (v2Match) {
-      run.baseq = run.baseq || parseInt(v2Match[1]);
-      run.l0q = run.l0q || parseInt(v2Match[2]);
-      run.optl2 = run.optl2 || !!v2Match[3];
-      const delta = v2Match[4] ? parseInt(v2Match[4]) : null;
-      run.l0_scale = run.l0_scale || (v2Match[5] ? parseInt(v2Match[5]) : 100);
-      run.l0_sharpen = run.l0_sharpen || (v2Match[6] ? parseInt(v2Match[6]) / 10 : null);
-      run.subsamp = run.subsamp || '444';
+    if (v4Match) {
+      run.seed_luma_q = run.seed_luma_q || parseInt(v4Match[1]);
+      run.seed_luma_size = run.seed_luma_size || parseInt(v4Match[2]);
+      run.seed_chroma_q = run.seed_chroma_q || parseInt(v4Match[3]);
+      run.seed_chroma_size = run.seed_chroma_size || parseInt(v4Match[4]);
+      run.l0q = run.l0q || parseInt(v4Match[5]);
+      run.optl2 = run.optl2 || !!v4Match[6];
+      const delta = v4Match[7] ? parseInt(v4Match[7]) : null;
+      run.l0_scale = run.l0_scale || (v4Match[8] ? parseInt(v4Match[8]) : 100);
+      run.l0_sharpen = run.l0_sharpen || (v4Match[9] ? parseInt(v4Match[9]) / 10 : null);
 
-      let label = `ORIGAMI v2 B${run.baseq} L0=${run.l0q}`;
+      let label = `ORIGAMI v4 SL=${run.seed_luma_q}@${run.seed_luma_size} SC=${run.seed_chroma_q}@${run.seed_chroma_size} L0=${run.l0q}`;
       if (run.optl2) label += delta ? ` optL2 \u00b1${delta}` : ' optL2';
       if (run.l0_scale < 100) label += ` L0@${run.l0_scale}%`;
       if (run.l0_sharpen) label += ` L0sh=${Number(run.l0_sharpen).toFixed(1)}`;
       run.displayName = label;
+    } else if (v2Match) {
+      run.seedq = run.seedq || (v2Match[1] === 'L' ? 'L' : parseInt(v2Match[1]));
+      run.l0q = run.l0q || parseInt(v2Match[2]);
+      run.seed_size = run.seed_size || (v2Match[3] ? parseInt(v2Match[3]) : null);
+      const optl2Mode = v2Match[4] || null;  // 'optl2', 'optl2luma', 'nooptl2', or null
+      run.optl2 = run.optl2 || (optl2Mode === 'optl2' || optl2Mode === 'optl2luma');
+      run.optl2_mode = optl2Mode;
+      const delta = v2Match[5] ? parseInt(v2Match[5]) : null;
+      run.l0_scale = run.l0_scale || (v2Match[6] ? parseInt(v2Match[6]) : 100);
+      run.l0_sharpen = run.l0_sharpen || (v2Match[7] ? parseInt(v2Match[7]) / 10 : null);
+      run.sr = run.sr || !!v2Match[8];
+      run.enhance = run.enhance || !!v2Match[9];
+      run.denoise_weight = v2Match[10] ? parseInt(v2Match[10]) : null;
+      run.denoise = run.denoise_weight !== null;
+      run.synth_strength = v2Match[11] ? parseInt(v2Match[11]) : null;
+      run.tile_sharpen = v2Match[12] ? parseInt(v2Match[12]) / 10 : null;
+      run.subsamp = run.subsamp || '444';
+
+      let label = `ORIGAMI v2 SQ${run.seedq} L0=${run.l0q}`;
+      if (run.seed_size) label += ` SS${run.seed_size}`;
+      if (optl2Mode === 'optl2') label += delta ? ` optL2 \u00b1${delta}` : ' optL2';
+      else if (optl2Mode === 'optl2luma') label += ' optL2-luma';
+      else if (optl2Mode === 'nooptl2') label += ' noOptL2';
+      if (run.l0_scale < 100) label += ` L0@${run.l0_scale}%`;
+      if (run.l0_sharpen) label += ` L0sh=${Number(run.l0_sharpen).toFixed(1)}`;
+      if (run.sr) label += ' SR';
+      if (run.enhance) label += ' enh';
+      if (run.denoise) label += ` dn${run.denoise_weight}`;
+      if (run.synth_strength !== null) label += ` sn${run.synth_strength}`;
+      if (run.tile_sharpen) label += ` tsh${run.tile_sharpen}`;
+      run.displayName = label;
     } else if (newNameMatch) {
-      run.baseq = run.baseq || parseInt(newNameMatch[1]);
+      run.seedq = run.seedq || parseInt(newNameMatch[1]);
       run.l1q = run.l1q || parseInt(newNameMatch[2]);
       run.l0q = run.l0q || parseInt(newNameMatch[3]);
       run.optl2 = run.optl2 || !!newNameMatch[4];
@@ -213,7 +284,7 @@ async function scanRuns() {
       run.l1_sharpen = run.l1_sharpen || (newNameMatch[8] ? parseInt(newNameMatch[8]) / 10 : null);
       run.l0_sharpen = run.l0_sharpen || (newNameMatch[9] ? parseInt(newNameMatch[9]) / 10 : null);
 
-      let label = `ORIGAMI turbo B${run.baseq} L1=${run.l1q} L0=${run.l0q}`;
+      let label = `ORIGAMI turbo SQ${run.seedq} L1=${run.l1q} L0=${run.l0q}`;
       if (run.optl2) label += ' optL2';
       if (run.sharpen) label += ` sh=${Number(run.sharpen).toFixed(1)}`;
       if (run.l1_scale < 100) label += ` L1@${run.l1_scale}%`;
@@ -221,10 +292,36 @@ async function scanRuns() {
       if (run.l1_sharpen) label += ` L1sh=${Number(run.l1_sharpen).toFixed(1)}`;
       if (run.l0_sharpen) label += ` L0sh=${Number(run.l0_sharpen).toFixed(1)}`;
       run.displayName = label;
+    } else if (dirName.match(/^sr_([a-z0-9_]+?)_(f32|i8)_(\d+)_b(\d+)_l0q(\d+)$/)) {
+      // SR model runs: sr_{model}_{precision}_444_b{seedq}_l0q{N}
+      const srMatch = dirName.match(/^sr_([a-z0-9_]+?)_(f32|i8)_(\d+)_b(\d+)_l0q(\d+)$/);
+      const modelName = srMatch[1].replace(/_/g, ' ');
+      const precision = srMatch[2] === 'i8' ? ' INT8' : '';
+      run.subsamp = srMatch[3];
+      run.seedq = run.seedq || parseInt(srMatch[4]);
+      run.l0q = run.l0q || parseInt(srMatch[5]);
+      run.type = 'sr_model';
+      run.displayName = `SR ${modelName}${precision} L0=${run.l0q}`;
+    } else if (dirName.match(/^sr_lanczos3_(\d+)_b(\d+)_l0q(\d+)$/)) {
+      // SR lanczos3 baseline: sr_lanczos3_444_b{seedq}_l0q{N}
+      const srLanczosMatch = dirName.match(/^sr_lanczos3_(\d+)_b(\d+)_l0q(\d+)$/);
+      run.subsamp = srLanczosMatch[1];
+      run.seedq = run.seedq || parseInt(srLanczosMatch[2]);
+      run.l0q = run.l0q || parseInt(srLanczosMatch[3]);
+      run.type = 'origami';
+      run.displayName = `Lanczos3 L0=${run.l0q}`;
+    } else if (jpegBaselineMatch) {
+      const modelName = srMatch[1].replace(/_/g, ' ');
+      const precision = srMatch[2] === 'i8' ? ' INT8' : '';
+      run.subsamp = srMatch[3];
+      run.seedq = run.seedq || parseInt(srMatch[4]);
+      run.l0q = run.l0q || parseInt(srMatch[5]);
+      run.type = 'sr_model';
+      run.displayName = `SR ${modelName}${precision} L0=${run.l0q}`;
     } else if (jpegBaselineMatch) {
       const q = parseInt(jpegBaselineMatch[1]);
       run.type = 'jpeg_baseline';
-      run.baseq = q;
+      run.seedq = q;
       run.displayName = `JPEG ${q}`;
     } else {
       // Try legacy patterns for display name and metadata
@@ -232,7 +329,7 @@ async function scanRuns() {
       if (legacy) {
         run.displayName = legacy.displayName;
         if (legacy.type) run.type = legacy.type;
-        if (legacy.baseq != null) run.baseq = run.baseq || legacy.baseq;
+        if (legacy.baseq != null) run.seedq = run.seedq || legacy.baseq;
         if (legacy.l1q != null) run.l1q = run.l1q || legacy.l1q;
         if (legacy.l0q != null) run.l0q = run.l0q || legacy.l0q;
         if (legacy.optl2 != null) run.optl2 = run.optl2 || legacy.optl2;
@@ -280,6 +377,19 @@ function getLegacyInfo(dirName) {
       type: 'jpeg_baseline', baseq: q, encoder,
     };
   }
+
+  // Original uncompressed reference tiles
+  if (dirName === '_originals') return {
+    displayName: '_originals',
+    type: 'origami', encoder: 'reference',
+  };
+
+  // JXL served (tile server simulation) — uses origami-style compress/decompress dirs
+  m = dirName.match(/^jxl_served_q(\d+)$/);
+  if (m) return {
+    displayName: `JXL Served Q${m[1]}`,
+    type: 'origami', baseq: parseInt(m[1]), encoder: 'jpegxl_served',
+  };
 
   // JP2
   m = dirName.match(/^jp2_baseline_q(\d+)$/);
@@ -444,8 +554,8 @@ async function buildCapturesFromRuns(runs) {
   for (const run of runs) {
     const key = run.displayName;
     captures[key] = {
-      q: run.l0q || run.baseq || 0,
-      j: run.l0q || run.baseq || 0,
+      q: run.l0q || run.seedq || 0,
+      j: run.l0q || run.seedq || 0,
       name: run.dirName,
       type: run.type,
       encoder: run.encoder || 'libjpeg-turbo',
@@ -453,7 +563,8 @@ async function buildCapturesFromRuns(runs) {
       has_compress: run.has_compress,
       has_decompress: run.has_decompress,
       has_tiles: run.has_tiles,
-      baseq: run.baseq,
+      seedq: run.seedq,
+      seed_size: run.seed_size,
       l1q: run.l1q,
       l0q: run.l0q,
       subsamp: run.subsamp,
@@ -483,18 +594,34 @@ async function getCaptures() {
 // ─── Build encode command ───
 
 function buildEncodeCommand(params, outDir) {
-  const baseqArg = isLosslessBaseQ(params.baseq) ? 'lossless' : String(params.baseq);
+  const seedqVal = params.seedq || params.baseq;
+  const seedqArg = isLosslessSeedQ(seedqVal) ? 'lossless' : String(seedqVal);
   const args = [
     'encode',
     '--image', params.image,
     '--out', outDir,
-    '--baseq', baseqArg,
+    '--seedq', seedqArg,
     '--l0q', String(params.l0q),
     '--subsamp', '444',
     '--manifest',
     '--debug-images',
     '--pack',
   ];
+  if (params.seed_luma_size) {
+    args.push('--seed-luma-size', String(params.seed_luma_size));
+  }
+  if (params.seed_luma_q) {
+    args.push('--seed-luma-q', String(params.seed_luma_q));
+  }
+  if (params.seed_chroma_size) {
+    args.push('--seed-chroma-size', String(params.seed_chroma_size));
+  }
+  if (params.seed_chroma_q) {
+    args.push('--seed-chroma-q', String(params.seed_chroma_q));
+  }
+  if (params.seed_size) {
+    args.push('--seed-size', String(params.seed_size));
+  }
   if (params.optl2) {
     args.push('--optl2', '--max-delta', String(params.max_delta || 20));
   }
@@ -507,6 +634,22 @@ function buildEncodeCommand(params, outDir) {
   if (params.l0_sharpen) {
     args.push('--l0-sharpen', Number(params.l0_sharpen).toFixed(1));
   }
+  if (params.enhance) {
+    const refinePath = path.join(__dirname, '../../models/refine_8ch15b.onnx');
+    if (fs.existsSync(refinePath)) {
+      args.push('--refine-model', refinePath);
+    }
+  }
+  if (params.denoise) {
+    args.push('--denoise');
+    if (params.denoise_weight != null) {
+      args.push('--denoise-weight', Number(params.denoise_weight).toFixed(2));
+    }
+    if (params.synth_strength != null) {
+      args.push('--synth-strength', Number(params.synth_strength).toFixed(2));
+    }
+  }
+  args.push('--upsample-filter', 'lanczos3');
   return args;
 }
 
@@ -526,7 +669,7 @@ app.get('/api/runs', async (req, res) => {
 // POST /api/runs — Create & launch a new encode
 app.post('/api/runs', async (req, res) => {
   try {
-    const { image, baseq, l0q, optl2, max_delta, sharpen, l0_scale, l0_sharpen } = req.body;
+    const { image, seedq, baseq, seed_size, seed_luma_size, seed_luma_q, seed_chroma_size, seed_chroma_q, l0q, optl2, max_delta, sharpen, l0_scale, l0_sharpen, enhance, denoise, denoise_weight, synth_noise, synth_strength, tile_sharpen } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: 'image is required' });
@@ -537,15 +680,27 @@ app.post('/api/runs', async (req, res) => {
       return res.status(400).json({ error: `Image not found: ${image}` });
     }
 
+    const seedqVal = seedq || baseq;
     const params = {
       image: imagePath,
-      baseq: isLosslessBaseQ(baseq) ? 'lossless' : (baseq || 95),
+      seedq: isLosslessSeedQ(seedqVal) ? 'lossless' : (seedqVal || 95),
+      seed_size: seed_size || null,
+      seed_luma_size: seed_luma_size || null,
+      seed_luma_q: seed_luma_q || null,
+      seed_chroma_size: seed_chroma_size || null,
+      seed_chroma_q: seed_chroma_q || null,
       l0q: l0q || 60,
       optl2: optl2 !== false,
       max_delta: max_delta || 20,
       sharpen: sharpen || null,
       l0_scale: l0_scale || 100,
       l0_sharpen: l0_sharpen || null,
+      enhance: !!enhance,
+      denoise: !!denoise,
+      denoise_weight: denoise ? (denoise_weight != null ? denoise_weight : 1.0) : null,
+      synth_noise: !!synth_noise,
+      synth_strength: synth_noise ? (synth_strength != null ? synth_strength : 0.8) : null,
+      tile_sharpen: tile_sharpen || null,
     };
 
     const runName = generateRunName(params);
@@ -888,6 +1043,7 @@ async function findPngsRecursive(dir, base) {
     return results;
   }
   for (const entry of entries) {
+    if (entry.name.startsWith('_')) continue;  // skip _archive etc.
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       const sub = await findPngsRecursive(fullPath, base);
@@ -972,6 +1128,113 @@ app.get('/pipeline-data', async (req, res) => {
 
 // Serve raw run files for pipeline page image access
 app.use('/run-image', express.static(RUNS_DIR));
+
+// ─── Denoise experiment API ───
+
+const NOISE_FLOOR_DIR = path.join(__dirname, '../analysis/noise_floor');
+
+// Serve denoise experiment image assets
+app.use('/denoise-assets', express.static(NOISE_FLOOR_DIR));
+
+// List denoise experiments
+app.get('/api/denoise/experiments', async (req, res) => {
+  try {
+    if (!fs.existsSync(NOISE_FLOOR_DIR)) {
+      return res.json([]);
+    }
+    const entries = await fsPromises.readdir(NOISE_FLOOR_DIR, { withFileTypes: true });
+    const experiments = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const metaPath = path.join(NOISE_FLOOR_DIR, entry.name, 'metadata.json');
+      const metricsPath = path.join(NOISE_FLOOR_DIR, entry.name, 'metrics.json');
+      if (fs.existsSync(metaPath) || fs.existsSync(metricsPath)) {
+        let meta = {};
+        try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')); } catch {}
+        experiments.push({
+          id: entry.name,
+          timestamp: meta.timestamp || null,
+          source_run: meta.source_run || null,
+          params: meta.params || null,
+          has_sweep: fs.existsSync(path.join(NOISE_FLOOR_DIR, entry.name, 'jxl_sweep')),
+          has_separation: fs.existsSync(path.join(NOISE_FLOOR_DIR, entry.name, 'separation')),
+          has_artifacts: fs.existsSync(path.join(NOISE_FLOOR_DIR, entry.name, 'artifacts')),
+        });
+      }
+    }
+    res.json(experiments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get experiment data (metadata + metrics)
+app.get('/api/denoise/experiment/:id', async (req, res) => {
+  try {
+    const expDir = path.join(NOISE_FLOOR_DIR, req.params.id);
+    if (!fs.existsSync(expDir)) return res.status(404).json({ error: 'Not found' });
+
+    const result = { id: req.params.id };
+    const metaPath = path.join(expDir, 'metadata.json');
+    const metricsPath = path.join(expDir, 'metrics.json');
+
+    if (fs.existsSync(metaPath)) result.metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    if (fs.existsSync(metricsPath)) result.metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf-8'));
+
+    // List sweep quality levels
+    const sweepDir = path.join(expDir, 'jxl_sweep');
+    if (fs.existsSync(sweepDir)) {
+      const sweepEntries = fs.readdirSync(sweepDir, { withFileTypes: true });
+      result.sweep_qualities = sweepEntries
+        .filter(e => e.isDirectory() && e.name.startsWith('q'))
+        .map(e => parseInt(e.name.slice(1)))
+        .sort((a, b) => b - a);
+    }
+
+    // List separation methods
+    const sepDir = path.join(expDir, 'separation');
+    if (fs.existsSync(sepDir)) {
+      const sepEntries = fs.readdirSync(sepDir, { withFileTypes: true });
+      result.separation_methods = sepEntries
+        .filter(e => e.isDirectory())
+        .map(e => {
+          let m = { name: e.name };
+          const mPath = path.join(sepDir, e.name, 'metrics.json');
+          if (fs.existsSync(mPath)) {
+            try { m.metrics = JSON.parse(fs.readFileSync(mPath, 'utf-8')); } catch {}
+          }
+          return m;
+        });
+    }
+
+    // Artifacts
+    const artDir = path.join(expDir, 'artifacts');
+    if (fs.existsSync(artDir)) {
+      const mPath = path.join(artDir, 'metrics.json');
+      if (fs.existsSync(mPath)) {
+        try { result.artifact_metrics = JSON.parse(fs.readFileSync(mPath, 'utf-8')); } catch {}
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Save notes
+app.post('/api/denoise/experiment/:id/notes', async (req, res) => {
+  try {
+    const metaPath = path.join(NOISE_FLOOR_DIR, req.params.id, 'metadata.json');
+    if (!fs.existsSync(metaPath)) return res.status(404).json({ error: 'Not found' });
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    meta.notes = req.body.notes || '';
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Proxy tile server routes to Rust tile server (same origin for browser)
 const tileProxy = createProxyMiddleware({

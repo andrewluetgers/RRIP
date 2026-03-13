@@ -16,8 +16,7 @@ use crate::turbojpeg_optimized::{
     decode_luma_turbo, encode_jpeg_turbo, encode_luma_turbo, load_rgb_turbo,
 };
 
-// upsample_2x and upsample_4x are in super (core/mod.rs)
-use super::{upsample_2x, upsample_4x, fir_resize};
+use super::fir_resize;
 
 // ---------------------------------------------------------------------------
 // BufferPool — pre-allocated buffer reuse for tile processing
@@ -128,6 +127,8 @@ pub struct FamilyStats {
 // ---------------------------------------------------------------------------
 
 pub struct FamilyResult {
+    /// L2 tile: (x2, y2, jpeg_bytes) — only present when seed > tile_size
+    pub l2: Option<(u32, u32, Vec<u8>)>,
     /// L1 tiles: (x1, y1, jpeg_bytes)
     pub l1: Vec<(u32, u32, Vec<u8>)>,
     /// L0 tiles: (x0, y0, jpeg_bytes)
@@ -196,6 +197,25 @@ pub struct ReconstructOpts {
     pub sharpen: Option<f32>,
     /// Resample filter for prediction upsamples (default: Lanczos3).
     pub upsample_filter: ResampleFilter,
+    /// Optional SR model for learned 4x super-resolution (replaces upsample filter).
+    #[cfg(feature = "sr-model")]
+    pub sr_model: Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    /// Optional refine model for same-resolution enhancement of L0 tiles.
+    #[cfg(feature = "sr-model")]
+    pub refine_model: Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    /// Unsharp mask strength applied to decoded residual before applying to prediction.
+    /// Boosts residual detail at decode time without increasing encoded size.
+    pub l0_sharpen: Option<f32>,
+    /// Unsharp mask strength applied to final reconstructed tiles (decode-time).
+    /// Applied after residual correction, before noise synthesis.
+    pub tile_sharpen: Option<f32>,
+    /// Enable wavelet-domain noise synthesis at decode time.
+    /// If true and the pack contains synthesis params (level_kind=6),
+    /// synthesized noise is added to the reconstructed Y plane.
+    pub synth_noise: bool,
+    /// Noise synthesis strength (0.0 = none, 1.0 = full measured sigma).
+    /// Default 0.5 recommended since denoiser removes some real signal.
+    pub synth_strength: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +224,7 @@ pub struct ReconstructOpts {
 
 /// Decode an L2 baseline tile from raw bytes (JPEG or JXL).
 /// Detects format by magic bytes.
-fn decode_l2_rgb_from_bytes(data: &[u8]) -> Result<RgbImage> {
+pub fn decode_l2_rgb_from_bytes(data: &[u8]) -> Result<RgbImage> {
     // Check for JXL magic
     let is_jxl = (data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A)
         || (data.len() >= 12
@@ -476,6 +496,65 @@ fn ycbcr_tile_to_rgb(
     }
 }
 
+/// Apply refine model to prediction planes (Y/Cb/Cr u8) by converting tiles to RGB,
+/// running the refiner, and converting back. Modifies planes in place.
+#[cfg(feature = "sr-model")]
+fn refine_prediction_planes(
+    y: &mut [u8], cb: &mut [u8], cr: &mut [u8],
+    w: u32, h: u32, tile_size: u32,
+    refine: &crate::core::sr_model::SRModel,
+) {
+    use crate::core::color::{ycbcr_to_rgb, rgb_to_ycbcr};
+    let tiles_x = (w + tile_size - 1) / tile_size;
+    let tiles_y = (h + tile_size - 1) / tile_size;
+    let ts = tile_size as usize;
+
+    for ty_idx in 0..tiles_y {
+        for tx_idx in 0..tiles_x {
+            let x0 = (tx_idx * tile_size) as usize;
+            let y0 = (ty_idx * tile_size) as usize;
+
+            // Extract tile → RGB
+            let mut tile_rgb = vec![0u8; ts * ts * 3];
+            for dy in 0..ts {
+                let py = y0 + dy;
+                if py >= h as usize { continue; }
+                for dx in 0..ts {
+                    let px = x0 + dx;
+                    if px >= w as usize { continue; }
+                    let pi = py * w as usize + px;
+                    let ti = (dy * ts + dx) * 3;
+                    let (r, g, b) = ycbcr_to_rgb(y[pi], cb[pi], cr[pi]);
+                    tile_rgb[ti] = r;
+                    tile_rgb[ti + 1] = g;
+                    tile_rgb[ti + 2] = b;
+                }
+            }
+
+            // Refine
+            if refine.refine_rgb_inplace(&mut tile_rgb, tile_size, tile_size).is_err() {
+                continue; // skip on error, keep original prediction
+            }
+
+            // Write back → YCbCr
+            for dy in 0..ts {
+                let py = y0 + dy;
+                if py >= h as usize { continue; }
+                for dx in 0..ts {
+                    let px = x0 + dx;
+                    if px >= w as usize { continue; }
+                    let pi = py * w as usize + px;
+                    let ti = (dy * ts + dx) * 3;
+                    let (yv, cbv, crv) = rgb_to_ycbcr(tile_rgb[ti], tile_rgb[ti + 1], tile_rgb[ti + 2]);
+                    y[pi] = yv;
+                    cb[pi] = cbv;
+                    cr[pi] = crv;
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // reconstruct_family — the core fused reconstruction pipeline (v2)
 // ---------------------------------------------------------------------------
@@ -514,80 +593,333 @@ pub fn reconstruct_family(
         None
     };
 
-    // --- L2 decode ---
+    // Compute L0/L1 output dimensions from tile grid (pyramid properties, not seed-dependent)
+    let l0_pred_w = tile_size * 4;
+    let l0_pred_h = tile_size * 4;
+    let l1_w = tile_size * 2;
+    let l1_h = tile_size * 2;
+    let up_filter = opts.upsample_filter;
+
+    // Check if this is a v4 split-seed pack
+    let is_v4 = pack.as_ref().map_or(false, |p| p.is_split_seed());
+
+    // --- Decode and upsample seeds, apply residual ---
+    // Produces: l0_y_corrected, l0_cb, l0_cr, l1_cb, l1_cr, seed_w/h (for L2 tile gen)
+
     let l2_start = Instant::now();
-    let l2_img = if let Some(ref pack) = pack {
-        if let Some(l2_bytes) = pack.get_l2() {
-            decode_l2_rgb_from_bytes(l2_bytes)
-                .with_context(|| "decoding L2 from pack/bundle")?
+    let l0_y_corrected: Vec<u8>;
+    let l0_cb: Vec<u8>;
+    let l0_cr: Vec<u8>;
+    let l1_cb: Vec<u8>;
+    let l1_cr: Vec<u8>;
+    let seed_w: u32; // for L2 tile generation (unified) or chroma size (v4)
+    let seed_h: u32;
+    let seed_cb_for_l2: Vec<u8>; // seed chroma for L2 tile generation
+    let seed_cr_for_l2: Vec<u8>;
+
+    if is_v4 {
+        // --- V4 split-seed path ---
+        let pack = pack.as_ref().unwrap();
+        let luma_w = pack.metadata.seed_luma_w as u32;
+        let luma_h = pack.metadata.seed_luma_h as u32;
+        let chroma_w = pack.metadata.seed_chroma_w as u32;
+        let chroma_h = pack.metadata.seed_chroma_h as u32;
+
+        // Decode seed luma (grayscale JPEG)
+        let luma_bytes = pack.get_seed_luma()
+            .ok_or_else(|| anyhow!("v4 pack missing seed_luma entry"))?;
+        let (luma_y, _lw, _lh) = decode_luma_from_bytes(luma_bytes)?;
+
+        // Decode seed Cb and Cr
+        let chroma_cb;
+        let chroma_cr;
+        if let Some(cr_bytes) = pack.get_seed_cr() {
+            // New format: separate Cb/Cr grayscale entries (level_kind 4 = Cb, 5 = Cr)
+            let cb_bytes = pack.get_seed_cb()
+                .ok_or_else(|| anyhow!("v4 pack has seed_cr but missing seed_cb entry"))?;
+            chroma_cb = decode_luma_from_bytes(cb_bytes)
+                .with_context(|| "decoding seed Cb from v4 pack")?.0;
+            chroma_cr = decode_luma_from_bytes(cr_bytes)
+                .with_context(|| "decoding seed Cr from v4 pack")?.0;
+        } else {
+            // Legacy: single RGB chroma entry (level_kind=4 stores RGB, no level_kind=5)
+            let chroma_rgb_bytes = pack.get_seed_chroma()
+                .ok_or_else(|| anyhow!("v4 pack missing seed chroma entries"))?;
+            let chroma_img = decode_l2_rgb_from_bytes(chroma_rgb_bytes)
+                .with_context(|| "decoding chroma seed (legacy RGB) from v4 pack")?;
+            let (_, cb, cr) = ycbcr_planes(&chroma_img);
+            chroma_cb = cb;
+            chroma_cr = cr;
+        }
+
+        let l2_decode_ms_val = if timing { l2_start.elapsed().as_millis() } else { 0 };
+        let _ = l2_decode_ms_val; // used in stats below
+
+        // Parallel upsample from independent source sizes
+        let upsample_start = Instant::now();
+        let (l0_y_pred, ((l1_cb_val, l1_cr_val), (l0_cb_val, l0_cr_val))) = rayon::join(
+            || {
+                // Y: upsample luma seed to L0 size
+                fir_resize(&luma_y, luma_w, luma_h, l0_pred_w, l0_pred_h, up_filter)
+            },
+            || rayon::join(
+                || {
+                    // Cb/Cr: upsample chroma seed to L1 size
+                    let cb = fir_resize(&chroma_cb, chroma_w, chroma_h, l1_w, l1_h, up_filter);
+                    let cr = fir_resize(&chroma_cr, chroma_w, chroma_h, l1_w, l1_h, up_filter);
+                    (cb, cr)
+                },
+                || {
+                    // Cb/Cr: upsample chroma seed to L0 size
+                    let cb = fir_resize(&chroma_cb, chroma_w, chroma_h, l0_pred_w, l0_pred_h, up_filter);
+                    let cr = fir_resize(&chroma_cr, chroma_w, chroma_h, l0_pred_w, l0_pred_h, up_filter);
+                    (cb, cr)
+                },
+            ),
+        );
+        let upsample_ms_val = if timing { upsample_start.elapsed().as_millis() } else { 0 };
+        let _ = upsample_ms_val;
+
+        // Apply refine model to prediction before residual (improves prediction → smaller residual match)
+        #[cfg(feature = "sr-model")]
+        let (mut l0_y_pred, mut l0_cb_val, mut l0_cr_val) = if let Some(ref refine) = opts.refine_model {
+            let mut y = l0_y_pred;
+            let mut cb = l0_cb_val;
+            let mut cr = l0_cr_val;
+            refine_prediction_planes(&mut y, &mut cb, &mut cr, l0_pred_w, l0_pred_h, tile_size, refine);
+            (y, cb, cr)
+        } else {
+            (l0_y_pred, l0_cb_val, l0_cr_val)
+        };
+
+        // Apply fused L0 residual
+        let l0_res_start = Instant::now();
+        let mut l0_y = l0_y_pred;
+        if let Some(fused_bytes) = pack.get_fused_l0() {
+            let (residual, res_w, res_h) = decode_luma_from_bytes(fused_bytes)?;
+            let residual = if let Some(strength) = opts.l0_sharpen {
+                crate::core::sharpen::unsharp_mask_gray(&residual, res_w, res_h, strength)
+            } else {
+                residual
+            };
+            apply_fused_residual(&mut l0_y, &residual, l0_pred_w, l0_pred_h, res_w, res_h);
+        }
+        // Sharpen reconstructed Y (after residual, before noise)
+        if let Some(strength) = opts.tile_sharpen {
+            l0_y = crate::core::sharpen::unsharp_mask_gray(&l0_y, l0_pred_w, l0_pred_h, strength);
+        }
+        // Optionally synthesize noise from pack params
+        if opts.synth_noise {
+            if let Some(synth_params) = pack.get_synth_params() {
+                crate::core::wavelet::synthesize_and_apply_noise(
+                    &mut l0_y, l0_pred_w, l0_pred_h, &synth_params, opts.synth_strength,
+                );
+            }
+        }
+        let _l0_residual_ms = if timing { l0_res_start.elapsed().as_millis() } else { 0 };
+
+        l0_y_corrected = l0_y;
+        l0_cb = l0_cb_val;
+        l0_cr = l0_cr_val;
+        l1_cb = l1_cb_val;
+        l1_cr = l1_cr_val;
+        seed_w = chroma_w; // for L2 tile gen
+        seed_h = chroma_h;
+        seed_cb_for_l2 = chroma_cb;
+        seed_cr_for_l2 = chroma_cr;
+    } else {
+        // --- Unified seed path (v2/v3) ---
+        let l2_img = if let Some(ref pack) = pack {
+            if let Some(l2_bytes) = pack.get_l2() {
+                decode_l2_rgb_from_bytes(l2_bytes)
+                    .with_context(|| "decoding L2 from pack/bundle")?
+            } else {
+                let l2_path = baseline_tile_path(input.files_dir, input.l2, x2, y2);
+                load_rgb(&l2_path)
+                    .with_context(|| format!("loading baseline L2 tile {}", l2_path.display()))?
+            }
         } else {
             let l2_path = baseline_tile_path(input.files_dir, input.l2, x2, y2);
             load_rgb(&l2_path)
                 .with_context(|| format!("loading baseline L2 tile {}", l2_path.display()))?
-        }
-    } else {
-        let l2_path = baseline_tile_path(input.files_dir, input.l2, x2, y2);
-        load_rgb(&l2_path)
-            .with_context(|| format!("loading baseline L2 tile {}", l2_path.display()))?
-    };
-    let l2_decode_ms = if timing { l2_start.elapsed().as_millis() } else { 0 };
+        };
 
-    // --- Optionally sharpen L2 before upsample ---
-    let l2_img = if let Some(strength) = opts.sharpen {
-        use crate::core::sharpen::unsharp_mask_rgb;
-        let w = l2_img.width();
-        let h = l2_img.height();
-        let sharpened = unsharp_mask_rgb(l2_img.as_raw(), w, h, strength);
-        RgbImage::from_raw(w, h, sharpened).expect("sharpen produced wrong size")
-    } else {
-        l2_img
-    };
+        // Optionally sharpen L2 before upsample
+        let l2_img = if let Some(strength) = opts.sharpen {
+            use crate::core::sharpen::unsharp_mask_rgb;
+            let w = l2_img.width();
+            let h = l2_img.height();
+            let sharpened = unsharp_mask_rgb(l2_img.as_raw(), w, h, strength);
+            RgbImage::from_raw(w, h, sharpened).expect("sharpen produced wrong size")
+        } else {
+            l2_img
+        };
 
-    // --- Extract L2 YCbCr planes ---
-    let (l2_y, l2_cb, l2_cr) = ycbcr_planes(&l2_img);
-    let l2_w = l2_img.width();
-    let l2_h = l2_img.height();
+        let s_w = l2_img.width();
+        let s_h = l2_img.height();
 
-    // --- Parallel upsample: Y 4x, Cb/Cr 2x and 4x ---
-    let upsample_start = Instant::now();
-    let up_filter = opts.upsample_filter;
+        // --- SR model path: run learned 4x super-resolution on full RGB ---
+        #[cfg(feature = "sr-model")]
+        let use_sr = opts.sr_model.is_some();
+        #[cfg(not(feature = "sr-model"))]
+        let use_sr = false;
 
-    let (l0_y_pred, ((l1_cb, l1_cr), (l0_cb, l0_cr))) = rayon::join(
-        || {
-            // Y: direct 4x upsample for L0 prediction
-            upsample_4x(&l2_y, l2_w as usize, l2_h as usize, up_filter)
-        },
-        || rayon::join(
-            || {
-                // Cb/Cr: 2x for L1
-                let cb = upsample_2x(&l2_cb, l2_w as usize, l2_h as usize, up_filter);
-                let cr = upsample_2x(&l2_cr, l2_w as usize, l2_h as usize, up_filter);
-                (cb, cr)
-            },
-            || {
-                // Cb/Cr: 4x for L0
-                let cb = upsample_4x(&l2_cb, l2_w as usize, l2_h as usize, up_filter);
-                let cr = upsample_4x(&l2_cr, l2_w as usize, l2_h as usize, up_filter);
-                (cb, cr)
-            },
-        ),
-    );
+        if use_sr {
+            #[cfg(feature = "sr-model")]
+            {
+                let sr = opts.sr_model.as_ref().unwrap();
+                let upsample_start = Instant::now();
 
-    let l0_pred_w = l2_w * 4;
-    let l0_pred_h = l2_h * 4;
-    let upsample_ms = if timing { upsample_start.elapsed().as_millis() } else { 0 };
+                // Run SR model: L2 RGB → L0 RGB (256×256 → 1024×1024)
+                let (sr_rgb, sr_w, sr_h) = sr.infer_rgb(l2_img.as_raw(), s_w, s_h)
+                    .with_context(|| "SR model inference failed")?;
 
-    // --- Decode fused L0 residual (single JPEG) ---
-    let l0_res_start = Instant::now();
-    let mut l0_y_corrected = l0_y_pred;
+                let _upsample_ms = if timing { upsample_start.elapsed().as_millis() } else { 0 };
 
-    if let Some(ref pack) = pack {
-        if let Some(fused_bytes) = pack.get_fused_l0() {
-            let (residual, res_w, res_h) = decode_luma_from_bytes(fused_bytes)?;
-            apply_fused_residual(&mut l0_y_corrected, &residual, l0_pred_w, l0_pred_h, res_w, res_h);
+                // Convert SR RGB output to YCbCr planes
+                let sr_img = RgbImage::from_raw(sr_w, sr_h, sr_rgb)
+                    .ok_or_else(|| anyhow!("SR model produced invalid image dimensions"))?;
+                let (sr_y, sr_cb_full, sr_cr_full) = ycbcr_planes(&sr_img);
+
+                // Apply refine model on top of SR prediction
+                let (mut sr_y, mut sr_cb_full, mut sr_cr_full) = if let Some(ref refine) = opts.refine_model {
+                    let mut y = sr_y;
+                    let mut cb = sr_cb_full;
+                    let mut cr = sr_cr_full;
+                    refine_prediction_planes(&mut y, &mut cb, &mut cr, sr_w, sr_h, tile_size, refine);
+                    (y, cb, cr)
+                } else {
+                    (sr_y, sr_cb_full, sr_cr_full)
+                };
+
+                // L1 chroma: downsample SR chroma from L0 size to L1 size
+                let l1_cb_val = fir_resize(&sr_cb_full, sr_w, sr_h, l1_w, l1_h, up_filter);
+                let l1_cr_val = fir_resize(&sr_cr_full, sr_w, sr_h, l1_w, l1_h, up_filter);
+
+                // Apply fused L0 residual on top of SR Y prediction (if available)
+                let l0_res_start = Instant::now();
+                let mut l0_y = sr_y;
+                if let Some(ref pack) = pack {
+                    if let Some(fused_bytes) = pack.get_fused_l0() {
+                        let (residual, res_w, res_h) = decode_luma_from_bytes(fused_bytes)?;
+                        let residual = if let Some(strength) = opts.l0_sharpen {
+                            crate::core::sharpen::unsharp_mask_gray(&residual, res_w, res_h, strength)
+                        } else {
+                            residual
+                        };
+                        apply_fused_residual(&mut l0_y, &residual, sr_w, sr_h, res_w, res_h);
+                    }
+                    // Sharpen reconstructed Y (after residual, before noise)
+                    if let Some(strength) = opts.tile_sharpen {
+                        l0_y = crate::core::sharpen::unsharp_mask_gray(&l0_y, sr_w, sr_h, strength);
+                    }
+                    if opts.synth_noise {
+                        if let Some(synth_params) = pack.get_synth_params() {
+                            crate::core::wavelet::synthesize_and_apply_noise(
+                                &mut l0_y, sr_w, sr_h, &synth_params, opts.synth_strength,
+                            );
+                        }
+                    }
+                }
+                let _l0_residual_ms = if timing { l0_res_start.elapsed().as_millis() } else { 0 };
+
+                l0_y_corrected = l0_y;
+                l0_cb = sr_cb_full;
+                l0_cr = sr_cr_full;
+                l1_cb = l1_cb_val;
+                l1_cr = l1_cr_val;
+
+                // For L2 tile generation, use seed chroma from original L2
+                let (_, s_cb_orig, s_cr_orig) = ycbcr_planes(&l2_img);
+                seed_cb_for_l2 = s_cb_orig;
+                seed_cr_for_l2 = s_cr_orig;
+                seed_w = s_w;
+                seed_h = s_h;
+            }
+            #[cfg(not(feature = "sr-model"))]
+            unreachable!();
+        } else {
+            // --- Traditional upsample path ---
+
+            // Extract seed YCbCr planes
+            let (s_y, s_cb, s_cr) = ycbcr_planes(&l2_img);
+
+            // Parallel upsample: seed → L0 Y, seed → L1 Cb/Cr, seed → L0 Cb/Cr
+            let upsample_start = Instant::now();
+
+            let (l0_y_pred, ((l1_cb_val, l1_cr_val), (l0_cb_val, l0_cr_val))) = rayon::join(
+                || {
+                    fir_resize(&s_y, s_w, s_h, l0_pred_w, l0_pred_h, up_filter)
+                },
+                || rayon::join(
+                    || {
+                        let cb = fir_resize(&s_cb, s_w, s_h, l1_w, l1_h, up_filter);
+                        let cr = fir_resize(&s_cr, s_w, s_h, l1_w, l1_h, up_filter);
+                        (cb, cr)
+                    },
+                    || {
+                        let cb = fir_resize(&s_cb, s_w, s_h, l0_pred_w, l0_pred_h, up_filter);
+                        let cr = fir_resize(&s_cr, s_w, s_h, l0_pred_w, l0_pred_h, up_filter);
+                        (cb, cr)
+                    },
+                ),
+            );
+            let _upsample_ms = if timing { upsample_start.elapsed().as_millis() } else { 0 };
+
+            // Apply refine model to prediction before residual
+            #[cfg(feature = "sr-model")]
+            let (mut l0_y_pred, mut l0_cb_val, mut l0_cr_val) = if let Some(ref refine) = opts.refine_model {
+                let mut y = l0_y_pred;
+                let mut cb = l0_cb_val;
+                let mut cr = l0_cr_val;
+                refine_prediction_planes(&mut y, &mut cb, &mut cr, l0_pred_w, l0_pred_h, tile_size, refine);
+                (y, cb, cr)
+            } else {
+                (l0_y_pred, l0_cb_val, l0_cr_val)
+            };
+
+            // Decode fused L0 residual
+            let l0_res_start = Instant::now();
+            let mut l0_y = l0_y_pred;
+            if let Some(ref pack) = pack {
+                if let Some(fused_bytes) = pack.get_fused_l0() {
+                    let (residual, res_w, res_h) = decode_luma_from_bytes(fused_bytes)?;
+                    let residual = if let Some(strength) = opts.l0_sharpen {
+                        crate::core::sharpen::unsharp_mask_gray(&residual, res_w, res_h, strength)
+                    } else {
+                        residual
+                    };
+                    apply_fused_residual(&mut l0_y, &residual, l0_pred_w, l0_pred_h, res_w, res_h);
+                }
+                // Sharpen reconstructed Y (after residual, before noise)
+                if let Some(strength) = opts.tile_sharpen {
+                    l0_y = crate::core::sharpen::unsharp_mask_gray(&l0_y, l0_pred_w, l0_pred_h, strength);
+                }
+                if opts.synth_noise {
+                    if let Some(synth_params) = pack.get_synth_params() {
+                        crate::core::wavelet::synthesize_and_apply_noise(
+                            &mut l0_y, l0_pred_w, l0_pred_h, &synth_params, opts.synth_strength,
+                        );
+                    }
+                }
+            }
+            let _l0_residual_ms = if timing { l0_res_start.elapsed().as_millis() } else { 0 };
+
+            l0_y_corrected = l0_y;
+            l0_cb = l0_cb_val;
+            l0_cr = l0_cr_val;
+            l1_cb = l1_cb_val;
+            l1_cr = l1_cr_val;
+            seed_w = s_w;
+            seed_h = s_h;
+            seed_cb_for_l2 = s_cb;
+            seed_cr_for_l2 = s_cr;
         }
     }
-    let l0_residual_ms = if timing { l0_res_start.elapsed().as_millis() } else { 0 };
+
+    let l2_decode_ms = if timing { l2_start.elapsed().as_millis() } else { 0 };
+    let upsample_ms = 0u128; // included in l2_decode_ms above
+    let l0_residual_ms = 0u128; // included in l2_decode_ms above
 
     // --- Slice L0 into tiles + encode (parallel) ---
     let l0_encode_start = Instant::now();
@@ -641,8 +973,6 @@ pub fn reconstruct_family(
 
     // --- Downsample corrected L0 Y 2x → L1 Y ---
     let l1_ds_start = Instant::now();
-    let l1_w = l2_w * 2;
-    let l1_h = l2_h * 2;
     let l1_y = fir_resize(&l0_y_corrected, l0_pred_w, l0_pred_h, l1_w, l1_h, up_filter);
     let l1_downsample_ms = if timing { l1_ds_start.elapsed().as_millis() } else { 0 };
 
@@ -685,9 +1015,47 @@ pub fn reconstruct_family(
     }
     let l1_encode_ms = if timing { l1_encode_start.elapsed().as_millis() } else { 0 };
 
+    // --- Generate L2 tile when seed > tile_size ---
+    // The seed in the pack is larger than the L2 tile in the DZI hierarchy,
+    // so we generate the L2 tile by downsampling the reconstructed L1 Y + seed chroma.
+    let l2_tile = if seed_w > tile_size {
+        let l2_out_w = tile_size;
+        let l2_out_h = tile_size;
+        // Downsample L1 Y to L2 size
+        let l2_y = fir_resize(&l1_y, l1_w, l1_h, l2_out_w, l2_out_h, up_filter);
+        // Downsample seed chroma to L2 size (already at seed_w which may be > tile_size)
+        let l2_cb = fir_resize(&seed_cb_for_l2, seed_w, seed_h, l2_out_w, l2_out_h, up_filter);
+        let l2_cr = fir_resize(&seed_cr_for_l2, seed_w, seed_h, l2_out_w, l2_out_h, up_filter);
+
+        let mut buf = buffer_pool.get(tile_buf_len);
+        ycbcr_tile_to_rgb(
+            &l2_y, &l2_cb, &l2_cr,
+            l2_out_w, l2_out_h,
+            0, 0, tile_size,
+            &mut buf,
+        );
+        let bytes = if grayscale_only {
+            let mut y_bytes = Vec::with_capacity((tile_size * tile_size) as usize);
+            for i in 0..(tile_size * tile_size) as usize {
+                let r = buf[i * 3] as f32;
+                let g = buf[i * 3 + 1] as f32;
+                let b = buf[i * 3 + 2] as f32;
+                let y = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
+                y_bytes.push(y);
+            }
+            encode_tile_gray(&y_bytes, tile_size, tile_size, quality, output_format)?
+        } else {
+            encode_tile_rgb(&buf, tile_size, tile_size, quality, output_format)?
+        };
+        buffer_pool.put(buf);
+        Some((x2, y2, bytes))
+    } else {
+        None
+    };
+
     info!(
-        "family_v2 x2={} y2={} l0_tiles={} l1_tiles={}",
-        x2, y2, l0_tiles.len(), l1_tiles.len()
+        "family x2={} y2={} l0_tiles={} l1_tiles={} l2_generated={} seed={}x{}",
+        x2, y2, l0_tiles.len(), l1_tiles.len(), l2_tile.is_some(), seed_w, seed_h
     );
 
     let stats = if timing {
@@ -706,6 +1074,7 @@ pub fn reconstruct_family(
     };
 
     Ok(FamilyResult {
+        l2: l2_tile,
         l1: l1_tiles,
         l0: l0_tiles,
         stats,
@@ -719,6 +1088,15 @@ pub fn reconstruct_family(
 /// Write a FamilyResult's tiles to disk under out_dir/L1/ and out_dir/L0/.
 pub fn write_family_tiles(result: &FamilyResult, out_dir: &Path, format: OutputFormat) -> Result<()> {
     let ext = format.extension();
+
+    if let Some((x, y, ref bytes)) = result.l2 {
+        let l2_dir = out_dir.join("L2");
+        fs::create_dir_all(&l2_dir)?;
+        let path = l2_dir.join(format!("{}_{}{}", x, y, ext));
+        fs::write(&path, bytes)
+            .with_context(|| format!("writing L2 tile {}", path.display()))?;
+    }
+
     let l1_dir = out_dir.join("L1");
     let l0_dir = out_dir.join("L0");
     fs::create_dir_all(&l1_dir)?;
@@ -855,6 +1233,7 @@ mod tests {
         let _ = fs::remove_dir_all(&out_dir);
 
         let result = FamilyResult {
+            l2: None,
             l1: vec![
                 (10, 20, vec![0xFF, 0xD8, 0xFF, 0xD9]),
                 (11, 20, vec![0xFF, 0xD8, 0xFF, 0xD9]),

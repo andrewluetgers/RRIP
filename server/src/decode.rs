@@ -62,6 +62,49 @@ pub struct DecodeArgs {
     /// Upsample filter for predictions: bilinear, bicubic, lanczos3 (default: lanczos3)
     #[arg(long, default_value = "lanczos3")]
     upsample_filter: String,
+
+    /// Path to SR ONNX model for learned 4x super-resolution (replaces upsample filter)
+    #[arg(long)]
+    sr_model: Option<String>,
+
+    /// Number of ONNX Runtime intra-op threads for SR model (default: 4)
+    #[arg(long, default_value_t = 4)]
+    sr_threads: usize,
+
+    /// Number of SR model session copies for concurrent inference (default: 8)
+    #[arg(long, default_value_t = 8)]
+    sr_pool: usize,
+
+    /// Path to refine ONNX model for same-resolution L0 tile enhancement
+    #[arg(long)]
+    refine_model: Option<String>,
+
+    /// Number of ONNX Runtime intra-op threads for refine model (default: 2)
+    #[arg(long, default_value_t = 2)]
+    refine_threads: usize,
+
+    /// Number of refine model session copies for concurrent inference (default: 4)
+    #[arg(long, default_value_t = 4)]
+    refine_pool: usize,
+
+    /// Enable wavelet-domain noise synthesis at decode time.
+    /// Adds synthesized noise to the reconstructed Y plane using parameters
+    /// stored in the pack file during encoding (requires --denoise at encode time).
+    #[arg(long)]
+    synth_noise: bool,
+
+    /// Noise synthesis strength (0.0-1.0, default: 0.5).
+    /// Controls how much of the removed noise is synthesized back.
+    #[arg(long, default_value_t = 0.5)]
+    synth_strength: f32,
+
+    /// Unsharp mask strength for decoded residual (applied before adding to prediction)
+    #[arg(long)]
+    l0_sharpen: Option<f32>,
+
+    /// Unsharp mask strength for reconstructed tiles (applied to Y plane after residual, before noise)
+    #[arg(long)]
+    tile_sharpen: Option<f32>,
 }
 
 pub fn run(args: DecodeArgs) -> Result<()> {
@@ -162,6 +205,36 @@ pub fn run(args: DecodeArgs) -> Result<()> {
     // Create output directory
     fs::create_dir_all(&args.out)?;
 
+    // Load SR model if specified
+    #[cfg(feature = "sr-model")]
+    let sr_model = if let Some(ref model_path) = args.sr_model {
+        Some(std::sync::Arc::new(
+            crate::core::sr_model::SRModel::load(model_path, args.sr_threads, args.sr_pool)
+                .with_context(|| format!("loading SR model from {}", model_path))?
+        ))
+    } else {
+        None
+    };
+    #[cfg(not(feature = "sr-model"))]
+    if args.sr_model.is_some() {
+        return Err(anyhow!("--sr-model requires building with --features sr-model"));
+    }
+
+    // Load refine model if specified
+    #[cfg(feature = "sr-model")]
+    let refine_model = if let Some(ref model_path) = args.refine_model {
+        Some(std::sync::Arc::new(
+            crate::core::sr_model::SRModel::load(model_path, args.refine_threads, args.refine_pool)
+                .with_context(|| format!("loading refine model from {}", model_path))?
+        ))
+    } else {
+        None
+    };
+    #[cfg(not(feature = "sr-model"))]
+    if args.refine_model.is_some() {
+        return Err(anyhow!("--refine-model requires building with --features sr-model"));
+    }
+
     // Create buffer pool
     let buffer_pool = BufferPool::new(128);
 
@@ -189,6 +262,14 @@ pub fn run(args: DecodeArgs) -> Result<()> {
             output_format,
             sharpen: None,
             upsample_filter,
+            #[cfg(feature = "sr-model")]
+            sr_model: sr_model.clone(),
+            #[cfg(feature = "sr-model")]
+            refine_model: refine_model.clone(),
+            synth_noise: args.synth_noise,
+            synth_strength: args.synth_strength,
+            l0_sharpen: args.l0_sharpen,
+            tile_sharpen: args.tile_sharpen,
         };
 
         let result = reconstruct_family(&input, x2, y2, &opts, &buffer_pool)?;
@@ -284,6 +365,16 @@ mod tests {
             timing: false,
             output_format: "jpeg".to_string(),
             upsample_filter: "lanczos3".to_string(),
+            sr_model: None,
+            sr_threads: 4,
+            sr_pool: 8,
+            refine_model: None,
+            refine_threads: 2,
+            refine_pool: 4,
+            synth_noise: false,
+            synth_strength: 0.5,
+            l0_sharpen: None,
+            tile_sharpen: None,
         };
         let result = run(args);
         assert!(result.is_err());
@@ -311,6 +402,16 @@ mod tests {
             timing: false,
             output_format: "jpeg".to_string(),
             upsample_filter: "lanczos3".to_string(),
+            sr_model: None,
+            sr_threads: 4,
+            sr_pool: 8,
+            refine_model: None,
+            refine_threads: 2,
+            refine_pool: 4,
+            synth_noise: false,
+            synth_strength: 0.5,
+            l0_sharpen: None,
+            tile_sharpen: None,
         };
         let result = run(args);
         assert!(result.is_err());

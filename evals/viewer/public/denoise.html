@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORIGAMI — Denoise Analysis</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #333; background: #f5f5f5;
+        }
+        a { color: #17a2b8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .navbar {
+            position: sticky; top: 0; z-index: 100;
+            background: #1a1a2e; padding: 0 24px;
+            display: flex; align-items: center; height: 48px; gap: 24px;
+        }
+        .navbar .brand { font-size: 18px; font-weight: 700; color: #e94560; letter-spacing: 1px; }
+        .navbar a { color: #adb5bd; font-size: 14px; font-weight: 500; }
+        .navbar a:hover, .navbar a.active { color: #fff; text-decoration: none; }
+
+        .container { max-width: 1600px; margin: 0 auto; padding: 16px; }
+
+        .card {
+            background: white; border-radius: 8px; padding: 16px;
+            margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h2 { font-size: 16px; color: #495057; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .card h3 { font-size: 14px; color: #666; margin: 12px 0 8px; }
+
+        select, button, input { font-family: inherit; font-size: 13px; }
+        select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; background: white; }
+        button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; background: #17a2b8; color: white; }
+        button:hover { background: #138496; }
+        button.small { padding: 3px 8px; font-size: 11px; }
+
+        .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+        .controls label { font-size: 13px; color: #666; }
+
+        .image-grid {
+            display: grid; gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+        .image-card { text-align: center; }
+        .image-card .label { font-size: 11px; color: #888; margin-top: 4px; }
+
+        /* Zoomable image containers */
+        .zoom-row {
+            display: grid; gap: 8px; margin: 8px 0;
+        }
+        .zoom-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .zoom-row.cols-2 { grid-template-columns: 1fr 1fr; }
+
+        .zoom-container {
+            position: relative; overflow: hidden;
+            border: 1px solid #ddd; border-radius: 4px;
+            background: #222; cursor: grab; min-height: 200px;
+        }
+        .zoom-container:active { cursor: grabbing; }
+        .zoom-container img {
+            position: absolute; top: 0; left: 0;
+            transform-origin: 0 0; image-rendering: auto;
+            max-width: none; user-select: none; -webkit-user-drag: none;
+        }
+        .zoom-container .zoom-label {
+            position: absolute; bottom: 4px; left: 4px;
+            background: rgba(0,0,0,0.7); color: #fff; padding: 2px 6px;
+            font-size: 11px; border-radius: 3px; z-index: 10; pointer-events: none;
+        }
+
+        .zoom-controls {
+            display: flex; gap: 6px; align-items: center; margin-bottom: 6px;
+        }
+        .zoom-controls .zoom-info { font-size: 11px; color: #888; margin-left: auto; }
+
+        .metrics-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 6px; margin: 8px 0;
+        }
+        .metric {
+            background: #f8f9fa; border-radius: 4px; padding: 6px;
+            text-align: center; font-size: 11px;
+        }
+        .metric .value { font-size: 16px; font-weight: 700; color: #333; }
+        .metric .name { color: #888; margin-top: 2px; }
+        .metric.good .value { color: #28a745; }
+        .metric.bad .value { color: #dc3545; }
+
+        .tabs { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; }
+        .tab {
+            padding: 6px 12px; background: #e9ecef; border: none; cursor: pointer;
+            border-radius: 4px 4px 0 0; font-size: 12px; color: #666;
+        }
+        .tab.active { background: white; color: #333; font-weight: 600; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #666; }
+        td.num { text-align: right; font-family: "SF Mono", "Consolas", monospace; }
+
+        .slider-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+        .slider-row input[type="range"] { flex: 1; }
+        .slider-row .slider-label { min-width: 40px; font-weight: 600; font-size: 14px; }
+
+        textarea { width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; resize: vertical; }
+
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .chart-grid img { width: 100%; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
+
+        /* Full-size overlay */
+        .overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 200; cursor: zoom-out;
+            justify-content: center; align-items: center;
+        }
+        .overlay.active { display: flex; }
+        .overlay img { max-width: 95%; max-height: 95%; object-fit: contain; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <span class="brand">ORIGAMI</span>
+        <a href="/">Home</a>
+        <a href="/runs.html">Runs</a>
+        <a href="/comparison.html">Comparison</a>
+        <a href="/denoise.html" class="active">Denoise</a>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <div class="controls">
+                <label>Experiment:</label>
+                <select id="experiment-select"><option value="">Loading...</option></select>
+                <span id="experiment-info" style="font-size:12px;color:#888"></span>
+            </div>
+        </div>
+
+        <!-- Source images -->
+        <div class="card" id="sources-card" style="display:none">
+            <h2>Source Images</h2>
+            <div class="image-grid" id="source-images" style="grid-template-columns: repeat(4, 1fr)"></div>
+        </div>
+
+        <!-- JXL Quality Sweep -->
+        <div class="card" id="sweep-card" style="display:none">
+            <h2>JXL Quality Sweep</h2>
+            <div class="slider-row">
+                <label>Quality:</label>
+                <input type="range" id="quality-slider" min="0" max="10" value="0">
+                <span class="slider-label" id="quality-label">Q100</span>
+            </div>
+            <div class="image-grid" id="sweep-images" style="grid-template-columns: repeat(4, 1fr)"></div>
+            <div class="metrics-row" id="sweep-metrics"></div>
+            <h3>Charts</h3>
+            <div class="chart-grid" id="sweep-charts"></div>
+        </div>
+
+        <!-- Separation Methods — Color Comparison -->
+        <div class="card" id="separation-card" style="display:none">
+            <h2>Separation Methods</h2>
+            <div class="controls" id="method-filter" style="margin-bottom: 8px;">
+                <label>Show:</label>
+                <div class="tabs" id="category-tabs" style="margin-bottom:0"></div>
+            </div>
+            <div class="tabs" id="separation-tabs"></div>
+
+            <h3>Color Comparison: Original / Recon (structure only) / Recon + Synth Noise / Prediction</h3>
+            <div class="zoom-controls">
+                <button class="small" id="zoom-reset">Reset Zoom</button>
+                <button class="small" id="zoom-in">+</button>
+                <button class="small" id="zoom-out">-</button>
+                <span class="zoom-info" id="zoom-info">1.0x</span>
+            </div>
+            <div class="zoom-row" id="color-comparison" style="height: 350px; grid-template-columns: 1fr 1fr 1fr 1fr;"></div>
+
+            <h3>Noise: Actual / Synthesized (16 bytes)</h3>
+            <div class="zoom-row cols-2" id="noise-comparison" style="height: 300px;"></div>
+
+            <h3>Structure / Edge Overlay</h3>
+            <div class="zoom-row cols-2" id="separation-detail" style="height: 300px;"></div>
+
+            <h3>Heatmaps</h3>
+            <div class="image-grid" id="separation-heatmaps" style="grid-template-columns: repeat(4, 1fr)"></div>
+
+            <div class="metrics-row" id="separation-metrics"></div>
+
+            <h3>All Methods</h3>
+            <table id="separation-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>SSIM</th>
+                        <th>LPIPS</th>
+                        <th>kbit</th>
+                        <th>Ratio</th>
+                        <th>Noise Score</th>
+                        <th>Noise Unif</th>
+                        <th>Edge Corr</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Artifact Decontamination -->
+        <div class="card" id="artifacts-card" style="display:none">
+            <h2>JPEG Artifact Decontamination</h2>
+            <div class="image-grid" id="artifact-images" style="grid-template-columns: repeat(3, 1fr)"></div>
+            <div class="metrics-row" id="artifact-metrics"></div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card" id="notes-card" style="display:none">
+            <h2>Notes</h2>
+            <textarea id="notes-textarea" placeholder="Add qualitative observations here..."></textarea>
+            <div style="margin-top:8px">
+                <button id="save-notes">Save Notes</button>
+                <span id="notes-status" style="font-size:12px;color:#888;margin-left:8px"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-size overlay -->
+    <div class="overlay" id="overlay" onclick="this.classList.remove('active')">
+        <img id="overlay-img" src="">
+    </div>
+
+    <script>
+    let experiments = [];
+    let currentExp = null;
+    let currentExpData = null;
+
+    // Zoom/pan state
+    let zoomLevel = 1;
+    let panX = 0, panY = 0;
+    let isPanning = false, panStartX = 0, panStartY = 0;
+    let syncedContainers = [];
+
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+
+    function showOverlay(src) {
+        $('#overlay-img').src = src;
+        $('#overlay').classList.add('active');
+    }
+
+    function imgCard(src, label) {
+        return `<div class="image-card">
+            <img src="${src}" onclick="showOverlay(this.src)" loading="lazy"
+                 onerror="this.parentElement.style.display='none'" style="width:100%;cursor:pointer;border:1px solid #ddd;border-radius:4px">
+            <div class="label">${label}</div>
+        </div>`;
+    }
+
+    function metricBox(name, value, unit = '', cls = '') {
+        const v = value == null ? 'N/A' : (typeof value === 'number' ? (Number.isInteger(value) ? value : value.toFixed(4)) : value);
+        return `<div class="metric ${cls}"><div class="value">${v}${unit}</div><div class="name">${name}</div></div>`;
+    }
+
+    // --- Synchronized zoom/pan ---
+
+    function createZoomContainer(src, label, groupId) {
+        const div = document.createElement('div');
+        div.className = 'zoom-container';
+        div.dataset.group = groupId;
+        div.innerHTML = `<img src="${src}" draggable="false" onerror="this.parentElement.innerHTML='<div style=\\'color:#666;padding:40px;text-align:center\\'>No image</div>'">
+            <span class="zoom-label">${label}</span>`;
+        return div;
+    }
+
+    function updateAllZoom() {
+        syncedContainers.forEach(c => {
+            const img = c.querySelector('img');
+            if (img && img.naturalWidth) {
+                img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+            }
+        });
+        $('#zoom-info').textContent = `${zoomLevel.toFixed(1)}x`;
+    }
+
+    // Global mouse handlers (registered once)
+    let _zoomMouseHandlersInstalled = false;
+    function installGlobalMouseHandlers() {
+        if (_zoomMouseHandlersInstalled) return;
+        _zoomMouseHandlersInstalled = true;
+        document.addEventListener('mousemove', e => {
+            if (!isPanning) return;
+            panX = e.clientX - panStartX;
+            panY = e.clientY - panStartY;
+            updateAllZoom();
+        });
+        document.addEventListener('mouseup', () => { isPanning = false; });
+    }
+
+    function initZoomGroup(containerEl) {
+        const containers = containerEl.querySelectorAll('.zoom-container');
+        syncedContainers = Array.from(containers);
+
+        containers.forEach(c => {
+            c.addEventListener('wheel', e => {
+                e.preventDefault();
+                const rect = c.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+
+                const oldZoom = zoomLevel;
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                zoomLevel = Math.max(0.5, Math.min(20, zoomLevel * delta));
+
+                // Zoom toward mouse position
+                panX = mx - (mx - panX) * (zoomLevel / oldZoom);
+                panY = my - (my - panY) * (zoomLevel / oldZoom);
+                updateAllZoom();
+            });
+
+            c.addEventListener('mousedown', e => {
+                isPanning = true;
+                panStartX = e.clientX - panX;
+                panStartY = e.clientY - panY;
+                e.preventDefault();
+            });
+        });
+
+        installGlobalMouseHandlers();
+    }
+
+    function resetZoom() {
+        zoomLevel = 1; panX = 0; panY = 0;
+        updateAllZoom();
+    }
+
+    // --- Data loading ---
+
+    async function loadExperiments() {
+        const resp = await fetch('/api/denoise/experiments');
+        experiments = await resp.json();
+        const sel = $('#experiment-select');
+        sel.innerHTML = experiments.length
+            ? experiments.map(e => `<option value="${e.id}">${e.id}</option>`).join('')
+            : '<option value="">No experiments found</option>';
+        if (experiments.length > 0) {
+            // Prefer the separation experiment (most interesting)
+            const sep = experiments.find(e => e.id.startsWith('separation_'));
+            selectExperiment(sep ? sep.id : experiments[0].id);
+            if (sep) sel.value = sep.id;
+        }
+    }
+
+    async function selectExperiment(id) {
+        currentExp = id;
+        const resp = await fetch(`/api/denoise/experiment/${id}`);
+        currentExpData = await resp.json();
+        render();
+    }
+
+    function assetUrl(subpath) {
+        return `/denoise-assets/${currentExp}/${subpath}`;
+    }
+
+    // --- Rendering ---
+
+    function render() {
+        const d = currentExpData;
+        if (!d) return;
+
+        const info = d.metadata
+            ? `${d.metadata.source_run || ''} | ${d.metadata.params?.jxl_config || ''} | ${d.metadata.timestamp || ''}`
+            : '';
+        $('#experiment-info').textContent = info;
+
+        // Sources
+        const srcCard = $('#sources-card');
+        if (d.metadata?.has_three_signal !== false) {
+            srcCard.style.display = '';
+            $('#source-images').innerHTML = [
+                imgCard(assetUrl('sources/original_Y.png'), 'Original Y'),
+                imgCard(assetUrl('sources/prediction_Y.png'), 'Prediction Y'),
+                imgCard(assetUrl('sources/residual.png'), 'Residual'),
+                imgCard(assetUrl('sources/missed_edges.png'), 'Missed Edges'),
+            ].join('');
+        } else {
+            srcCard.style.display = 'none';
+        }
+
+        renderSweep(d);
+        renderSeparation(d);
+        renderArtifacts(d);
+        renderNotes(d);
+    }
+
+    function renderSweep(d) {
+        const card = $('#sweep-card');
+        if (!d.sweep_qualities || !d.sweep_qualities.length) { card.style.display = 'none'; return; }
+        card.style.display = '';
+
+        const qs = d.sweep_qualities;
+        const slider = $('#quality-slider');
+        slider.max = qs.length - 1;
+        slider.value = 0;
+
+        function update() {
+            const q = qs[parseInt(slider.value)];
+            $('#quality-label').textContent = `Q${q}`;
+            const qDir = `jxl_sweep/q${q}`;
+            $('#sweep-images').innerHTML = [
+                imgCard(assetUrl(`${qDir}/roundtrip.png`), `Roundtrip Q${q}`),
+                imgCard(assetUrl(`${qDir}/cumulative_delta_heatmap.png`), 'Cumulative Heatmap'),
+                imgCard(assetUrl(`${qDir}/cumulative_edge_correlation_map.png`), 'Cumulative Edge Corr'),
+                imgCard(assetUrl(`${qDir}/reconstruction.png`), 'Reconstruction'),
+                imgCard(assetUrl(`${qDir}/delta_heatmap.png`), 'Step Heatmap'),
+                imgCard(assetUrl(`${qDir}/edge_correlation_map.png`), 'Step Edge Corr'),
+            ].join('');
+
+            const m = d.metrics?.[String(q)];
+            if (m) {
+                $('#sweep-metrics').innerHTML = [
+                    metricBox('JXL Size', m.jxl_size_bytes ? (m.jxl_size_bytes / 1024).toFixed(1) : null, ' KB'),
+                    metricBox('BPP', m.jxl_bpp?.toFixed(3)),
+                    metricBox('Recon PSNR', m.reconstruction_psnr_db?.toFixed(1), ' dB'),
+                    metricBox('Cum Noise', m.cumulative_noise_floor_score?.toFixed(3)),
+                    metricBox('Cum Edge Corr', m.cumulative_edge_correlation?.toFixed(3)),
+                    metricBox('Cum |Delta|', m.cumulative_mean_abs?.toFixed(2)),
+                    metricBox('Step Noise', m.delta_noise_floor_score?.toFixed(3)),
+                    metricBox('Step Edge Corr', m.delta_edge_correlation?.toFixed(3)),
+                ].join('');
+            }
+        }
+        slider.oninput = update;
+        update();
+
+        $('#sweep-charts').innerHTML = [
+            imgCard(assetUrl('jxl_sweep/rd_curve.png'), 'Rate-Distortion'),
+            imgCard(assetUrl('jxl_sweep/cumulative_classification.png'), 'Cumulative Classification'),
+            imgCard(assetUrl('jxl_sweep/layer_classification.png'), 'Step Classification'),
+            imgCard(assetUrl('jxl_sweep/summary_strip.png'), 'Summary Strip'),
+        ].join('');
+    }
+
+    // Method category definitions
+    const METHOD_CATEGORIES = {
+        'wavelets':      { label: 'Wavelets',       match: m => m.startsWith('wavelet_') },
+        'edge_mask':     { label: 'Edge Mask',      match: m => m.startsWith('edge_mask') },
+        'combined':      { label: 'Combined',       match: m => m.startsWith('combined') },
+        'guided':        { label: 'Guided',         match: m => m.startsWith('guided') },
+        'all':           { label: 'All',            match: () => true },
+    };
+    let activeCategory = 'wavelets';  // default
+
+    function renderSeparation(d) {
+        const card = $('#separation-card');
+        if (!d.separation_methods || !d.separation_methods.length) { card.style.display = 'none'; return; }
+        card.style.display = '';
+
+        // All methods (excluding sharpening), sorted by SSIM
+        const allMethods = d.separation_methods
+            .filter(m => !m.name.startsWith('sharpen_'))
+            .sort((a, b) => (b.metrics?.reconstruction_ssim || 0) - (a.metrics?.reconstruction_ssim || 0));
+
+        // Build category tabs
+        const catTabs = $('#category-tabs');
+        const cats = Object.entries(METHOD_CATEGORIES).filter(([key, cat]) =>
+            key === 'all' || allMethods.some(m => cat.match(m.name))
+        );
+        catTabs.innerHTML = cats.map(([key, cat]) => {
+            const count = key === 'all' ? allMethods.length : allMethods.filter(m => cat.match(m.name)).length;
+            return `<button class="tab ${key === activeCategory ? 'active' : ''}" data-cat="${key}">${cat.label} (${count})</button>`;
+        }).join('');
+
+        catTabs.onclick = e => {
+            const cat = e.target.dataset?.cat;
+            if (cat) { activeCategory = cat; renderMethodList(allMethods); }
+        };
+
+        renderMethodList(allMethods);
+    }
+
+    function renderMethodList(allMethods) {
+        const card = $('#separation-card');
+        const catFilter = METHOD_CATEGORIES[activeCategory];
+        const methods = activeCategory === 'all' ? allMethods : allMethods.filter(m => catFilter.match(m.name));
+
+        // Update category tab active state
+        $$('#category-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.cat === activeCategory));
+
+        // Method tabs
+        const tabs = $('#separation-tabs');
+        tabs.innerHTML = methods.map((m, i) =>
+            `<button class="tab ${i === 0 ? 'active' : ''}" data-idx="${i}">${m.name}</button>`
+        ).join('');
+
+        function showMethod(idx) {
+            $$('#separation-tabs .tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+            const m = methods[idx];
+            const dir = `separation/${m.name}`;
+
+            // Color comparison: Original / Recon (clean) / Recon + Synth Noise / Prediction
+            const colorRow = $('#color-comparison');
+            colorRow.innerHTML = '';
+            colorRow.appendChild(createZoomContainer(assetUrl(`${dir}/original_color.png`), 'Original', 'color'));
+            colorRow.appendChild(createZoomContainer(assetUrl(`${dir}/reconstruction_color.png`), 'Recon (structure only)', 'color'));
+            colorRow.appendChild(createZoomContainer(assetUrl(`${dir}/reconstruction_noisy_color.png`), 'Recon + Synth Noise', 'color'));
+            colorRow.appendChild(createZoomContainer(assetUrl(`${dir}/prediction_color.png`), 'Prediction', 'color'));
+
+            // Noise comparison: Actual vs Synthesized
+            const noiseRow = $('#noise-comparison');
+            noiseRow.innerHTML = '';
+            noiseRow.appendChild(createZoomContainer(assetUrl(`${dir}/noise.png`), 'Actual Noise', 'color'));
+            noiseRow.appendChild(createZoomContainer(assetUrl(`${dir}/noise_synthesized.png`), 'Synthesized Noise (16 bytes)', 'color'));
+
+            // Detail row: Structure / Edge Overlay
+            const detailRow = $('#separation-detail');
+            detailRow.innerHTML = '';
+            detailRow.appendChild(createZoomContainer(assetUrl(`${dir}/structure.png`), 'Structure', 'color'));
+            detailRow.appendChild(createZoomContainer(assetUrl(`${dir}/edge_overlay.png`), 'Edge Overlay', 'color'));
+
+            // Init zoom on all containers
+            resetZoom();
+            setTimeout(() => initZoomGroup(card), 100);
+
+            // Heatmaps
+            $('#separation-heatmaps').innerHTML = [
+                imgCard(assetUrl(`${dir}/structure_heatmap.png`), 'Structure Heatmap'),
+                imgCard(assetUrl(`${dir}/noise_heatmap.png`), 'Actual Noise Heatmap'),
+                imgCard(assetUrl(`${dir}/noise_synth_heatmap.png`), 'Synth Noise Heatmap'),
+                imgCard(assetUrl(`${dir}/reconstruction.png`), 'Reconstruction Y'),
+            ].join('');
+
+            // Metrics
+            if (m.metrics) {
+                const mt = m.metrics;
+                const structBytes = mt.structure_jxl_bytes || mt.structure_jpeg_size_bytes || 0;
+                const origBytes = mt.original_jxl_bytes || mt.original_jpeg_size_bytes || 0;
+                const structKbit = (structBytes * 8 / 1024).toFixed(1);
+                const origKbit = (origBytes * 8 / 1024).toFixed(1);
+                $('#separation-metrics').innerHTML = [
+                    metricBox('SSIM', mt.reconstruction_ssim, '', mt.reconstruction_ssim > 0.95 ? 'good' : ''),
+                    metricBox('LPIPS', mt.reconstruction_lpips, '', mt.reconstruction_lpips < 0.05 ? 'good' : ''),
+                    metricBox('Structure', structKbit, ' kbit'),
+                    metricBox('Original', origKbit, ' kbit'),
+                    metricBox('Comp Ratio', mt.compression_ratio?.toFixed(2)),
+                    metricBox('Noise Score', mt.noise_floor_score?.toFixed(3)),
+                    metricBox('Noise Uniformity', mt.noise_uniformity_cov?.toFixed(3), '', mt.noise_uniformity_cov < 0.2 ? 'good' : ''),
+                    metricBox('Synth SSIM', mt.synth_recon_ssim, '', mt.synth_recon_ssim > 0.95 ? 'good' : ''),
+                    metricBox('Synth LPIPS', mt.synth_recon_lpips),
+                    metricBox('Synth Std Match', mt.synth_noise_std_ratio?.toFixed(3)),
+                ].join('');
+            }
+        }
+
+        tabs.onclick = e => {
+            const idx = e.target.dataset?.idx;
+            if (idx !== undefined) showMethod(parseInt(idx));
+        };
+        if (methods.length > 0) showMethod(0);
+
+        // Comparison table — always shows filtered methods
+        const tbody = $('#separation-table tbody');
+        tbody.innerHTML = methods.map(m => {
+            const mt = m.metrics || {};
+            const bytes = mt.structure_jxl_bytes || mt.structure_jpeg_size_bytes || 0;
+            const kbit = (bytes * 8 / 1024).toFixed(1);
+            return `<tr>
+                <td>${m.name}</td>
+                <td class="num">${mt.reconstruction_ssim?.toFixed(4) || 'N/A'}</td>
+                <td class="num">${mt.reconstruction_lpips?.toFixed(4) || 'N/A'}</td>
+                <td class="num">${kbit}</td>
+                <td class="num">${mt.compression_ratio?.toFixed(2) || 'N/A'}</td>
+                <td class="num">${mt.noise_floor_score?.toFixed(3) || 'N/A'}</td>
+                <td class="num">${mt.noise_uniformity_cov?.toFixed(3) || 'N/A'}</td>
+                <td class="num">${mt.edge_correlation?.toFixed(3) || 'N/A'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderArtifacts(d) {
+        const card = $('#artifacts-card');
+        if (!d.artifact_metrics) { card.style.display = 'none'; return; }
+        card.style.display = '';
+        $('#artifact-images').innerHTML = [
+            imgCard(assetUrl('artifacts/before_fft.png'), 'FFT Before'),
+            imgCard(assetUrl('artifacts/after_fft.png'), 'FFT After'),
+            imgCard(assetUrl('artifacts/residual_clean.png'), 'Cleaned'),
+            imgCard(assetUrl('artifacts/removed_artifacts.png'), 'Removed'),
+            imgCard(assetUrl('artifacts/autocorrelation_comparison.png'), 'Autocorrelation'),
+        ].join('');
+        const m = d.artifact_metrics;
+        $('#artifact-metrics').innerHTML = [
+            metricBox('Noise Before', m.before_noise_score?.toFixed(3)),
+            metricBox('Noise After', m.after_noise_score?.toFixed(3)),
+            metricBox('AC Lag-8', `${m.before_autocorr_lag8?.toFixed(4)} -> ${m.after_autocorr_lag8?.toFixed(4)}`),
+            metricBox('AC Lag-32', `${m.before_autocorr_lag32?.toFixed(4)} -> ${m.after_autocorr_lag32?.toFixed(4)}`),
+        ].join('');
+    }
+
+    function renderNotes(d) {
+        $('#notes-card').style.display = '';
+        $('#notes-textarea').value = d.metadata?.notes || '';
+    }
+
+    // Event handlers
+    $('#experiment-select').onchange = e => selectExperiment(e.target.value);
+    $('#zoom-reset').onclick = resetZoom;
+    $('#zoom-in').onclick = () => { zoomLevel = Math.min(20, zoomLevel * 1.5); updateAllZoom(); };
+    $('#zoom-out').onclick = () => { zoomLevel = Math.max(0.5, zoomLevel / 1.5); updateAllZoom(); };
+
+    $('#save-notes').onclick = async () => {
+        const resp = await fetch(`/api/denoise/experiment/${currentExp}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes: $('#notes-textarea').value }),
+        });
+        const result = await resp.json();
+        $('#notes-status').textContent = result.ok ? 'Saved!' : 'Error';
+        setTimeout(() => $('#notes-status').textContent = '', 2000);
+    };
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') $('#overlay').classList.remove('active');
+        if (e.key === '0') resetZoom();
+    });
+
+    loadExperiments();
+    </script>
+</body>
+</html>

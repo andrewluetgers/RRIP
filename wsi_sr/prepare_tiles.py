@@ -70,7 +70,20 @@ def extract_tiles_dicom(dcm_path: str, outdir: str, max_tiles: int = 0,
     saved = 0
     skipped_blank = 0
     skipped_size = 0
-    pixel_data = None
+
+    # Use per-frame JPEG decoding (fast, low memory) instead of ds.decompress()
+    # which loads ALL frames into RAM at once (~10GB for 3000+ frames)
+    from pydicom.encaps import decode_data_sequence
+    from io import BytesIO
+
+    try:
+        frames_data = decode_data_sequence(ds[0x7FE00010].value)
+        print(f"Decoded {len(frames_data)} encapsulated frames")
+    except Exception as e:
+        print(f"Failed to decode encapsulated data: {e}")
+        print("Falling back to ds.pixel_array (slow, high memory)...")
+        ds.decompress()
+        frames_data = None
 
     for frame_idx in range(n_frames):
         if max_tiles > 0 and saved >= max_tiles:
@@ -78,27 +91,20 @@ def extract_tiles_dicom(dcm_path: str, outdir: str, max_tiles: int = 0,
 
         # Extract frame
         try:
-            if pixel_data is None:
-                ds.decompress()
-                pixel_data = ds.pixel_array
-
-            if pixel_data.ndim == 4:
-                frame = pixel_data[frame_idx]
-            elif pixel_data.ndim == 3:
-                frame = pixel_data
-            else:
-                continue
-        except Exception:
-            try:
-                from pydicom.encaps import decode_data_sequence
-                from io import BytesIO
-                frames_data = decode_data_sequence(ds[0x7FE00010].value)
-                frame_bytes = frames_data[frame_idx]
-                img = Image.open(BytesIO(frame_bytes))
+            if frames_data is not None:
+                img = Image.open(BytesIO(frames_data[frame_idx]))
                 frame = np.array(img)
-            except Exception as e:
-                print(f"  Frame {frame_idx}: extraction failed ({e}), skipping")
-                continue
+            else:
+                pixel_array = ds.pixel_array
+                if pixel_array.ndim == 4:
+                    frame = pixel_array[frame_idx]
+                elif pixel_array.ndim == 3:
+                    frame = pixel_array
+                else:
+                    continue
+        except Exception as e:
+            print(f"  Frame {frame_idx}: extraction failed ({e}), skipping")
+            continue
 
         # Ensure correct size (edge tiles may be smaller)
         h, w = frame.shape[:2]

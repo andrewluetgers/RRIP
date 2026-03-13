@@ -1,0 +1,17 @@
+{
+  "noise_floor_score": 0.5156268243557491,
+  "structure_jxl_bytes": 6865,
+  "original_jxl_bytes": 92666,
+  "compression_ratio": 0.07408326678609199,
+  "reconstruction_psnr_db": 32.10213601392538,
+  "full_residual_psnr_db": 78.01061513296814,
+  "psnr_delta_db": 45.90847911904276,
+  "reconstruction_ssim": 0.8505278628663746,
+  "full_residual_ssim": 0.9999957648195937,
+  "reconstruction_lpips": 0.4315813481807709,
+  "full_residual_lpips": 0.022259792312979698,
+  "prediction_lpips": 0.44307342171669006,
+  "edge_correlation": 0.18430915503914488,
+  "structure_energy": 0.22469806671142578,
+  "noise_energy": 4.711247444152832
+}

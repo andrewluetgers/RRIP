@@ -42,6 +42,8 @@ rcgen = "0.13"
 rustls = "0.23"
 rustls-pki-types = "1"
 openslide-rs = { version = "2.0", optional = true }
+ort = { version = "2.0.0-rc.12", optional = true, features = ["download-binaries"] }
+half = "2.4"
 
 [features]
 default = ["jpegxl"]
@@ -49,6 +51,7 @@ mozjpeg = []   # Links pre-built mozjpeg via build.rs (see scripts/build_mozjpeg
 jpegli = []    # Links pre-built jpegli via build.rs (see scripts/build_jpegli.sh)
 jpegxl = ["jpegxl-rs"]  # Statically builds and links libjxl via vendored feature
 openslide = ["dep:openslide-rs"]  # WSI ingest via OpenSlide (requires system OpenSlide 4.0+)
+sr-model = ["dep:ort"]  # ONNX Runtime SR model for learned 4x super-resolution
 
 [[bin]]
 name = "test_pack_compression"

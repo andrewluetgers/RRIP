@@ -1,0 +1,9 @@
+[
+  {
+    "run": "sr_dual_200ep_f32_444_b95_l0q60",
+    "quality": 30,
+    "mode": "JPEG",
+    "size_bytes": 44062,
+    "size_kb": 43.0,
+    "bpp": 0.3362,
+    "psnr": 

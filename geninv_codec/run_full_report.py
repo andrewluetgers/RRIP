@@ -41,7 +41,7 @@ from src.utils import (
     save_gray01_png, save_rgb_png,
     save_centered_int8_as_jpeg, load_centered_jpeg_as_int8,
     residual_visual, error_vis_centered,
-    psnr01, mae01,
+    mse01, psnr01, mae01, ssim01, delta_e_rgb, lpips_rgb,
     pack_latents_int8, zlib_size
 )
 from src.models import TinyEncoder, TinyGenerator
@@ -69,6 +69,45 @@ def predict_full_residual_and_latents(E, G, Y_base, R_true, patch, device):
     R_hat_np = R_hat.detach().cpu().numpy().astype(np.float32)
     z_np = np.stack(z_list, axis=0).astype(np.float32)
     return R_hat_np, z_np
+
+
+def reconstruct_rgb(Y_rec_01: np.ndarray, base_rgb_u8: np.ndarray, orig_rgb_u8: np.ndarray) -> np.ndarray:
+    """Reconstruct RGB by replacing luma in base with corrected Y, keeping base chroma.
+
+    Uses the original image's Cb/Cr channels (from RGB->YCbCr) combined with
+    the reconstructed Y channel to produce the final RGB output.
+    """
+    # Convert base to YCbCr to get chroma
+    base_f = base_rgb_u8.astype(np.float32) / 255.0
+    R, G, B = base_f[..., 0], base_f[..., 1], base_f[..., 2]
+    Cb_base = -0.168736 * R - 0.331264 * G + 0.500000 * B
+    Cr_base =  0.500000 * R - 0.418688 * G - 0.081312 * B
+
+    # Reconstruct RGB from corrected Y + base chroma
+    Y = Y_rec_01
+    R_out = Y + 1.402 * Cr_base
+    G_out = Y - 0.344136 * Cb_base - 0.714136 * Cr_base
+    B_out = Y + 1.772 * Cb_base
+
+    rgb = np.stack([R_out, G_out, B_out], axis=-1)
+    return (np.clip(rgb, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
+def compute_all_metrics(Y_rec: np.ndarray, Y_orig: np.ndarray,
+                        rec_rgb: np.ndarray, orig_rgb: np.ndarray) -> dict:
+    """Compute full metrics suite: Y-PSNR, Y-MSE, Y-MAE, Y-SSIM, Delta E, LPIPS."""
+    print("  computing PSNR/MSE/MAE/SSIM...", flush=True)
+    m = {
+        "Y_PSNR": psnr01(Y_rec, Y_orig),
+        "Y_MSE": mse01(Y_rec, Y_orig),
+        "Y_MAE": mae01(Y_rec, Y_orig),
+        "Y_SSIM": ssim01(Y_rec, Y_orig),
+    }
+    print("  computing Delta E...", flush=True)
+    m["Delta_E"] = delta_e_rgb(orig_rgb, rec_rgb)
+    print("  computing LPIPS...", flush=True)
+    m["LPIPS"] = lpips_rgb(orig_rgb, rec_rgb)
+    return m
 
 
 def main():
@@ -128,17 +167,19 @@ def main():
 
     # ---- A) True residual stored as JPEG90/95 and applied ----
     results = []
+    print("--- Base only ---", flush=True)
+    base_metrics = compute_all_metrics(Y_base, Y_orig, base_rgb, orig_rgb)
     results.append({
         "method": f"Base only (JPEG q{args.base_quality})",
         "base_bytes": base_bytes,
         "extra_bytes": 0,
         "total_bytes": base_bytes,
-        "Y_PSNR": psnr01(Y_base, Y_orig),
-        "Y_MAE": mae01(Y_base, Y_orig),
+        **base_metrics,
     })
 
     Rq = quantize_residual_int8(R_true)
     for q in args.residual_jpeg:
+        print(f"--- True residual JPEG{q} ---", flush=True)
         res_path = os.path.join(args.outdir, f"true_residual_centered_JPEG{q}.jpg")
         save_centered_int8_as_jpeg(res_path, Rq, quality=q)
         extra = os.path.getsize(res_path)
@@ -146,18 +187,19 @@ def main():
         Rq_dec = load_centered_jpeg_as_int8(res_path)
         R_dec = dequantize_residual_int8(Rq_dec)
         Y_rec = np.clip(Y_base + R_dec, 0.0, 1.0).astype(np.float32)
+        rec_rgb = reconstruct_rgb(Y_rec, base_rgb, orig_rgb)
 
         save_gray01_png(os.path.join(args.outdir, f"Y_true_residual_applied_JPEG{q}.png"), Y_rec)
         err_u8 = error_vis_centered(Y_orig - Y_rec, gain=args.err_gain)
         Image.fromarray(err_u8, mode="L").save(os.path.join(args.outdir, f"err_true_residual_JPEG{q}_vis.png"))
 
+        metrics = compute_all_metrics(Y_rec, Y_orig, rec_rgb, orig_rgb)
         results.append({
             "method": f"True residual JPEG{q} + apply",
             "base_bytes": base_bytes,
             "extra_bytes": extra,
             "total_bytes": base_bytes + extra,
-            "Y_PSNR": psnr01(Y_rec, Y_orig),
-            "Y_MAE": mae01(Y_rec, Y_orig),
+            **metrics,
         })
 
     # ---- B) Latent predicted residual (amortized) ----
@@ -187,13 +229,15 @@ def main():
         f.write(zlib.compress(latent_payload, level=9))
 
     # Latent-only result (counting zlib bytes as "what you'd transmit")
+    print("--- Latent-only ---", flush=True)
+    latent_only_rgb = reconstruct_rgb(Y_latent_only, base_rgb, orig_rgb)
+    latent_only_metrics = compute_all_metrics(Y_latent_only, Y_orig, latent_only_rgb, orig_rgb)
     results.append({
         "method": f"Latent-only + apply (zdim={zdim}, patch={args.patch})",
         "base_bytes": base_bytes,
         "extra_bytes": latent_zlib_bytes,
         "total_bytes": base_bytes + latent_zlib_bytes,
-        "Y_PSNR": psnr01(Y_latent_only, Y_orig),
-        "Y_MAE": mae01(Y_latent_only, Y_orig),
+        **latent_only_metrics,
     })
 
     # ---- Correction layer: Corr = true - predicted residual ----
@@ -203,6 +247,7 @@ def main():
     save_gray01_png(os.path.join(args.outdir, "correction_visual.png"), residual_visual(Corr, corr_scale))
 
     for q in args.corr_jpeg:
+        print(f"--- Latent + correction JPEG{q} ---", flush=True)
         corr_path = os.path.join(args.outdir, f"correction_centered_JPEG{q}.jpg")
         save_centered_int8_as_jpeg(corr_path, Corrq, quality=q)
         corr_bytes = os.path.getsize(corr_path)
@@ -211,17 +256,18 @@ def main():
         Corr_dec = dequantize_residual_int8(Corrq_dec)
 
         Y_lat_corr = np.clip(Y_base + R_hat + Corr_dec, 0.0, 1.0).astype(np.float32)
+        corr_rgb = reconstruct_rgb(Y_lat_corr, base_rgb, orig_rgb)
         save_gray01_png(os.path.join(args.outdir, f"Y_latent_plus_corr_JPEG{q}.png"), Y_lat_corr)
         err_u8 = error_vis_centered(Y_orig - Y_lat_corr, gain=args.err_gain)
         Image.fromarray(err_u8, mode="L").save(os.path.join(args.outdir, f"err_latent_plus_corr_JPEG{q}_vis.png"))
 
+        corr_metrics = compute_all_metrics(Y_lat_corr, Y_orig, corr_rgb, orig_rgb)
         results.append({
             "method": f"Latent + correction JPEG{q} + apply",
             "base_bytes": base_bytes,
             "extra_bytes": latent_zlib_bytes + corr_bytes,
             "total_bytes": base_bytes + latent_zlib_bytes + corr_bytes,
-            "Y_PSNR": psnr01(Y_lat_corr, Y_orig),
-            "Y_MAE": mae01(Y_lat_corr, Y_orig),
+            **corr_metrics,
         })
 
     # ---- Write results.csv + metrics.json ----
@@ -291,6 +337,8 @@ def main():
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for root, _, files in os.walk(args.outdir):
             for fn in files:
+                if fn == "report.zip":
+                    continue
                 p = os.path.join(root, fn)
                 arc = os.path.relpath(p, args.outdir)
                 z.write(p, arcname=os.path.join("report", arc))

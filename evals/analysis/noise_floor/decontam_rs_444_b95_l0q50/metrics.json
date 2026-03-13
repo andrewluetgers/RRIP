@@ -1,0 +1,11 @@
+{
+  "before_noise_score": 0.51262181056902,
+  "after_noise_score": 0.5283561650386097,
+  "before_autocorr_lag8": 0.12405001599705863,
+  "after_autocorr_lag8": 0.14010309211298408,
+  "before_autocorr_lag32": 0.030464570343596644,
+  "after_autocorr_lag32": -0.024201795770105065,
+  "removed_energy_mean": 3.1177024841308594,
+  "removed_energy_max": 25.0,
+  "bandwidth": 2
+}

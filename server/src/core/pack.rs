@@ -10,10 +10,51 @@ pub struct PackIndexEntry {
     pub length: u32,
 }
 
+/// Metadata embedded in a pack header (v3+). For v1/v2 packs, defaults are inferred.
+#[derive(Debug, Clone, Copy)]
+pub struct PackMetadata {
+    pub version: u16,
+    pub tile_size: u16,
+    pub seed_w: u16,
+    pub seed_h: u16,
+    pub residual_w: u16,
+    pub residual_h: u16,
+    /// V4 split-seed: luma seed dimensions (0 = not split, use seed_w/h)
+    pub seed_luma_w: u16,
+    pub seed_luma_h: u16,
+    /// V4 split-seed: chroma seed dimensions (0 = not split, use seed_w/h)
+    pub seed_chroma_w: u16,
+    pub seed_chroma_h: u16,
+}
+
+impl PackMetadata {
+    /// Infer defaults for v1/v2 packs (seed = tile_size, residual = tile_size * 4).
+    pub fn default_for_v2(tile_size: u16) -> Self {
+        Self {
+            version: 2,
+            tile_size,
+            seed_w: tile_size,
+            seed_h: tile_size,
+            residual_w: tile_size * 4,
+            residual_h: tile_size * 4,
+            seed_luma_w: 0,
+            seed_luma_h: 0,
+            seed_chroma_w: 0,
+            seed_chroma_h: 0,
+        }
+    }
+
+    /// Whether this pack uses split luma/chroma seeds (v4).
+    pub fn is_split_seed(&self) -> bool {
+        self.version >= 4 && self.seed_luma_w > 0
+    }
+}
+
 pub struct PackFile {
     pub data: Vec<u8>,
     pub data_offset: usize,
     pub index: Vec<PackIndexEntry>,
+    pub metadata: PackMetadata,
 }
 
 impl PackFile {
@@ -25,6 +66,43 @@ impl PackFile {
     /// Get the fused L0 residual (single grayscale JPEG mosaic) from the pack.
     pub fn get_fused_l0(&self) -> Option<&[u8]> {
         self.get_residual(0, 0)
+    }
+
+    /// Get the seed luma (grayscale JPEG) from a v4 split-seed pack.
+    pub fn get_seed_luma(&self) -> Option<&[u8]> {
+        self.get_residual(3, 0)
+    }
+
+    /// Get the seed chroma (RGB JPEG — decoder extracts Cb/Cr, discards Y) from a v4 split-seed pack.
+    /// Legacy: used when level_kind=4 stores RGB chroma.
+    pub fn get_seed_chroma(&self) -> Option<&[u8]> {
+        self.get_residual(4, 0)
+    }
+
+    /// Get the seed Cb (grayscale) from a v4 split-seed pack (level_kind=4).
+    pub fn get_seed_cb(&self) -> Option<&[u8]> {
+        self.get_residual(4, 0)
+    }
+
+    /// Get the seed Cr (grayscale) from a v4 split-seed pack (level_kind=5).
+    pub fn get_seed_cr(&self) -> Option<&[u8]> {
+        self.get_residual(5, 0)
+    }
+
+    /// Get wavelet synthesis parameters (level_kind=6, 16 bytes) if present.
+    pub fn get_synth_params(&self) -> Option<crate::core::wavelet::SynthesisParams> {
+        let data = self.get_residual(6, 0)?;
+        if data.len() < 16 {
+            return None;
+        }
+        let mut buf = [0u8; 16];
+        buf.copy_from_slice(&data[..16]);
+        Some(crate::core::wavelet::SynthesisParams::from_bytes(&buf))
+    }
+
+    /// Whether this pack uses split luma/chroma seeds (v4).
+    pub fn is_split_seed(&self) -> bool {
+        self.metadata.is_split_seed()
     }
 
     pub fn get_residual(&self, level_kind: u8, idx_in_parent: u8) -> Option<&[u8]> {
@@ -58,7 +136,7 @@ pub struct PackWriteEntry {
     pub jpeg_data: Vec<u8>,
 }
 
-/// Write a pack file with LZ4 compression. Uses "ORIG" magic, version 2.
+/// Write a v2 pack file with LZ4 compression. Uses "ORIG" magic, version 2.
 ///
 /// V2 pack format (before LZ4 compression):
 /// - Header (24 bytes):
@@ -78,45 +156,7 @@ pub struct PackWriteEntry {
 ///   [12..16] reserved
 /// - Data: concatenated JPEG blobs
 pub fn write_pack(pack_dir: &Path, x2: u32, y2: u32, entries: &[PackWriteEntry]) -> Result<()> {
-    let header_size: usize = 24;
-    let index_size = entries.len() * 16;
-    let index_offset = header_size;
-    let data_offset = header_size + index_size;
-
-    // Calculate total data size
-    let total_data_size: usize = entries.iter().map(|e| e.jpeg_data.len()).sum();
-    let total_size = data_offset + total_data_size;
-
-    let mut buf = vec![0u8; total_size];
-
-    // Write header
-    buf[0..4].copy_from_slice(b"ORIG");
-    buf[4..6].copy_from_slice(&2u16.to_le_bytes()); // version 2
-    // [6..8] reserved
-    buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
-    buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
-    buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
-    // [20..24] reserved
-
-    // Write index and data
-    let mut data_cursor: u32 = 0;
-    for (i, entry) in entries.iter().enumerate() {
-        let idx_start = index_offset + i * 16;
-        buf[idx_start] = entry.level_kind;
-        buf[idx_start + 1] = entry.idx_in_parent;
-        // [2..4] reserved
-        buf[idx_start + 4..idx_start + 8].copy_from_slice(&data_cursor.to_le_bytes());
-        buf[idx_start + 8..idx_start + 12]
-            .copy_from_slice(&(entry.jpeg_data.len() as u32).to_le_bytes());
-        // [12..16] reserved
-
-        let dst_start = data_offset + data_cursor as usize;
-        buf[dst_start..dst_start + entry.jpeg_data.len()].copy_from_slice(&entry.jpeg_data);
-        data_cursor += entry.jpeg_data.len() as u32;
-    }
-
-    // LZ4 compress
-    let compressed = lz4_flex::compress_prepend_size(&buf);
+    let compressed = build_pack_v2(entries);
 
     // Write to file
     fs::create_dir_all(pack_dir)?;
@@ -125,6 +165,183 @@ pub fn write_pack(pack_dir: &Path, x2: u32, y2: u32, entries: &[PackWriteEntry])
         .with_context(|| format!("Failed to write pack file {}", path.display()))?;
 
     Ok(())
+}
+
+/// Write a v3 pack file with seed/residual dimensions in the header.
+///
+/// V3 pack format (before LZ4 compression):
+/// - Header (32 bytes):
+///   [0..4]   magic "ORIG"
+///   [4..6]   version (u16 LE) = 3
+///   [6..8]   tile_size (u16 LE)
+///   [8..12]  entry count (u32 LE)
+///   [12..16] index_offset (u32 LE)
+///   [16..20] data_offset (u32 LE)
+///   [20..22] seed_w (u16 LE)
+///   [22..24] seed_h (u16 LE)
+///   [24..26] residual_w (u16 LE)
+///   [26..28] residual_h (u16 LE)
+///   [28..32] reserved (zeroes)
+/// - Index and Data: same as v2
+pub fn write_pack_v3(
+    pack_dir: &Path,
+    x2: u32,
+    y2: u32,
+    entries: &[PackWriteEntry],
+    metadata: &PackMetadata,
+) -> Result<()> {
+    let compressed = build_pack_v3(entries, metadata);
+
+    fs::create_dir_all(pack_dir)?;
+    let path = pack_dir.join(format!("{}_{}.pack", x2, y2));
+    fs::write(&path, &compressed)
+        .with_context(|| format!("Failed to write pack file {}", path.display()))?;
+
+    Ok(())
+}
+
+/// Write a v4 pack file with split luma/chroma seed dimensions in the header.
+///
+/// V4 pack format (before LZ4 compression):
+/// - Header (48 bytes):
+///   [0..4]   magic "ORIG"
+///   [4..6]   version (u16 LE) = 4
+///   [6..8]   tile_size (u16 LE)
+///   [8..12]  entry count (u32 LE) — typically 3 (seed_luma + seed_chroma + fused L0)
+///   [12..16] index_offset (u32 LE)
+///   [16..20] data_offset (u32 LE)
+///   [20..22] seed_luma_w (u16 LE)
+///   [22..24] seed_luma_h (u16 LE)
+///   [24..26] seed_chroma_w (u16 LE)
+///   [26..28] seed_chroma_h (u16 LE)
+///   [28..30] residual_w (u16 LE)
+///   [30..32] residual_h (u16 LE)
+///   [32..48] reserved (zeroes)
+/// - Index (16 bytes per entry):
+///   [0]      level_kind (3=seed_luma, 4=seed_chroma, 0=fused L0 residual)
+///   [1]      idx_in_parent (always 0)
+///   [2..4]   reserved
+///   [4..8]   offset relative to data_offset (u32 LE)
+///   [8..12]  length (u32 LE)
+///   [12..16] reserved
+/// - Data: concatenated JPEG blobs
+pub fn write_pack_v4(
+    pack_dir: &Path,
+    x2: u32,
+    y2: u32,
+    entries: &[PackWriteEntry],
+    metadata: &PackMetadata,
+) -> Result<()> {
+    let compressed = build_pack_v4(entries, metadata);
+
+    fs::create_dir_all(pack_dir)?;
+    let path = pack_dir.join(format!("{}_{}.pack", x2, y2));
+    fs::write(&path, &compressed)
+        .with_context(|| format!("Failed to write pack file {}", path.display()))?;
+
+    Ok(())
+}
+
+/// Build v4 pack bytes (LZ4 compressed) with split luma/chroma seed dims in header.
+fn build_pack_v4(entries: &[PackWriteEntry], meta: &PackMetadata) -> Vec<u8> {
+    let header_size: usize = 48;
+    let index_size = entries.len() * 16;
+    let index_offset = header_size;
+    let data_offset = header_size + index_size;
+
+    let total_data_size: usize = entries.iter().map(|e| e.jpeg_data.len()).sum();
+    let total_size = data_offset + total_data_size;
+
+    let mut buf = vec![0u8; total_size];
+
+    buf[0..4].copy_from_slice(b"ORIG");
+    buf[4..6].copy_from_slice(&4u16.to_le_bytes());
+    buf[6..8].copy_from_slice(&meta.tile_size.to_le_bytes());
+    buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
+    buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
+    buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
+    buf[20..22].copy_from_slice(&meta.seed_luma_w.to_le_bytes());
+    buf[22..24].copy_from_slice(&meta.seed_luma_h.to_le_bytes());
+    buf[24..26].copy_from_slice(&meta.seed_chroma_w.to_le_bytes());
+    buf[26..28].copy_from_slice(&meta.seed_chroma_h.to_le_bytes());
+    buf[28..30].copy_from_slice(&meta.residual_w.to_le_bytes());
+    buf[30..32].copy_from_slice(&meta.residual_h.to_le_bytes());
+    // [32..48] reserved
+
+    write_pack_index_and_data(&mut buf, entries, index_offset, data_offset);
+    lz4_flex::compress_prepend_size(&buf)
+}
+
+/// LZ4-compress pack entries into v4 wire format with split seed metadata.
+pub fn compress_pack_entries_v4(entries: &[PackWriteEntry], metadata: &PackMetadata) -> Vec<u8> {
+    build_pack_v4(entries, metadata)
+}
+
+/// Build v2 pack bytes (LZ4 compressed).
+fn build_pack_v2(entries: &[PackWriteEntry]) -> Vec<u8> {
+    let header_size: usize = 24;
+    let index_size = entries.len() * 16;
+    let index_offset = header_size;
+    let data_offset = header_size + index_size;
+
+    let total_data_size: usize = entries.iter().map(|e| e.jpeg_data.len()).sum();
+    let total_size = data_offset + total_data_size;
+
+    let mut buf = vec![0u8; total_size];
+
+    buf[0..4].copy_from_slice(b"ORIG");
+    buf[4..6].copy_from_slice(&2u16.to_le_bytes());
+    buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
+    buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
+    buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
+
+    write_pack_index_and_data(&mut buf, entries, index_offset, data_offset);
+    lz4_flex::compress_prepend_size(&buf)
+}
+
+/// Build v3 pack bytes (LZ4 compressed) with seed/residual dims in header.
+fn build_pack_v3(entries: &[PackWriteEntry], meta: &PackMetadata) -> Vec<u8> {
+    let header_size: usize = 32;
+    let index_size = entries.len() * 16;
+    let index_offset = header_size;
+    let data_offset = header_size + index_size;
+
+    let total_data_size: usize = entries.iter().map(|e| e.jpeg_data.len()).sum();
+    let total_size = data_offset + total_data_size;
+
+    let mut buf = vec![0u8; total_size];
+
+    buf[0..4].copy_from_slice(b"ORIG");
+    buf[4..6].copy_from_slice(&3u16.to_le_bytes());
+    buf[6..8].copy_from_slice(&meta.tile_size.to_le_bytes());
+    buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
+    buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
+    buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
+    buf[20..22].copy_from_slice(&meta.seed_w.to_le_bytes());
+    buf[22..24].copy_from_slice(&meta.seed_h.to_le_bytes());
+    buf[24..26].copy_from_slice(&meta.residual_w.to_le_bytes());
+    buf[26..28].copy_from_slice(&meta.residual_h.to_le_bytes());
+    // [28..32] reserved
+
+    write_pack_index_and_data(&mut buf, entries, index_offset, data_offset);
+    lz4_flex::compress_prepend_size(&buf)
+}
+
+/// Write index entries and data blobs into a pre-allocated buffer.
+fn write_pack_index_and_data(buf: &mut [u8], entries: &[PackWriteEntry], index_offset: usize, data_offset: usize) {
+    let mut data_cursor: u32 = 0;
+    for (i, entry) in entries.iter().enumerate() {
+        let idx_start = index_offset + i * 16;
+        buf[idx_start] = entry.level_kind;
+        buf[idx_start + 1] = entry.idx_in_parent;
+        buf[idx_start + 4..idx_start + 8].copy_from_slice(&data_cursor.to_le_bytes());
+        buf[idx_start + 8..idx_start + 12]
+            .copy_from_slice(&(entry.jpeg_data.len() as u32).to_le_bytes());
+
+        let dst_start = data_offset + data_cursor as usize;
+        buf[dst_start..dst_start + entry.jpeg_data.len()].copy_from_slice(&entry.jpeg_data);
+        data_cursor += entry.jpeg_data.len() as u32;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -332,42 +549,20 @@ pub fn write_bundle(
     Ok(())
 }
 
-/// LZ4-compress pack entries into the wire format used inside bundles.
+/// LZ4-compress pack entries into v2 wire format used inside bundles.
 /// This is the same LZ4 compression used by write_pack, producing identical bytes.
 pub fn compress_pack_entries(entries: &[PackWriteEntry]) -> Vec<u8> {
-    let header_size: usize = 24;
-    let index_size = entries.len() * 16;
-    let index_offset = header_size;
-    let data_offset = header_size + index_size;
-    let total_data_size: usize = entries.iter().map(|e| e.jpeg_data.len()).sum();
-    let total_size = data_offset + total_data_size;
+    build_pack_v2(entries)
+}
 
-    let mut buf = vec![0u8; total_size];
-    buf[0..4].copy_from_slice(b"ORIG");
-    buf[4..6].copy_from_slice(&2u16.to_le_bytes()); // version 2
-    buf[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
-    buf[12..16].copy_from_slice(&(index_offset as u32).to_le_bytes());
-    buf[16..20].copy_from_slice(&(data_offset as u32).to_le_bytes());
-
-    let mut data_cursor: u32 = 0;
-    for (i, entry) in entries.iter().enumerate() {
-        let idx_start = index_offset + i * 16;
-        buf[idx_start] = entry.level_kind;
-        buf[idx_start + 1] = entry.idx_in_parent;
-        buf[idx_start + 4..idx_start + 8].copy_from_slice(&data_cursor.to_le_bytes());
-        buf[idx_start + 8..idx_start + 12]
-            .copy_from_slice(&(entry.jpeg_data.len() as u32).to_le_bytes());
-        let dst_start = data_offset + data_cursor as usize;
-        buf[dst_start..dst_start + entry.jpeg_data.len()].copy_from_slice(&entry.jpeg_data);
-        data_cursor += entry.jpeg_data.len() as u32;
-    }
-
-    lz4_flex::compress_prepend_size(&buf)
+/// LZ4-compress pack entries into v3 wire format with seed/residual metadata.
+pub fn compress_pack_entries_v3(entries: &[PackWriteEntry], metadata: &PackMetadata) -> Vec<u8> {
+    build_pack_v3(entries, metadata)
 }
 
 /// Parse decompressed pack data into a PackFile.
 /// Shared between open_pack and BundleFile::get_pack.
-/// Accepts both v1 and v2 pack formats.
+/// Accepts v1, v2, and v3 pack formats.
 fn parse_pack_data(data: Vec<u8>) -> Result<PackFile> {
     if data.len() < 24 {
         return Err(anyhow!("pack too small"));
@@ -376,9 +571,48 @@ fn parse_pack_data(data: Vec<u8>) -> Result<PackFile> {
         return Err(anyhow!("pack magic mismatch"));
     }
     let version = u16::from_le_bytes([data[4], data[5]]);
-    if version != 1 && version != 2 {
-        return Err(anyhow!("pack version {} not supported (expected 1 or 2)", version));
+    if version < 1 || version > 4 {
+        return Err(anyhow!("pack version {} not supported (expected 1-4)", version));
     }
+
+    // Parse metadata fields based on version
+    let metadata = if version == 4 {
+        if data.len() < 48 {
+            return Err(anyhow!("v4 pack too small for 48-byte header"));
+        }
+        PackMetadata {
+            version,
+            tile_size: u16::from_le_bytes([data[6], data[7]]),
+            seed_w: 0, // v4 uses split luma/chroma, not unified seed
+            seed_h: 0,
+            seed_luma_w: u16::from_le_bytes([data[20], data[21]]),
+            seed_luma_h: u16::from_le_bytes([data[22], data[23]]),
+            seed_chroma_w: u16::from_le_bytes([data[24], data[25]]),
+            seed_chroma_h: u16::from_le_bytes([data[26], data[27]]),
+            residual_w: u16::from_le_bytes([data[28], data[29]]),
+            residual_h: u16::from_le_bytes([data[30], data[31]]),
+        }
+    } else if version == 3 {
+        if data.len() < 32 {
+            return Err(anyhow!("v3 pack too small for 32-byte header"));
+        }
+        PackMetadata {
+            version,
+            tile_size: u16::from_le_bytes([data[6], data[7]]),
+            seed_w: u16::from_le_bytes([data[20], data[21]]),
+            seed_h: u16::from_le_bytes([data[22], data[23]]),
+            residual_w: u16::from_le_bytes([data[24], data[25]]),
+            residual_h: u16::from_le_bytes([data[26], data[27]]),
+            seed_luma_w: 0,
+            seed_luma_h: 0,
+            seed_chroma_w: 0,
+            seed_chroma_h: 0,
+        }
+    } else {
+        // v1/v2: tile_size stored in reserved [6..8] was zero; default to 256
+        PackMetadata::default_for_v2(256)
+    };
+
     let count = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
     let index_offset = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
     let data_offset = u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize;
@@ -411,6 +645,7 @@ fn parse_pack_data(data: Vec<u8>) -> Result<PackFile> {
         data,
         data_offset,
         index,
+        metadata,
     })
 }
 
@@ -499,6 +734,199 @@ mod tests {
         assert!(bundle.get_pack(2, 0).is_err());
         assert!(bundle.get_pack(0, 1).is_err());
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_pack_v3_roundtrip() {
+        let dir = std::env::temp_dir().join("origami_test_packs_v3");
+        let _ = fs::remove_dir_all(&dir);
+        let entries = vec![
+            PackWriteEntry {
+                level_kind: 2,
+                idx_in_parent: 0,
+                jpeg_data: vec![0xFF, 0xD8, 0xFF, 0xD9], // seed image
+            },
+            PackWriteEntry {
+                level_kind: 0,
+                idx_in_parent: 0,
+                jpeg_data: vec![1, 2, 3, 4, 5], // fused L0 residual
+            },
+        ];
+
+        let meta = PackMetadata {
+            version: 3,
+            tile_size: 256,
+            seed_w: 384,
+            seed_h: 384,
+            residual_w: 1024,
+            residual_h: 1024,
+            seed_luma_w: 0,
+            seed_luma_h: 0,
+            seed_chroma_w: 0,
+            seed_chroma_h: 0,
+        };
+
+        write_pack_v3(&dir, 3, 5, &entries, &meta).unwrap();
+        let pack = open_pack(&dir, 3, 5).unwrap();
+
+        // Verify metadata
+        assert_eq!(pack.metadata.version, 3);
+        assert_eq!(pack.metadata.tile_size, 256);
+        assert_eq!(pack.metadata.seed_w, 384);
+        assert_eq!(pack.metadata.seed_h, 384);
+        assert_eq!(pack.metadata.residual_w, 1024);
+        assert_eq!(pack.metadata.residual_h, 1024);
+
+        // Verify data
+        let l2 = pack.get_l2().unwrap();
+        assert_eq!(l2, &[0xFF, 0xD8, 0xFF, 0xD9]);
+        let l0 = pack.get_fused_l0().unwrap();
+        assert_eq!(l0, &[1, 2, 3, 4, 5]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_compress_pack_entries_v3_roundtrip() {
+        let entries = vec![
+            PackWriteEntry { level_kind: 2, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 10, 20] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![30, 40, 50] },
+        ];
+        let meta = PackMetadata {
+            version: 3,
+            tile_size: 256,
+            seed_w: 512,
+            seed_h: 512,
+            residual_w: 900,
+            residual_h: 900,
+            seed_luma_w: 0,
+            seed_luma_h: 0,
+            seed_chroma_w: 0,
+            seed_chroma_h: 0,
+        };
+
+        let lz4 = compress_pack_entries_v3(&entries, &meta);
+        let data = lz4_flex::decompress_size_prepended(&lz4).unwrap();
+        let pack = parse_pack_data(data).unwrap();
+
+        assert_eq!(pack.metadata.version, 3);
+        assert_eq!(pack.metadata.seed_w, 512);
+        assert_eq!(pack.metadata.seed_h, 512);
+        assert_eq!(pack.metadata.residual_w, 900);
+        assert_eq!(pack.metadata.residual_h, 900);
+        assert_eq!(pack.get_l2().unwrap(), &[0xFF, 0xD8, 10, 20]);
+        assert_eq!(pack.get_fused_l0().unwrap(), &[30, 40, 50]);
+    }
+
+    #[test]
+    fn test_pack_v4_roundtrip() {
+        let dir = std::env::temp_dir().join("origami_test_packs_v4");
+        let _ = fs::remove_dir_all(&dir);
+        let entries = vec![
+            PackWriteEntry {
+                level_kind: 3,
+                idx_in_parent: 0,
+                jpeg_data: vec![0xFF, 0xD8, 0x01, 0x02], // seed luma
+            },
+            PackWriteEntry {
+                level_kind: 4,
+                idx_in_parent: 0,
+                jpeg_data: vec![0xFF, 0xD8, 0x03, 0x04, 0x05], // seed chroma
+            },
+            PackWriteEntry {
+                level_kind: 0,
+                idx_in_parent: 0,
+                jpeg_data: vec![1, 2, 3, 4, 5], // fused L0 residual
+            },
+        ];
+
+        let meta = PackMetadata {
+            version: 4,
+            tile_size: 256,
+            seed_w: 0,
+            seed_h: 0,
+            seed_luma_w: 512,
+            seed_luma_h: 512,
+            seed_chroma_w: 128,
+            seed_chroma_h: 128,
+            residual_w: 1024,
+            residual_h: 1024,
+        };
+
+        write_pack_v4(&dir, 2, 3, &entries, &meta).unwrap();
+        let pack = open_pack(&dir, 2, 3).unwrap();
+
+        // Verify metadata
+        assert_eq!(pack.metadata.version, 4);
+        assert_eq!(pack.metadata.tile_size, 256);
+        assert_eq!(pack.metadata.seed_luma_w, 512);
+        assert_eq!(pack.metadata.seed_luma_h, 512);
+        assert_eq!(pack.metadata.seed_chroma_w, 128);
+        assert_eq!(pack.metadata.seed_chroma_h, 128);
+        assert_eq!(pack.metadata.residual_w, 1024);
+        assert_eq!(pack.metadata.residual_h, 1024);
+        assert!(pack.is_split_seed());
+
+        // Verify data
+        let luma = pack.get_seed_luma().unwrap();
+        assert_eq!(luma, &[0xFF, 0xD8, 0x01, 0x02]);
+        let chroma = pack.get_seed_chroma().unwrap();
+        assert_eq!(chroma, &[0xFF, 0xD8, 0x03, 0x04, 0x05]);
+        let l0 = pack.get_fused_l0().unwrap();
+        assert_eq!(l0, &[1, 2, 3, 4, 5]);
+
+        // Old accessors should not find split seed entries
+        assert!(pack.get_l2().is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_compress_pack_entries_v4_roundtrip() {
+        let entries = vec![
+            PackWriteEntry { level_kind: 3, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 10, 20] },
+            PackWriteEntry { level_kind: 4, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8, 30, 40] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![50, 60, 70] },
+        ];
+        let meta = PackMetadata {
+            version: 4,
+            tile_size: 256,
+            seed_w: 0,
+            seed_h: 0,
+            seed_luma_w: 384,
+            seed_luma_h: 384,
+            seed_chroma_w: 64,
+            seed_chroma_h: 64,
+            residual_w: 1024,
+            residual_h: 1024,
+        };
+
+        let lz4 = compress_pack_entries_v4(&entries, &meta);
+        let data = lz4_flex::decompress_size_prepended(&lz4).unwrap();
+        let pack = parse_pack_data(data).unwrap();
+
+        assert_eq!(pack.metadata.version, 4);
+        assert_eq!(pack.metadata.seed_luma_w, 384);
+        assert_eq!(pack.metadata.seed_chroma_w, 64);
+        assert!(pack.is_split_seed());
+        assert_eq!(pack.get_seed_luma().unwrap(), &[0xFF, 0xD8, 10, 20]);
+        assert_eq!(pack.get_seed_chroma().unwrap(), &[0xFF, 0xD8, 30, 40]);
+        assert_eq!(pack.get_fused_l0().unwrap(), &[50, 60, 70]);
+    }
+
+    #[test]
+    fn test_v2_pack_not_split_seed() {
+        // Verify v2 packs report is_split_seed() = false
+        let dir = std::env::temp_dir().join("origami_test_v2_not_split");
+        let _ = fs::remove_dir_all(&dir);
+        let entries = vec![
+            PackWriteEntry { level_kind: 2, idx_in_parent: 0, jpeg_data: vec![0xFF, 0xD8] },
+            PackWriteEntry { level_kind: 0, idx_in_parent: 0, jpeg_data: vec![1, 2] },
+        ];
+        write_pack(&dir, 0, 0, &entries).unwrap();
+        let pack = open_pack(&dir, 0, 0).unwrap();
+        assert!(!pack.is_split_seed());
         let _ = fs::remove_dir_all(&dir);
     }
 

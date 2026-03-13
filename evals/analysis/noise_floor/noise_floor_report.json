@@ -1,0 +1,3602 @@
+[
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/rs_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 148.87595176696777
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_200ep_f32_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0310287475586,
+    "std": 6.109211595982821,
+    "incompressibility_ratio": 0.9986848831176758,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16535433741310143,
+      "per_lag": [
+        0.5835760790921309,
+        0.07926419192490526,
+        0.07331331916949912,
+        0.04885576828263,
+        0.04176232859634191
+      ]
+    },
+    "power_spectrum_flatness": 0.14172897362373216,
+    "block_variance_uniformity": 0.9102575182914734,
+    "distribution_normality": {
+      "ks_statistic": 0.06873355243016865,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.582775115966797
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0317389091029183,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.02553589106884,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.533512708193556,
+    "sub_scores": {
+      "incompressibility": 0.9973697662353516,
+      "autocorrelation": 0.4488188752896619,
+      "spectral_flatness": 0.1771612170296652,
+      "block_uniformity": 0.3931616544723511,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 147.20916748046875
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_200ep_f32_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0310287475586,
+    "std": 6.109211595982821,
+    "incompressibility_ratio": 0.9986848831176758,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16535433741310143,
+      "per_lag": [
+        0.5835760790921309,
+        0.07926419192490526,
+        0.07331331916949912,
+        0.04885576828263,
+        0.04176232859634191
+      ]
+    },
+    "power_spectrum_flatness": 0.14172897362373216,
+    "block_variance_uniformity": 0.9102575182914734,
+    "distribution_normality": {
+      "ks_statistic": 0.06873355243016865,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.582775115966797
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0317389091029183,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.02553589106884,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.533512708193556,
+    "sub_scores": {
+      "incompressibility": 0.9973697662353516,
+      "autocorrelation": 0.4488188752896619,
+      "spectral_flatness": 0.1771612170296652,
+      "block_uniformity": 0.3931616544723511,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 151.74412727355957
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_200ep_f32_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0310287475586,
+    "std": 6.109211595982821,
+    "incompressibility_ratio": 0.9986848831176758,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16535433741310143,
+      "per_lag": [
+        0.5835760790921309,
+        0.07926419192490526,
+        0.07331331916949912,
+        0.04885576828263,
+        0.04176232859634191
+      ]
+    },
+    "power_spectrum_flatness": 0.14172897362373216,
+    "block_variance_uniformity": 0.9102575182914734,
+    "distribution_normality": {
+      "ks_statistic": 0.06873355243016865,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.582775115966797
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0317389091029183,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.02553589106884,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.533512708193556,
+    "sub_scores": {
+      "incompressibility": 0.9973697662353516,
+      "autocorrelation": 0.4488188752896619,
+      "spectral_flatness": 0.1771612170296652,
+      "block_uniformity": 0.3931616544723511,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 152.4949073791504
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_200ep_f32_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0310287475586,
+    "std": 6.109211595982821,
+    "incompressibility_ratio": 0.9986848831176758,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16535433741310143,
+      "per_lag": [
+        0.5835760790921309,
+        0.07926419192490526,
+        0.07331331916949912,
+        0.04885576828263,
+        0.04176232859634191
+      ]
+    },
+    "power_spectrum_flatness": 0.14172897362373216,
+    "block_variance_uniformity": 0.9102575182914734,
+    "distribution_normality": {
+      "ks_statistic": 0.06873355243016865,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.582775115966797
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0317389091029183,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.02553589106884,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.533512708193556,
+    "sub_scores": {
+      "incompressibility": 0.9973697662353516,
+      "autocorrelation": 0.4488188752896619,
+      "spectral_flatness": 0.1771612170296652,
+      "block_uniformity": 0.3931616544723511,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 166.3527488708496
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_200ep_f32_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0310287475586,
+    "std": 6.109211595982821,
+    "incompressibility_ratio": 0.9986848831176758,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16535433741310143,
+      "per_lag": [
+        0.5835760790921309,
+        0.07926419192490526,
+        0.07331331916949912,
+        0.04885576828263,
+        0.04176232859634191
+      ]
+    },
+    "power_spectrum_flatness": 0.14172897362373216,
+    "block_variance_uniformity": 0.9102575182914734,
+    "distribution_normality": {
+      "ks_statistic": 0.06873355243016865,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.582775115966797
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0317389091029183,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.02553589106884,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.533512708193556,
+    "sub_scores": {
+      "incompressibility": 0.9973697662353516,
+      "autocorrelation": 0.4488188752896619,
+      "spectral_flatness": 0.1771612170296652,
+      "block_uniformity": 0.3931616544723511,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 161.20004653930664
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_f32_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.04699420928955,
+    "std": 6.123890466143801,
+    "incompressibility_ratio": 0.9989376068115234,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16478139761960628,
+      "per_lag": [
+        0.5854014382274446,
+        0.08342794576674603,
+        0.07266739686823437,
+        0.04316125680680273,
+        0.039248950428803664
+      ]
+    },
+    "power_spectrum_flatness": 0.13736344996958416,
+    "block_variance_uniformity": 0.9116306900978088,
+    "distribution_normality": {
+      "ks_statistic": 0.07021096904262947,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.592577934265137
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0287061106715065,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.023924442170842,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5327923318086394,
+    "sub_scores": {
+      "incompressibility": 0.9978752136230469,
+      "autocorrelation": 0.4507286746013124,
+      "spectral_flatness": 0.1717043124619802,
+      "block_uniformity": 0.3922462066014608,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 156.52990341186523
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_f32_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.04699420928955,
+    "std": 6.123890466143801,
+    "incompressibility_ratio": 0.9989376068115234,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16478139761960628,
+      "per_lag": [
+        0.5854014382274446,
+        0.08342794576674603,
+        0.07266739686823437,
+        0.04316125680680273,
+        0.039248950428803664
+      ]
+    },
+    "power_spectrum_flatness": 0.13736344996958416,
+    "block_variance_uniformity": 0.9116306900978088,
+    "distribution_normality": {
+      "ks_statistic": 0.07021096904262947,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.592577934265137
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0287061106715065,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.023924442170842,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5327923318086394,
+    "sub_scores": {
+      "incompressibility": 0.9978752136230469,
+      "autocorrelation": 0.4507286746013124,
+      "spectral_flatness": 0.1717043124619802,
+      "block_uniformity": 0.3922462066014608,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 171.76222801208496
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_f32_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.04699420928955,
+    "std": 6.123890466143801,
+    "incompressibility_ratio": 0.9989376068115234,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16478139761960628,
+      "per_lag": [
+        0.5854014382274446,
+        0.08342794576674603,
+        0.07266739686823437,
+        0.04316125680680273,
+        0.039248950428803664
+      ]
+    },
+    "power_spectrum_flatness": 0.13736344996958416,
+    "block_variance_uniformity": 0.9116306900978088,
+    "distribution_normality": {
+      "ks_statistic": 0.07021096904262947,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.592577934265137
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0287061106715065,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.023924442170842,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5327923318086394,
+    "sub_scores": {
+      "incompressibility": 0.9978752136230469,
+      "autocorrelation": 0.4507286746013124,
+      "spectral_flatness": 0.1717043124619802,
+      "block_uniformity": 0.3922462066014608,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 174.69310760498047
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_f32_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.04699420928955,
+    "std": 6.123890466143801,
+    "incompressibility_ratio": 0.9989376068115234,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16478139761960628,
+      "per_lag": [
+        0.5854014382274446,
+        0.08342794576674603,
+        0.07266739686823437,
+        0.04316125680680273,
+        0.039248950428803664
+      ]
+    },
+    "power_spectrum_flatness": 0.13736344996958416,
+    "block_variance_uniformity": 0.9116306900978088,
+    "distribution_normality": {
+      "ks_statistic": 0.07021096904262947,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.592577934265137
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0287061106715065,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.023924442170842,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5327923318086394,
+    "sub_scores": {
+      "incompressibility": 0.9978752136230469,
+      "autocorrelation": 0.4507286746013124,
+      "spectral_flatness": 0.1717043124619802,
+      "block_uniformity": 0.3922462066014608,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 163.3279323577881
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_f32_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.04699420928955,
+    "std": 6.123890466143801,
+    "incompressibility_ratio": 0.9989376068115234,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16478139761960628,
+      "per_lag": [
+        0.5854014382274446,
+        0.08342794576674603,
+        0.07266739686823437,
+        0.04316125680680273,
+        0.039248950428803664
+      ]
+    },
+    "power_spectrum_flatness": 0.13736344996958416,
+    "block_variance_uniformity": 0.9116306900978088,
+    "distribution_normality": {
+      "ks_statistic": 0.07021096904262947,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.592577934265137
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0287061106715065,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.023924442170842,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5327923318086394,
+    "sub_scores": {
+      "incompressibility": 0.9978752136230469,
+      "autocorrelation": 0.4507286746013124,
+      "spectral_flatness": 0.1717043124619802,
+      "block_uniformity": 0.3922462066014608,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 159.00588035583496
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_fft_f32_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0331325531006,
+    "std": 6.223538565677946,
+    "incompressibility_ratio": 0.9987421035766602,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16939850107242813,
+      "per_lag": [
+        0.5931872361212123,
+        0.09058585095251973,
+        0.07312961168573483,
+        0.055449557240863576,
+        0.03464024936181033
+      ]
+    },
+    "power_spectrum_flatness": 0.13842571747092483,
+    "block_variance_uniformity": 0.9432657957077026,
+    "distribution_normality": {
+      "ks_statistic": 0.0687682018189899,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.654691696166992
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0265646059292468,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.024214761390259,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5267185675370056,
+    "sub_scores": {
+      "incompressibility": 0.9974842071533203,
+      "autocorrelation": 0.4353383297585729,
+      "spectral_flatness": 0.17303214683865603,
+      "block_uniformity": 0.37115613619486487,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 149.7499942779541
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_fft_f32_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0331325531006,
+    "std": 6.223538565677946,
+    "incompressibility_ratio": 0.9987421035766602,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16939850107242813,
+      "per_lag": [
+        0.5931872361212123,
+        0.09058585095251973,
+        0.07312961168573483,
+        0.055449557240863576,
+        0.03464024936181033
+      ]
+    },
+    "power_spectrum_flatness": 0.13842571747092483,
+    "block_variance_uniformity": 0.9432657957077026,
+    "distribution_normality": {
+      "ks_statistic": 0.0687682018189899,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.654691696166992
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0265646059292468,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.024214761390259,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5267185675370056,
+    "sub_scores": {
+      "incompressibility": 0.9974842071533203,
+      "autocorrelation": 0.4353383297585729,
+      "spectral_flatness": 0.17303214683865603,
+      "block_uniformity": 0.37115613619486487,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 150.33793449401855
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_fft_f32_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0331325531006,
+    "std": 6.223538565677946,
+    "incompressibility_ratio": 0.9987421035766602,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16939850107242813,
+      "per_lag": [
+        0.5931872361212123,
+        0.09058585095251973,
+        0.07312961168573483,
+        0.055449557240863576,
+        0.03464024936181033
+      ]
+    },
+    "power_spectrum_flatness": 0.13842571747092483,
+    "block_variance_uniformity": 0.9432657957077026,
+    "distribution_normality": {
+      "ks_statistic": 0.0687682018189899,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.654691696166992
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0265646059292468,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.024214761390259,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5267185675370056,
+    "sub_scores": {
+      "incompressibility": 0.9974842071533203,
+      "autocorrelation": 0.4353383297585729,
+      "spectral_flatness": 0.17303214683865603,
+      "block_uniformity": 0.37115613619486487,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 147.74775505065918
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_fft_f32_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0331325531006,
+    "std": 6.223538565677946,
+    "incompressibility_ratio": 0.9987421035766602,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16939850107242813,
+      "per_lag": [
+        0.5931872361212123,
+        0.09058585095251973,
+        0.07312961168573483,
+        0.055449557240863576,
+        0.03464024936181033
+      ]
+    },
+    "power_spectrum_flatness": 0.13842571747092483,
+    "block_variance_uniformity": 0.9432657957077026,
+    "distribution_normality": {
+      "ks_statistic": 0.0687682018189899,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.654691696166992
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0265646059292468,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.024214761390259,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5267185675370056,
+    "sub_scores": {
+      "incompressibility": 0.9974842071533203,
+      "autocorrelation": 0.4353383297585729,
+      "spectral_flatness": 0.17303214683865603,
+      "block_uniformity": 0.37115613619486487,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 160.78805923461914
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_fft_f32_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.0331325531006,
+    "std": 6.223538565677946,
+    "incompressibility_ratio": 0.9987421035766602,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16939850107242813,
+      "per_lag": [
+        0.5931872361212123,
+        0.09058585095251973,
+        0.07312961168573483,
+        0.055449557240863576,
+        0.03464024936181033
+      ]
+    },
+    "power_spectrum_flatness": 0.13842571747092483,
+    "block_variance_uniformity": 0.9432657957077026,
+    "distribution_normality": {
+      "ks_statistic": 0.0687682018189899,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.654691696166992
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0265646059292468,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.024214761390259,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5267185675370056,
+    "sub_scores": {
+      "incompressibility": 0.9974842071533203,
+      "autocorrelation": 0.4353383297585729,
+      "spectral_flatness": 0.17303214683865603,
+      "block_uniformity": 0.37115613619486487,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 149.76787567138672
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_dual_i8_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.70147037506104,
+    "std": 9.90009248733551,
+    "incompressibility_ratio": 1.0000791549682617,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.20475074121296463,
+      "per_lag": [
+        0.40176989085177384,
+        0.20744085704945492,
+        0.008852919409286574,
+        0.36416280949740754,
+        0.0415272292569004
+      ]
+    },
+    "power_spectrum_flatness": 0.07987851336810782,
+    "block_variance_uniformity": 0.6416575908660889,
+    "distribution_normality": {
+      "ks_statistic": 0.07848587353675729,
+      "p_value": 0.0,
+      "laplacian_loc": -1.0,
+      "laplacian_scale": 7.710259437561035
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.025383245014123,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.018075717328618,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5193033751134416,
+    "sub_scores": {
+      "incompressibility": 1.0,
+      "autocorrelation": 0.3174975292901179,
+      "spectral_flatness": 0.09984814171013477,
+      "block_uniformity": 0.5722282727559407,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 156.9061279296875
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_f32_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01952171325684,
+    "std": 6.1935914536501455,
+    "incompressibility_ratio": 0.9989032745361328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1677217679118227,
+      "per_lag": [
+        0.5872831351479911,
+        0.08338020631001102,
+        0.07890879426040497,
+        0.055120491906015145,
+        0.03391621193469125
+      ]
+    },
+    "power_spectrum_flatness": 0.1358574374944392,
+    "block_variance_uniformity": 0.9241467118263245,
+    "distribution_normality": {
+      "ks_statistic": 0.06679928558425785,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.643268585205078
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0286261678689348,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0226794107947375,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5291868135178286,
+    "sub_scores": {
+      "incompressibility": 0.9978065490722656,
+      "autocorrelation": 0.4409274402939243,
+      "spectral_flatness": 0.169821796868049,
+      "block_uniformity": 0.3839021921157837,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 160.92896461486816
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_f32_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01952171325684,
+    "std": 6.1935914536501455,
+    "incompressibility_ratio": 0.9989032745361328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1677217679118227,
+      "per_lag": [
+        0.5872831351479911,
+        0.08338020631001102,
+        0.07890879426040497,
+        0.055120491906015145,
+        0.03391621193469125
+      ]
+    },
+    "power_spectrum_flatness": 0.1358574374944392,
+    "block_variance_uniformity": 0.9241467118263245,
+    "distribution_normality": {
+      "ks_statistic": 0.06679928558425785,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.643268585205078
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0286261678689348,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0226794107947375,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5291868135178286,
+    "sub_scores": {
+      "incompressibility": 0.9978065490722656,
+      "autocorrelation": 0.4409274402939243,
+      "spectral_flatness": 0.169821796868049,
+      "block_uniformity": 0.3839021921157837,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 158.60295295715332
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_f32_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01952171325684,
+    "std": 6.1935914536501455,
+    "incompressibility_ratio": 0.9989032745361328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1677217679118227,
+      "per_lag": [
+        0.5872831351479911,
+        0.08338020631001102,
+        0.07890879426040497,
+        0.055120491906015145,
+        0.03391621193469125
+      ]
+    },
+    "power_spectrum_flatness": 0.1358574374944392,
+    "block_variance_uniformity": 0.9241467118263245,
+    "distribution_normality": {
+      "ks_statistic": 0.06679928558425785,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.643268585205078
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0286261678689348,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0226794107947375,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5291868135178286,
+    "sub_scores": {
+      "incompressibility": 0.9978065490722656,
+      "autocorrelation": 0.4409274402939243,
+      "spectral_flatness": 0.169821796868049,
+      "block_uniformity": 0.3839021921157837,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 176.82933807373047
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_f32_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01952171325684,
+    "std": 6.1935914536501455,
+    "incompressibility_ratio": 0.9989032745361328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1677217679118227,
+      "per_lag": [
+        0.5872831351479911,
+        0.08338020631001102,
+        0.07890879426040497,
+        0.055120491906015145,
+        0.03391621193469125
+      ]
+    },
+    "power_spectrum_flatness": 0.1358574374944392,
+    "block_variance_uniformity": 0.9241467118263245,
+    "distribution_normality": {
+      "ks_statistic": 0.06679928558425785,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.643268585205078
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0286261678689348,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0226794107947375,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5291868135178286,
+    "sub_scores": {
+      "incompressibility": 0.9978065490722656,
+      "autocorrelation": 0.4409274402939243,
+      "spectral_flatness": 0.169821796868049,
+      "block_uniformity": 0.3839021921157837,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 166.49198532104492
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_f32_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01952171325684,
+    "std": 6.1935914536501455,
+    "incompressibility_ratio": 0.9989032745361328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1677217679118227,
+      "per_lag": [
+        0.5872831351479911,
+        0.08338020631001102,
+        0.07890879426040497,
+        0.055120491906015145,
+        0.03391621193469125
+      ]
+    },
+    "power_spectrum_flatness": 0.1358574374944392,
+    "block_variance_uniformity": 0.9241467118263245,
+    "distribution_normality": {
+      "ks_statistic": 0.06679928558425785,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.643268585205078
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0286261678689348,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0226794107947375,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5291868135178286,
+    "sub_scores": {
+      "incompressibility": 0.9978065490722656,
+      "autocorrelation": 0.4409274402939243,
+      "spectral_flatness": 0.169821796868049,
+      "block_uniformity": 0.3839021921157837,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 160.6290340423584
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_espcnr_i8_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.03080081939697,
+    "std": 6.205197406639202,
+    "incompressibility_ratio": 0.9993581771850586,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16789197118629268,
+      "per_lag": [
+        0.587667812151589,
+        0.0845807769775139,
+        0.07853930214913608,
+        0.05534927893332548,
+        0.0333226857198989
+      ]
+    },
+    "power_spectrum_flatness": 0.136027448361215,
+    "block_variance_uniformity": 0.9220616817474365,
+    "distribution_normality": {
+      "ks_statistic": 0.06731932114997319,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.653969764709473
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0293866098581232,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0232426915133868,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5295518017172276,
+    "sub_scores": {
+      "incompressibility": 0.9987163543701172,
+      "autocorrelation": 0.44036009604569104,
+      "spectral_flatness": 0.17003431045151873,
+      "block_uniformity": 0.3852922121683756,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 151.10301971435547
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_lanczos3_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 157.17768669128418
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_lanczos3_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 159.2869758605957
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_lanczos3_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 158.51187705993652
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_lanczos3_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 150.9082317352295
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_lanczos3_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 140.3191089630127
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_model_s1_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.00248908996582,
+    "std": 6.184184062759008,
+    "incompressibility_ratio": 0.9987812042236328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16719440543318653,
+      "per_lag": [
+        0.5892565202216862,
+        0.08675467542577714,
+        0.07184026624894196,
+        0.05142001745224378,
+        0.036700547817283664
+      ]
+    },
+    "power_spectrum_flatness": 0.13832228117653816,
+    "block_variance_uniformity": 0.9272430539131165,
+    "distribution_normality": {
+      "ks_statistic": 0.06650441900019133,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.629735946655273
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0271011841404116,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.020563942207599,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5297839300591816,
+    "sub_scores": {
+      "incompressibility": 0.9975624084472656,
+      "autocorrelation": 0.4426853152227115,
+      "spectral_flatness": 0.1729028514706727,
+      "block_uniformity": 0.38183796405792236,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 153.47719192504883
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_model_s1_444_b95_nores/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.00248908996582,
+    "std": 6.184184062759008,
+    "incompressibility_ratio": 0.9987812042236328,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16719440543318653,
+      "per_lag": [
+        0.5892565202216862,
+        0.08675467542577714,
+        0.07184026624894196,
+        0.05142001745224378,
+        0.036700547817283664
+      ]
+    },
+    "power_spectrum_flatness": 0.13832228117653816,
+    "block_variance_uniformity": 0.9272430539131165,
+    "distribution_normality": {
+      "ks_statistic": 0.06650441900019133,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.629735946655273
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0271011841404116,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.020563942207599,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5297839300591816,
+    "sub_scores": {
+      "incompressibility": 0.9975624084472656,
+      "autocorrelation": 0.4426853152227115,
+      "spectral_flatness": 0.1729028514706727,
+      "block_uniformity": 0.38183796405792236,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 152.97913551330566
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_f32_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.99971199035645,
+    "std": 6.1812794493172225,
+    "incompressibility_ratio": 0.9987068176269531,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16698076187407943,
+      "per_lag": [
+        0.5888977087883354,
+        0.08646389102561544,
+        0.07180641938313777,
+        0.05091751141286162,
+        0.036818278760446896
+      ]
+    },
+    "power_spectrum_flatness": 0.13828701462277226,
+    "block_variance_uniformity": 0.9255882501602173,
+    "distribution_normality": {
+      "ks_statistic": 0.06659688659244489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.6280059814453125
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0277706240259128,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0202908299505877,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.530045829537095,
+    "sub_scores": {
+      "incompressibility": 0.9974136352539062,
+      "autocorrelation": 0.44339746041973527,
+      "spectral_flatness": 0.17285876827846533,
+      "block_uniformity": 0.3829411665598551,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 148.35667610168457
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_f32_444_b95_l0q60/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.99971199035645,
+    "std": 6.1812794493172225,
+    "incompressibility_ratio": 0.9987068176269531,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16698076187407943,
+      "per_lag": [
+        0.5888977087883354,
+        0.08646389102561544,
+        0.07180641938313777,
+        0.05091751141286162,
+        0.036818278760446896
+      ]
+    },
+    "power_spectrum_flatness": 0.13828701462277226,
+    "block_variance_uniformity": 0.9255882501602173,
+    "distribution_normality": {
+      "ks_statistic": 0.06659688659244489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.6280059814453125
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0277706240259128,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0202908299505877,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.530045829537095,
+    "sub_scores": {
+      "incompressibility": 0.9974136352539062,
+      "autocorrelation": 0.44339746041973527,
+      "spectral_flatness": 0.17285876827846533,
+      "block_uniformity": 0.3829411665598551,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 155.25412559509277
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_f32_444_b95_l0q70/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.99971199035645,
+    "std": 6.1812794493172225,
+    "incompressibility_ratio": 0.9987068176269531,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16698076187407943,
+      "per_lag": [
+        0.5888977087883354,
+        0.08646389102561544,
+        0.07180641938313777,
+        0.05091751141286162,
+        0.036818278760446896
+      ]
+    },
+    "power_spectrum_flatness": 0.13828701462277226,
+    "block_variance_uniformity": 0.9255882501602173,
+    "distribution_normality": {
+      "ks_statistic": 0.06659688659244489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.6280059814453125
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0277706240259128,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0202908299505877,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.530045829537095,
+    "sub_scores": {
+      "incompressibility": 0.9974136352539062,
+      "autocorrelation": 0.44339746041973527,
+      "spectral_flatness": 0.17285876827846533,
+      "block_uniformity": 0.3829411665598551,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 152.18424797058105
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_f32_444_b95_l0q80/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.99971199035645,
+    "std": 6.1812794493172225,
+    "incompressibility_ratio": 0.9987068176269531,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16698076187407943,
+      "per_lag": [
+        0.5888977087883354,
+        0.08646389102561544,
+        0.07180641938313777,
+        0.05091751141286162,
+        0.036818278760446896
+      ]
+    },
+    "power_spectrum_flatness": 0.13828701462277226,
+    "block_variance_uniformity": 0.9255882501602173,
+    "distribution_normality": {
+      "ks_statistic": 0.06659688659244489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.6280059814453125
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0277706240259128,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0202908299505877,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.530045829537095,
+    "sub_scores": {
+      "incompressibility": 0.9974136352539062,
+      "autocorrelation": 0.44339746041973527,
+      "spectral_flatness": 0.17285876827846533,
+      "block_uniformity": 0.3829411665598551,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 149.57904815673828
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_f32_444_b95_l0q90/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 127.99971199035645,
+    "std": 6.1812794493172225,
+    "incompressibility_ratio": 0.9987068176269531,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.16698076187407943,
+      "per_lag": [
+        0.5888977087883354,
+        0.08646389102561544,
+        0.07180641938313777,
+        0.05091751141286162,
+        0.036818278760446896
+      ]
+    },
+    "power_spectrum_flatness": 0.13828701462277226,
+    "block_variance_uniformity": 0.9255882501602173,
+    "distribution_normality": {
+      "ks_statistic": 0.06659688659244489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.6280059814453125
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0277706240259128,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0202908299505877,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.530045829537095,
+    "sub_scores": {
+      "incompressibility": 0.9974136352539062,
+      "autocorrelation": 0.44339746041973527,
+      "spectral_flatness": 0.17285876827846533,
+      "block_uniformity": 0.3829411665598551,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 156.66890144348145
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/sr_wsisrx4_i8_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 135.92145156860352,
+    "std": 8.11142949810265,
+    "incompressibility_ratio": 1.0000791549682617,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.23135196307991984,
+      "per_lag": [
+        0.6660272368063769,
+        0.24864839480412002,
+        0.08836028679933024,
+        0.09847464639825387,
+        0.055249250591518216
+      ]
+    },
+    "power_spectrum_flatness": 0.08967976217191988,
+    "block_variance_uniformity": 0.981911301612854,
+    "distribution_normality": {
+      "ks_statistic": 0.06659413290644489,
+      "p_value": 0.0,
+      "laplacian_loc": 8.0,
+      "laplacian_scale": 6.020914077758789
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0141106656546257,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.0204871603556254,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.4699941683284147,
+    "sub_scores": {
+      "incompressibility": 1.0,
+      "autocorrelation": 0.2288267897336005,
+      "spectral_flatness": 0.11209970271489984,
+      "block_uniformity": 0.34539246559143066,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 153.21016311645508
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q30_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 153.02014350891113
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q35_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 159.18993949890137
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q40_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 154.3738842010498
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q45_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 148.76890182495117
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q50_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 144.19317245483398
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q55_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 171.88787460327148
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q58_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 177.26802825927734
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q60_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 180.89604377746582
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q62_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 170.76396942138672
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q65_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 154.25610542297363
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q68_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 152.67491340637207
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q70_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 171.89288139343262
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q72_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.11387252807617
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q75_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 156.59499168395996
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q80_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 147.86911010742188
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q85_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.48103713989258
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q90_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 144.42110061645508
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q95_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 149.3241786956787
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q97_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 152.17328071594238
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b90_l0q99_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01176738739014,
+    "std": 6.797555599273364,
+    "incompressibility_ratio": 0.9993276596069336,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.1861692751347452,
+      "per_lag": [
+        0.6489999271882112,
+        0.17611571683451321,
+        0.031259299028630685,
+        0.06118555041009276,
+        0.01328588221227821
+      ]
+    },
+    "power_spectrum_flatness": 0.11066594510813951,
+    "block_variance_uniformity": 0.9495320320129395,
+    "distribution_normality": {
+      "ks_statistic": 0.06223047973603324,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 5.081681251525879
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0148958541622506,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.022089339837382,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.5082642627893776,
+    "sub_scores": {
+      "incompressibility": 0.9986553192138672,
+      "autocorrelation": 0.37943574955084924,
+      "spectral_flatness": 0.13833243138517437,
+      "block_uniformity": 0.36697864532470703,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 155.8239459991455
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q30_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 157.3312282562256
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q35_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 158.74910354614258
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q40_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.05402946472168
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q45_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.209716796875
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q50_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 159.6369743347168
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q55_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 149.338960647583
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q60_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 143.84794235229492
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q65_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 141.97516441345215
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q70_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.83818817138672
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q75_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 138.84496688842773
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q80_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 143.62692832946777
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q85_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 147.80807495117188
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q90_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 146.30985260009766
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q95_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 144.71888542175293
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q97_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 142.46892929077148
+  },
+  {
+    "image": "021_L0_fused_residual_centered.png",
+    "path": "evals/runs/v2_b95_l0q99_ss256_nooptl2/compress/021_L0_fused_residual_centered.png",
+    "shape": [
+      1024,
+      1024
+    ],
+    "mean": 128.01544761657715,
+    "std": 6.4149945216037825,
+    "incompressibility_ratio": 0.9986772537231445,
+    "spatial_autocorrelation": {
+      "mean_abs": 0.17566305839428525,
+      "per_lag": [
+        0.6182388325360497,
+        0.11991566640870352,
+        0.06364479673370534,
+        0.06803780492256747,
+        0.008478191370400153
+      ]
+    },
+    "power_spectrum_flatness": 0.11947548186665125,
+    "block_variance_uniformity": 0.994769811630249,
+    "distribution_normality": {
+      "ks_statistic": 0.06371361795162489,
+      "p_value": 0.0,
+      "laplacian_loc": 0.0,
+      "laplacian_scale": 4.764791488647461
+    },
+    "run_length_entropy": 1.0,
+    "jpeg_artifact_energy": {
+      "period_8": {
+        "ratio": 1.0116172626334423,
+        "detected": false
+      },
+      "period_32": {
+        "ratio": 1.025544970253172,
+        "detected": false
+      }
+    },
+    "noise_floor_score": 0.51262181056902,
+    "sub_scores": {
+      "incompressibility": 0.9973545074462891,
+      "autocorrelation": 0.4144564720190491,
+      "spectral_flatness": 0.14934435233331406,
+      "block_uniformity": 0.336820125579834,
+      "distribution_fit": 0.0,
+      "run_length": 1.0
+    },
+    "eval_time_ms": 147.50933647155762
+  }
+]

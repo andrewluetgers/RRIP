@@ -1,0 +1,456 @@
+{
+  "image": "evals/test-images/L0-1024.jpg",
+  "quality": 40,
+  "original_sigma": 3.661804,
+  "original_approx_sigma": 178.229958,
+  "original_subband_sigmas": [
+    [
+      15.020786,
+      15.262293,
+      7.131524
+    ],
+    [
+      3.969844,
+      4.166126,
+      1.552381
+    ]
+  ],
+  "clean_sigma": 1.128959,
+  "best_iso_match": 9600,
+  "sigma_to_iso_table": [
+    {
+      "sigma": 1.128959,
+      "iso": 0,
+      "size": 47910
+    },
+    {
+      "sigma": 1.306499,
+      "iso": 50,
+      "size": 47911
+    },
+    {
+      "sigma": 1.306552,
+      "iso": 100,
+      "size": 47905
+    },
+    {
+      "sigma": 1.333462,
+      "iso": 200,
+      "size": 47901
+    },
+    {
+      "sigma": 1.478301,
+      "iso": 400,
+      "size": 47889
+    },
+    {
+      "sigma": 1.631008,
+      "iso": 800,
+      "size": 47867
+    },
+    {
+      "sigma": 1.706093,
+      "iso": 1200,
+      "size": 47859
+    },
+    {
+      "sigma": 1.878633,
+      "iso": 1600,
+      "size": 47837
+    },
+    {
+      "sigma": 2.099214,
+      "iso": 2400,
+      "size": 47805
+    },
+    {
+      "sigma": 2.277065,
+      "iso": 3200,
+      "size": 47769
+    },
+    {
+      "sigma": 2.651205,
+      "iso": 4800,
+      "size": 47701
+    },
+    {
+      "sigma": 2.891499,
+      "iso": 6400,
+      "size": 47634
+    },
+    {
+      "sigma": 3.479918,
+      "iso": 9600,
+      "size": 47506
+    },
+    {
+      "sigma": 3.930098,
+      "iso": 12800,
+      "size": 47416
+    },
+    {
+      "sigma": 4.678893,
+      "iso": 19200,
+      "size": 47240
+    },
+    {
+      "sigma": 5.385824,
+      "iso": 25600,
+      "size": 47114
+    },
+    {
+      "sigma": 6.657504,
+      "iso": 38400,
+      "size": 46994
+    },
+    {
+      "sigma": 7.764889,
+      "iso": 51200,
+      "size": 46940
+    }
+  ],
+  "full_results": [
+    {
+      "iso": 0,
+      "jxl_size": 47910,
+      "mad_sigma": 1.128959,
+      "delta_sigma_from_original": -2.532845,
+      "approx_sigma": 177.786807,
+      "subband_sigmas": [
+        [
+          12.940838,
+          13.225609,
+          3.512052
+        ],
+        [
+          2.018152,
+          2.139848,
+          0.531852
+        ]
+      ]
+    },
+    {
+      "iso": 50,
+      "jxl_size": 47911,
+      "mad_sigma": 1.306499,
+      "delta_sigma_from_original": -2.355305,
+      "approx_sigma": 177.78453,
+      "subband_sigmas": [
+        [
+          12.958196,
+          13.236035,
+          3.544361
+        ],
+        [
+          2.071963,
+          2.195197,
+          0.702005
+        ]
+      ]
+    },
+    {
+      "iso": 100,
+      "jxl_size": 47905,
+      "mad_sigma": 1.306552,
+      "delta_sigma_from_original": -2.355252,
+      "approx_sigma": 177.784583,
+      "subband_sigmas": [
+        [
+          12.960024,
+          13.238394,
+          3.545421
+        ],
+        [
+          2.072536,
+          2.195503,
+          0.701979
+        ]
+      ]
+    },
+    {
+      "iso": 200,
+      "jxl_size": 47901,
+      "mad_sigma": 1.333462,
+      "delta_sigma_from_original": -2.328342,
+      "approx_sigma": 177.784752,
+      "subband_sigmas": [
+        [
+          12.964158,
+          13.243749,
+          3.555505
+        ],
+        [
+          2.088635,
+          2.209491,
+          0.742125
+        ]
+      ]
+    },
+    {
+      "iso": 400,
+      "jxl_size": 47889,
+      "mad_sigma": 1.478301,
+      "delta_sigma_from_original": -2.183503,
+      "approx_sigma": 177.787839,
+      "subband_sigmas": [
+        [
+          12.979577,
+          13.259488,
+          3.592744
+        ],
+        [
+          2.154722,
+          2.272985,
+          0.90307
+        ]
+      ]
+    },
+    {
+      "iso": 800,
+      "jxl_size": 47867,
+      "mad_sigma": 1.631008,
+      "delta_sigma_from_original": -2.030796,
+      "approx_sigma": 177.789189,
+      "subband_sigmas": [
+        [
+          12.997981,
+          13.279673,
+          3.645232
+        ],
+        [
+          2.240393,
+          2.354872,
+          1.07974
+        ]
+      ]
+    },
+    {
+      "iso": 1200,
+      "jxl_size": 47859,
+      "mad_sigma": 1.706093,
+      "delta_sigma_from_original": -1.955711,
+      "approx_sigma": 177.788131,
+      "subband_sigmas": [
+        [
+          13.010883,
+          13.292163,
+          3.682427
+        ],
+        [
+          2.304087,
+          2.416986,
+          1.198192
+        ]
+      ]
+    },
+    {
+      "iso": 1600,
+      "jxl_size": 47837,
+      "mad_sigma": 1.878633,
+      "delta_sigma_from_original": -1.783171,
+      "approx_sigma": 177.794281,
+      "subband_sigmas": [
+        [
+          13.045937,
+          13.317124,
+          3.752512
+        ],
+        [
+          2.419998,
+          2.528342,
+          1.394528
+        ]
+      ]
+    },
+    {
+      "iso": 2400,
+      "jxl_size": 47805,
+      "mad_sigma": 2.099214,
+      "delta_sigma_from_original": -1.56259,
+      "approx_sigma": 177.794655,
+      "subband_sigmas": [
+        [
+          13.090388,
+          13.357569,
+          3.868359
+        ],
+        [
+          2.594886,
+          2.697953,
+          1.662411
+        ]
+      ]
+    },
+    {
+      "iso": 3200,
+      "jxl_size": 47769,
+      "mad_sigma": 2.277065,
+      "delta_sigma_from_original": -1.384739,
+      "approx_sigma": 177.800721,
+      "subband_sigmas": [
+        [
+          13.126682,
+          13.394202,
+          3.9665
+        ],
+        [
+          2.737069,
+          2.838738,
+          1.864583
+        ]
+      ]
+    },
+    {
+      "iso": 4800,
+      "jxl_size": 47701,
+      "mad_sigma": 2.651205,
+      "delta_sigma_from_original": -1.010599,
+      "approx_sigma": 177.80861,
+      "subband_sigmas": [
+        [
+          13.221181,
+          13.478402,
+          4.188038
+        ],
+        [
+          3.056062,
+          3.150148,
+          2.278806
+        ]
+      ]
+    },
+    {
+      "iso": 6400,
+      "jxl_size": 47634,
+      "mad_sigma": 2.891499,
+      "delta_sigma_from_original": -0.770305,
+      "approx_sigma": 177.8169,
+      "subband_sigmas": [
+        [
+          13.2914,
+          13.542811,
+          4.359669
+        ],
+        [
+          3.286336,
+          3.374616,
+          2.557338
+        ]
+      ]
+    },
+    {
+      "iso": 9600,
+      "jxl_size": 47506,
+      "mad_sigma": 3.479918,
+      "delta_sigma_from_original": -0.181886,
+      "approx_sigma": 177.827566,
+      "subband_sigmas": [
+        [
+          13.465458,
+          13.709264,
+          4.777113
+        ],
+        [
+          3.836007,
+          3.916192,
+          3.1928
+        ]
+      ]
+    },
+    {
+      "iso": 12800,
+      "jxl_size": 47416,
+      "mad_sigma": 3.930098,
+      "delta_sigma_from_original": 0.268294,
+      "approx_sigma": 177.829155,
+      "subband_sigmas": [
+        [
+          13.610311,
+          13.841612,
+          5.131819
+        ],
+        [
+          4.287066,
+          4.361549,
+          3.693255
+        ]
+      ]
+    },
+    {
+      "iso": 19200,
+      "jxl_size": 47240,
+      "mad_sigma": 4.678893,
+      "delta_sigma_from_original": 1.017089,
+      "approx_sigma": 177.831197,
+      "subband_sigmas": [
+        [
+          13.902347,
+          14.125141,
+          5.80658
+        ],
+        [
+          5.091981,
+          5.15735,
+          4.551066
+        ]
+      ]
+    },
+    {
+      "iso": 25600,
+      "jxl_size": 47114,
+      "mad_sigma": 5.385824,
+      "delta_sigma_from_original": 1.72402,
+      "approx_sigma": 177.82493,
+      "subband_sigmas": [
+        [
+          14.20057,
+          14.414735,
+          6.463524
+        ],
+        [
+          5.855088,
+          5.916667,
+          5.346243
+        ]
+      ]
+    },
+    {
+      "iso": 38400,
+      "jxl_size": 46994,
+      "mad_sigma": 6.657504,
+      "delta_sigma_from_original": 2.9957,
+      "approx_sigma": 177.791686,
+      "subband_sigmas": [
+        [
+          14.803816,
+          14.992492,
+          7.726742
+        ],
+        [
+          7.27691,
+          7.3316,
+          6.796525
+        ]
+      ]
+    },
+    {
+      "iso": 51200,
+      "jxl_size": 46940,
+      "mad_sigma": 7.764889,
+      "delta_sigma_from_original": 4.103085,
+      "approx_sigma": 177.757445,
+      "subband_sigmas": [
+        [
+          15.428861,
+          15.581104,
+          8.917793
+        ],
+        [
+          8.580404,
+          8.629779,
+          8.106939
+        ]
+      ]
+    }
+  ]
+}

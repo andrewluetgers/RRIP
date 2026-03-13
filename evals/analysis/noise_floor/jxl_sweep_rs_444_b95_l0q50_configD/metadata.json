@@ -1,0 +1,26 @@
+{
+  "experiment_id": "jxl_sweep_rs_444_b95_l0q50_configD",
+  "timestamp": "2026-03-11T12:35:20Z",
+  "source_run": "evals/runs/rs_444_b95_l0q50",
+  "source_residual": "evals/runs/rs_444_b95_l0q50/compress/021_L0_fused_residual_centered.png",
+  "has_three_signal": "evals/runs/rs_444_b95_l0q50/compress/_assembled_L0_prediction_Y.png",
+  "params": {
+    "jxl_config": "default",
+    "quality_levels": [
+      100,
+      95,
+      90,
+      80,
+      70,
+      60,
+      50,
+      40,
+      30,
+      20,
+      10
+    ],
+    "predictor": "lanczos3"
+  },
+  "notes": "",
+  "conclusions": []
+}

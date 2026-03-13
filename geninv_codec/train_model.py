@@ -26,6 +26,9 @@ from typing import List
 import numpy as np
 from PIL import Image
 
+import sys
+import time
+
 import torch
 import torch.nn.functional as F
 
@@ -87,6 +90,7 @@ def main():
     opt = torch.optim.Adam(list(E.parameters()) + list(G.parameters()), lr=args.lr)
 
     # Train
+    t0 = time.time()
     for step in range(args.steps):
         # pick random image
         Y_base, R_true = random.choice(dataset)
@@ -114,8 +118,12 @@ def main():
         loss.backward()
         opt.step()
 
-        if (step + 1) % 250 == 0:
-            print(f"step {step+1}/{args.steps}  loss={loss.item():.6f}")
+        if (step + 1) % 50 == 0:
+            elapsed = time.time() - t0
+            steps_per_sec = (step + 1) / elapsed
+            eta = (args.steps - step - 1) / steps_per_sec if steps_per_sec > 0 else 0
+            print(f"step {step+1}/{args.steps}  loss={loss.item():.6f}  "
+                  f"[{steps_per_sec:.1f} steps/s, ETA {eta:.0f}s]", flush=True)
 
     # Save portable checkpoint
     ckpt = {

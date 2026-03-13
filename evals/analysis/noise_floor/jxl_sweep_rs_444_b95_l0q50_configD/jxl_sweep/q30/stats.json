@@ -1,0 +1,15 @@
+{
+  "quality": 30,
+  "jxl_size_bytes": 16838,
+  "jxl_bpp": 0.1284637451171875,
+  "residual_psnr_db": 34.242027229401074,
+  "reconstruction_psnr_db": 34.24215765644745,
+  "delta_noise_floor_score": 0.34238084463898183,
+  "delta_edge_correlation": 0.09007438252214489,
+  "delta_artifact_fft_8": 1.0199172162281551,
+  "delta_artifact_fft_32": 0.9951315628646171,
+  "delta_mean_abs": 2.2858657836914062,
+  "cumulative_noise_floor_score": 0.6142053762464614,
+  "cumulative_edge_correlation": 0.0861891333810571,
+  "cumulative_mean_abs": 3.853814125061035
+}

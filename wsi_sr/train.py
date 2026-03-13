@@ -90,6 +90,46 @@ class FFTLoss(nn.Module):
         return self.weight * F.l1_loss(pred_ri, target_ri)
 
 
+def compute_edge_map(rgb: torch.Tensor) -> torch.Tensor:
+    """Compute gradient magnitude from RGB tensor [B, 3, H, W] → [B, 1, H, W]."""
+    # Convert to grayscale
+    gray = 0.299 * rgb[:, 0:1] + 0.587 * rgb[:, 1:2] + 0.114 * rgb[:, 2:3]
+    # Sobel filters
+    sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+                           dtype=rgb.dtype, device=rgb.device).view(1, 1, 3, 3)
+    sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+                           dtype=rgb.dtype, device=rgb.device).view(1, 1, 3, 3)
+    gx = F.conv2d(gray, sobel_x, padding=1)
+    gy = F.conv2d(gray, sobel_y, padding=1)
+    mag = torch.sqrt(gx ** 2 + gy ** 2 + 1e-8)
+    # Normalize to [0, 1] per sample
+    b = mag.shape[0]
+    mag_flat = mag.view(b, -1)
+    mag = mag / (mag_flat.max(dim=1, keepdim=True)[0].view(b, 1, 1, 1) + 1e-8)
+    return mag
+
+
+def compute_cost_weights(target: torch.Tensor, kernel_size: int = 8) -> torch.Tensor:
+    """Compute per-pixel cost weights based on local variance [B, C, H, W] → [B, 1, H, W].
+
+    High local variance = expensive to compress = higher weight.
+    """
+    gray = 0.299 * target[:, 0:1] + 0.587 * target[:, 1:2] + 0.114 * target[:, 2:3]
+    # Local mean via avg pool
+    pad = kernel_size // 2
+    mean = F.avg_pool2d(gray, kernel_size, stride=1, padding=pad)
+    # Trim to match size (avg_pool2d with padding can add an extra pixel)
+    mean = mean[:, :, :gray.shape[2], :gray.shape[3]]
+    var = F.avg_pool2d((gray - mean) ** 2, kernel_size, stride=1, padding=pad)
+    var = var[:, :, :gray.shape[2], :gray.shape[3]]
+    # Normalize: sqrt(var) gives std dev, scale so mean weight ≈ 1.0
+    std = torch.sqrt(var + 1e-8)
+    weights = std / (std.mean() + 1e-8)
+    # Floor at 0.2 so flat regions aren't completely ignored
+    weights = weights.clamp(min=0.2)
+    return weights
+
+
 def _json_safe(obj):
     """Convert numpy types to Python natives for JSON serialization."""
     if isinstance(obj, dict):
@@ -379,6 +419,12 @@ def main():
                          "Weights Y branch more heavily since it drives PSNR/residual size.")
     ap.add_argument("--cbcr-weight", type=float, default=0.5,
                     help="Weight for CbCr loss when using --ycbcr-loss (default: 0.5, Y gets 1.0)")
+    ap.add_argument("--cost-weight", action="store_true",
+                    help="Weight loss by local variance (focus model on expensive-to-compress regions)")
+    ap.add_argument("--cost-weight-kernel", type=int, default=8,
+                    help="Kernel size for local variance computation (default: 8)")
+    ap.add_argument("--edge-input", action="store_true",
+                    help="Add gradient magnitude as 4th input channel")
     ap.add_argument("--arch", choices=["wsisrx4", "wsisrx4dual", "widedeep", "large", "espcn", "espcnr"],
                     default="wsisrx4",
                     help="Model architecture: wsisrx4 (RGB,19K), wsisrx4dual (Y+CbCr,18K), "
@@ -532,9 +578,14 @@ def main():
         else:
             model = WSISRX4(channels=args.channels, num_blocks=args.blocks).to(device)
     else:
-        model = WSIEnhanceNet(channels=args.channels, num_blocks=args.blocks).to(device)
+        in_ch = 4 if args.edge_input else 3
+        model = WSIEnhanceNet(channels=args.channels, num_blocks=args.blocks, in_channels=in_ch).to(device)
 
     print(f"Model ({args.arch}): {count_params(model):,} params, {model_size_kb(model):.1f} KB (float32)")
+    if args.cost_weight:
+        print(f"Cost-weighted loss: kernel={args.cost_weight_kernel}")
+    if args.edge_input:
+        print(f"Edge-map input: 4 channels (RGB + gradient magnitude)")
 
     # Loss
     l1_loss = nn.L1Loss()
@@ -618,21 +669,30 @@ def main():
             if bi >= max_baseline_samples:
                 break
             hr_img = hr_img.to("cpu")
-            bilinear_up = F.interpolate(lr_img, scale_factor=4, mode="bilinear", align_corners=False)
-            baseline_stats["bilinear"].append(compute_residual_stats(bilinear_up, hr_img, jpeg_quality=80))
-            baseline_metrics["bilinear"].append(compute_val_metrics(
-                tensor_to_uint8(bilinear_up), tensor_to_uint8(hr_img),
-                has_ssimulacra2=_has_ssimulacra2))
-            bicubic_up = F.interpolate(lr_img, scale_factor=4, mode="bicubic", align_corners=False)
-            baseline_stats["bicubic"].append(compute_residual_stats(bicubic_up, hr_img, jpeg_quality=80))
-            baseline_metrics["bicubic"].append(compute_val_metrics(
-                tensor_to_uint8(bicubic_up), tensor_to_uint8(hr_img),
-                has_ssimulacra2=_has_ssimulacra2))
-            lanczos_up = _lanczos3_upsample(lr_img)
-            baseline_stats["lanczos3"].append(compute_residual_stats(lanczos_up, hr_img, jpeg_quality=80))
-            baseline_metrics["lanczos3"].append(compute_val_metrics(
-                tensor_to_uint8(lanczos_up), tensor_to_uint8(hr_img),
-                has_ssimulacra2=_has_ssimulacra2))
+            if args.mode == "enhance":
+                # In enhance mode, lr_img IS the lanczos3 upsample (same res as target).
+                # The baseline is just the input itself — no further upsampling needed.
+                # We only compute the "lanczos3" baseline since that's what the input is.
+                baseline_stats["lanczos3"].append(compute_residual_stats(lr_img, hr_img, jpeg_quality=80))
+                baseline_metrics["lanczos3"].append(compute_val_metrics(
+                    tensor_to_uint8(lr_img), tensor_to_uint8(hr_img),
+                    has_ssimulacra2=_has_ssimulacra2))
+            else:
+                bilinear_up = F.interpolate(lr_img, scale_factor=4, mode="bilinear", align_corners=False)
+                baseline_stats["bilinear"].append(compute_residual_stats(bilinear_up, hr_img, jpeg_quality=80))
+                baseline_metrics["bilinear"].append(compute_val_metrics(
+                    tensor_to_uint8(bilinear_up), tensor_to_uint8(hr_img),
+                    has_ssimulacra2=_has_ssimulacra2))
+                bicubic_up = F.interpolate(lr_img, scale_factor=4, mode="bicubic", align_corners=False)
+                baseline_stats["bicubic"].append(compute_residual_stats(bicubic_up, hr_img, jpeg_quality=80))
+                baseline_metrics["bicubic"].append(compute_val_metrics(
+                    tensor_to_uint8(bicubic_up), tensor_to_uint8(hr_img),
+                    has_ssimulacra2=_has_ssimulacra2))
+                lanczos_up = _lanczos3_upsample(lr_img)
+                baseline_stats["lanczos3"].append(compute_residual_stats(lanczos_up, hr_img, jpeg_quality=80))
+                baseline_metrics["lanczos3"].append(compute_val_metrics(
+                    tensor_to_uint8(lanczos_up), tensor_to_uint8(hr_img),
+                    has_ssimulacra2=_has_ssimulacra2))
     baseline_summary = {}
     for method in baseline_stats:
         stats = baseline_stats[method]
@@ -712,12 +772,23 @@ def main():
             lr_img = lr_img.to(device)
             hr_img = hr_img.to(device)
 
-            pred = model(lr_img)
+            # Add edge map as 4th input channel if requested
+            model_input = lr_img
+            if args.edge_input:
+                edge_map = compute_edge_map(lr_img)
+                model_input = torch.cat([lr_img, edge_map], dim=1)
+
+            pred = model(model_input)
 
             # Clamp to valid range for loss computation
             pred_clamped = pred.clamp(0, 1)
 
-            if args.ycbcr_loss:
+            if args.cost_weight:
+                # Cost-weighted loss: weight by local variance of ground truth
+                cw = compute_cost_weights(hr_img, kernel_size=args.cost_weight_kernel)
+                pixel_error = (pred_clamped - hr_img).abs()
+                loss = (cw * pixel_error).mean()
+            elif args.ycbcr_loss:
                 # Separate Y and CbCr losses for targeted optimization
                 pred_ycc = rgb_to_ycbcr(pred_clamped)
                 gt_ycc = rgb_to_ycbcr(hr_img)
@@ -773,7 +844,10 @@ def main():
                 for lr_img, hr_img, _ in val_loader:
                     lr_img = lr_img.to(device)
                     hr_img = hr_img.to(device)
-                    pred = model(lr_img).clamp(0, 1)
+                    val_input = lr_img
+                    if args.edge_input:
+                        val_input = torch.cat([lr_img, compute_edge_map(lr_img)], dim=1)
+                    pred = model(val_input).clamp(0, 1)
                     val_psnr += psnr(pred, hr_img)
                     val_res_stats.append(compute_residual_stats(pred, hr_img, jpeg_quality=80))
                     val_metrics_list.append(compute_val_metrics(
@@ -939,7 +1013,10 @@ def main():
                             break
                         e_lr = e_lr.to(device)
                         e_hr = e_hr.to(device)
-                        e_pred = model(e_lr).clamp(0, 1)
+                        e_input = e_lr
+                        if args.edge_input:
+                            e_input = torch.cat([e_lr, compute_edge_map(e_lr)], dim=1)
+                        e_pred = model(e_input).clamp(0, 1)
                         em = compute_val_metrics(
                             tensor_to_uint8(e_pred), tensor_to_uint8(e_hr),
                             has_ssimulacra2=_has_ssimulacra2)

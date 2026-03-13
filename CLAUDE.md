@@ -38,6 +38,7 @@ The `origami` binary is a thin clap dispatcher (`server/src/main.rs`) with subco
 | `optimize_chroma.rs` | Gradient-descent chroma optimizer for 420opt encoding |
 | `sharpen.rs` | Unsharp mask filter (RGB and grayscale, scalar + NEON) |
 | `pyramid.rs` | DZI pyramid discovery and tile coordinate helpers |
+| `sr_model.rs` | ONNX Runtime SR model pool for learned 4x super-resolution (feature: `sr-model`) |
 
 ### JPEG Encoder Backends
 
@@ -102,6 +103,15 @@ cargo build --release
 cd server
 cargo build --release --features mozjpeg
 ```
+
+### Building with SR Model Support (ONNX Runtime)
+
+```bash
+cd server
+cargo build --release --features sr-model
+```
+
+This downloads ONNX Runtime binaries automatically via the `ort` crate. The SR model replaces the lanczos3 upsample with a learned 4x super-resolution CNN (WSISRX4, 19K params, ~97KB ONNX). A pool of ORT sessions enables concurrent inference without lock contention.
 
 ### Building with jpegli Encoder
 
@@ -170,6 +180,8 @@ Example: `--baseq 80 --resq 40 --subsamp 444 --optl2 --max-delta 20`
 | `--manifest` | Write `manifest.json` with per-tile metrics | off |
 | `--debug-images` | Write debug PNGs (originals, predictions, reconstructions) | off |
 | `--max-parents` | Limit number of L2 parents to process (for testing) | all |
+| `--sr-model` | Path to SR ONNX model for learned 4x prediction (feature: `sr-model`) | off |
+| `--sr-threads` | ONNX Runtime intra-op threads | 4 |
 
 **Encoding pipeline order (CPU):** Downsample → OptL2 → Sharpen → JPEG encode (matches GPU pipeline).
 
@@ -191,6 +203,9 @@ Offline decoder that reconstructs L1/L0 tiles from a pyramid plus v2 pack files.
 | `--max-parents` | Limit number of L2 parents | all |
 | `--grayscale` | Output grayscale tiles (for debugging) | off |
 | `--timing` | Print per-family timing breakdown | off |
+| `--sr-model` | Path to SR ONNX model for learned 4x super-resolution (feature: `sr-model`) | off |
+| `--sr-threads` | ONNX Runtime intra-op threads per session | 4 |
+| `--sr-pool` | Number of SR model session copies for concurrent inference | 8 |
 
 ### CLI Reference: `origami serve`
 
@@ -217,12 +232,18 @@ Tile server with dynamic reconstruction and caching.
 | `--grayscale-only` | Output grayscale tiles only | off |
 | `--timing-breakdown` | Log per-request timing breakdown | off |
 | `--metrics-interval-secs` | Metrics reporting interval | 30 |
+| `--sr-model` | Path to SR ONNX model for learned 4x super-resolution (feature: `sr-model`) | off |
+| `--sr-threads` | ONNX Runtime intra-op threads per session | 4 |
+| `--sr-pool` | Number of SR model session copies for concurrent inference | 8 |
 
 ### Running Examples
 
 ```bash
 # Start the tile server
 origami serve --slides-root /path/to/slides --port 3007
+
+# Start with SR model (requires --features sr-model build)
+origami serve --slides-root /path/to/slides --port 3007 --sr-model models/model_sr.onnx
 
 # Encode residuals from a DZI pyramid (v2: fused L0 residual, no L1 residuals)
 origami encode --pyramid /path/to/slide --out /path/to/output --resq 50 --pack
@@ -242,6 +263,15 @@ origami decode --pyramid /path/to/slide --out /path/to/output \
 # Decode from pack directory
 origami decode --pyramid /path/to/slide --out /path/to/output \
     --packs /path/to/packs --quality 95
+
+# Single-image encode with SR model prediction (requires --features sr-model)
+origami encode --image evals/test-images/L0-1024.jpg --out /tmp/sr_run \
+    --baseq 95 --l0q 50 --subsamp 444 --manifest --debug-images --pack \
+    --sr-model models/model_sr.onnx
+
+# Decode with SR model
+origami decode --pyramid /path/to/slide --out /path/to/output \
+    --packs /path/to/packs --sr-model models/model_sr.onnx
 ```
 
 ### Using System libjpeg-turbo
@@ -439,6 +469,10 @@ Lanczos3 adds ~10ms (~25%) per family vs bilinear, but still well within the 200
 - **tracing**: Structured logging
 - **libc**: FFI support for libjpeg62 bindings
 
+### Optional Crates (feature-gated)
+
+- **ort**: ONNX Runtime Rust bindings for SR model inference (`--features sr-model`, auto-downloads ORT binaries)
+
 ### Optional Vendor Libraries (pre-built, not Rust crates)
 
 - **mozjpeg**: Better JPEG compression via trellis quantization (`vendor/mozjpeg/`)
@@ -557,12 +591,136 @@ cd /workspace/RRIP/gpu-encode
 cargo build --release
 ```
 
-### Current Pod: origami-b200
+### Creating a Pod via API
 
-- **Pod ID**: `tyjyett3vxrvbe`
-- **GPU**: NVIDIA B200 (183 GB VRAM)
-- **CUDA driver**: 580.126.09
-- **Workspace**: `/workspace/RRIP`
+Use the RunPod GraphQL API to create pods programmatically. **Always use `SECURE` cloud type** and explicitly request SSH port.
+
+```bash
+# Create a GPU pod (e.g. RTX 3090 for training)
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{
+    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"my-pod\", gpuTypeId: \"NVIDIA GeForce RTX 3090\", gpuCount: 1, cloudType: SECURE, volumeInGb: 50, containerDiskInGb: 20, volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", ports: \"22/tcp,8888/http\" }) { id name machine { gpuDisplayName } } }"
+  }' https://api.runpod.io/graphql | python3 -m json.tool
+```
+
+**Common GPU type IDs** (use exact strings):
+- `"NVIDIA GeForce RTX 3090"` — 24GB, ~$0.30/hr, good for SR training
+- `"NVIDIA GeForce RTX 4090"` — 24GB, ~$0.50/hr, faster training
+- `"NVIDIA A40"` — 48GB, ~$0.50/hr, larger batch sizes
+- `"NVIDIA H100 NVL"` — 94GB, ~$3.07/hr, fast training
+- `"NVIDIA B200"` — 183GB, ~$3/hr, large-scale work
+
+**Key parameters:**
+- `cloudType: SECURE` — ensures public SSH port is allocated (COMMUNITY pods often lack public SSH)
+- `ports: "22/tcp,8888/http"` — explicitly request SSH port mapping
+- `volumeMountPath: "/workspace"` — **REQUIRED**: must be set explicitly or container creation fails with "invalid mount config for type bind: field Target must not be empty"
+- `volumeInGb: 50` — persistent volume (survives pod restarts)
+- `containerDiskInGb: 20` — ephemeral container storage
+
+**After creation**, wait ~60-90 seconds for the pod to boot, then query the API to get SSH connection info (IP and port change each time). SSH may take an additional 30-60 seconds after the API reports "RUNNING" status.
+
+### SSH Troubleshooting
+
+RunPod pods frequently have SSH issues on first boot. Common problems and fixes:
+
+1. **"Connection refused" on direct TCP port**: The container is running but sshd hasn't started. Enable the **Web Terminal** in the RunPod UI and run:
+   ```bash
+   ssh-keygen -A && service ssh start
+   ```
+
+2. **No authorized_keys file**: RunPod sometimes fails to inject SSH keys. Fix via Web Terminal:
+   ```bash
+   mkdir -p /root/.ssh
+   echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKRtZxKPn2QP/rrA3ZGThhKnXKEF2G9uv52PQYJSS2gx runpod" > /root/.ssh/authorized_keys
+   chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+   ```
+
+3. **"sshd: no hostkeys available -- exiting"**: Host keys weren't generated. Run `ssh-keygen -A` first, then `service ssh start`.
+
+4. **Container creation fails with "invalid mount config"**: Missing `volumeMountPath` parameter. Always include `volumeMountPath: "/workspace"` in the create mutation.
+
+5. **"This is taking longer than expected" in UI**: Check the Logs tab. If it shows mount errors, terminate and recreate with `volumeMountPath`. If logs show "Pod Started" but SSH won't connect, use Web Terminal to fix sshd.
+
+**SSH key**: `~/.ssh/id_runpod` (ed25519). The RunPod UI references `id_ed25519` but our key is `id_runpod`.
+
+### Stopping / Starting / Terminating Pods
+
+```bash
+# Stop a pod (preserves volume, stops billing for GPU)
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query": "mutation { podStop(input: { podId: \"POD_ID\" }) { id desiredStatus } }"}' \
+  https://api.runpod.io/graphql
+
+# Resume a stopped pod
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query": "mutation { podResume(input: { podId: \"POD_ID\", gpuCount: 1 }) { id desiredStatus } }"}' \
+  https://api.runpod.io/graphql
+
+# Terminate (DELETE) a pod — destroys everything including volume
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query": "mutation { podTerminate(input: { podId: \"POD_ID\" }) }"}' \
+  https://api.runpod.io/graphql
+```
+
+### Quickstart: Full Pod Workflow
+
+This is the standard workflow for spinning up a pod, uploading data, running a job, and downloading results:
+
+```bash
+# 1. Query API for current pods and SSH info
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query":"{ myself { pods { id name desiredStatus machine { gpuDisplayName } runtime { ports { ip isIpPublic privatePort publicPort type } } } } }"}' \
+  https://api.runpod.io/graphql | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for p in data['data']['myself']['pods']:
+    gpu = p.get('machine', {}).get('gpuDisplayName', '?')
+    status = p['desiredStatus']
+    ports = p.get('runtime', {}).get('ports', []) if p.get('runtime') else []
+    ssh = next((port for port in ports if port.get('privatePort') == 22), None)
+    ssh_str = f'{ssh[\"ip\"]}:{ssh[\"publicPort\"]}' if ssh else 'no SSH yet'
+    print(f'{p[\"name\"]} ({p[\"id\"]}): {gpu}, {status}, SSH={ssh_str}')
+"
+
+# 2. Set connection vars (from step 1 output)
+POD_IP=<ip>
+POD_PORT=<port>
+
+# 3. Upload data files via scp
+scp -i ~/.ssh/id_runpod -P $POD_PORT local/data.file root@$POD_IP:/workspace/
+
+# 4. Push code locally, clone/pull on pod
+git push
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@$POD_IP -p $POD_PORT \
+  "cd /workspace && git clone https://github.com/andrewluetgers/RRIP.git 2>/dev/null; cd RRIP && git pull"
+
+# 5. Run commands on pod
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@$POD_IP -p $POD_PORT \
+  "cd /workspace/RRIP && bash some_script.sh"
+
+# 6. Download results
+scp -i ~/.ssh/id_runpod -P $POD_PORT root@$POD_IP:/workspace/results.tar.gz ./
+
+# 7. Stop pod when done (saves money, preserves volume)
+curl -s -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  --data '{"query": "mutation { podStop(input: { podId: \"POD_ID\" }) { id desiredStatus } }"}' \
+  https://api.runpod.io/graphql
+```
+
+**SSH tips:**
+- Always use `-o StrictHostKeyChecking=no` since pod IPs change frequently
+- Quote remote commands as a single string to avoid shell expansion issues
+- For long-running jobs, use `nohup` or `screen`/`tmux` on the pod
+
+### Current Pods
+
+Pods are ephemeral — always query the API for current status. Do not rely on hardcoded IPs/ports.
 
 ## Safety Rules
 

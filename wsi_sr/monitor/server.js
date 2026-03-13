@@ -195,7 +195,9 @@ async function pollGCS() {
     for (const prefix of ["stage2", "stage1", ""]) {
       const base = prefix ? `${bucket}/${prefix}` : bucket;
 
-      const ext = await cloudRead(`${base}/status/extract_progress.json`);
+      // Try aggregate status first (cron-generated, covers all workers), then per-worker fallback
+      const extAgg = await cloudRead(`${base}/status/extract_aggregate.json`);
+      const ext = extAgg || await cloudRead(`${base}/status/extract_progress.json`);
       if (ext) {
         // Prefer the latest (stage2 over stage1 if both exist)
         if (!remoteStatus.extract || ext.total_slides > (remoteStatus.extract.total_slides || 0)) {

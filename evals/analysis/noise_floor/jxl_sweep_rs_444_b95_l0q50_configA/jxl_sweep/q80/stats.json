@@ -1,0 +1,12 @@
+{
+  "quality": 80,
+  "jxl_size_bytes": 102039,
+  "jxl_bpp": 0.7784957885742188,
+  "residual_psnr_db": 40.140393570005834,
+  "reconstruction_psnr_db": 40.14086266022563,
+  "delta_noise_floor_score": 0.6239426574292494,
+  "delta_edge_correlation": 0.02773051570873266,
+  "delta_artifact_fft_8": 0.9933130630554757,
+  "delta_artifact_fft_32": 1.0014453133148542,
+  "delta_mean_abs": 1.9056158065795898
+}

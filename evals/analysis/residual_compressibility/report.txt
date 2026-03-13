@@ -1,0 +1,168 @@
+================================================================================
+RESIDUAL COMPRESSIBILITY ANALYSIS
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+Group: lanczos3 (42 images)
+────────────────────────────────────────────────────────────────────────────────
+  std                           : mean=  6.5972  std=  0.1911  min=  6.4150  max=  6.7976
+  pct_near_zero                 : mean=  0.3483  std=  0.0111  min=  0.3366  max=  0.3589
+  autocorr_lag1                 : mean=  0.6262  std=  0.0156  min=  0.6113  max=  0.6426
+  autocorr_lag4                 : mean= -0.0831  std=  0.0041  min= -0.0871  max= -0.0788
+  autocorr_lag8                 : mean=  0.1157  std=  0.0087  min=  0.1066  max=  0.1241
+  autocorr_lag16                : mean=  0.0376  std=  0.0037  min=  0.0337  max=  0.0411
+  spectral_slope                : mean=  0.3946  std=  0.1620  min=  0.2246  max=  0.5491
+  pct_blocks_below_1            : mean=  0.0017  std=  0.0000  min=  0.0016  max=  0.0017
+  pct_blocks_below_3            : mean=  0.1033  std=  0.0188  min=  0.0836  max=  0.1212
+  pct_blocks_below_5            : mean=  0.6282  std=  0.0358  min=  0.5906  max=  0.6624
+  entropy_0th                   : mean=  4.7232  std=  0.0455  min=  4.6797  max=  4.7709
+  entropy_1st                   : mean=  4.4322  std=  0.0245  min=  4.4087  max=  4.4579
+  spatial_redundancy            : mean=  0.2910  std=  0.0210  min=  0.2710  max=  0.3130
+  png_bpp                       : mean=  4.1780  std=  0.0094  min=  4.1691  max=  4.1879
+  boundary_energy_8             : mean=  1.0491  std=  0.0037  min=  1.0453  max=  1.0526
+  boundary_energy_32            : mean=  1.0751  std=  0.0067  min=  1.0681  max=  1.0815
+  boundary_energy_64            : mean=  1.0732  std=  0.0080  min=  1.0647  max=  1.0809
+  fft_peak_ratio_8              : mean=  1.0438  std=  0.0094  min=  1.0348  max=  1.0537
+  fft_peak_ratio_32             : mean=  1.0944  std=  0.0232  min=  1.0701  max=  1.1165
+  col_var_autocorr_8            : mean=  0.6069  std=  0.0034  min=  0.6036  max=  0.6104
+  col_var_autocorr_32           : mean=  0.5240  std=  0.0117  min=  0.5129  max=  0.5363
+
+  INTERPRETATION:
+  • Autocorrelation lag-1:  0.6262  
+    → MODERATE spatial correlation — learned model may help
+  • Autocorrelation lag-16: 0.0376
+    → No long-range structure — only local patterns
+  • Spectral slope: 0.39
+    → Flat/white spectrum — noise-like, hard to compress beyond entropy
+  • Spatial redundancy (H0 - H1): 0.2910 bits/pixel
+    0th-order entropy: 4.7232 bpp
+    1st-order entropy: 4.4322 bpp
+    → MINIMAL spatial redundancy — context coding gives little benefit
+  • Block sparsity (% blocks with mean |residual| < 3): 10.3%
+    → Dense residuals — block-skip not helpful
+
+  JPEG ARTIFACT ANALYSIS:
+  • Boundary energy ratio (period 8):  1.0491  (1.0 = no artifacts, >1.05 = artifacts)
+  • Boundary energy ratio (period 32): 1.0751  (L2 JPEG blocks upsampled 4x)
+  • Boundary energy ratio (period 64): 1.0732
+  • FFT peak at 1/8 frequency:  1.0438x neighbors  (>1.5 = strong grid)
+  • FFT peak at 1/32 frequency: 1.0944x neighbors
+  • Column variance autocorrelation at lag 8:  0.6069
+  • Column variance autocorrelation at lag 32: 0.5240
+    → JPEG BLOCK ARTIFACTS DETECTED in residuals
+      L2 baseline JPEG compression creates periodic structure that
+      contaminates the residual. This is NOT tissue structure.
+
+  BOTTOM LINE:
+  ~ Residuals have some structure. A learned codec MIGHT beat JPEG by a small margin.
+    Better prediction (SR model) is likely more impactful than better compression.
+
+────────────────────────────────────────────────────────────────────────────────
+Group: sr_model (28 images)
+────────────────────────────────────────────────────────────────────────────────
+  std                           : mean=  6.3705  std=  0.7701  min=  6.1092  max=  9.9001
+  pct_near_zero                 : mean=  0.3505  std=  0.0502  min=  0.1388  max=  0.3664
+  autocorr_lag1                 : mean=  0.5810  std=  0.0298  min=  0.4432  max=  0.6545
+  autocorr_lag4                 : mean= -0.0448  std=  0.0720  min= -0.0696  max=  0.3249
+  autocorr_lag8                 : mean=  0.1212  std=  0.0625  min=  0.1005  max=  0.4267
+  autocorr_lag16                : mean=  0.0649  std=  0.0634  min=  0.0484  max=  0.3871
+  spectral_slope                : mean=  0.3858  std=  0.3018  min= -0.6946  max=  0.5475
+  pct_blocks_below_1            : mean=  0.0016  std=  0.0005  min=  0.0000  max=  0.0020
+  pct_blocks_below_3            : mean=  0.1092  std=  0.0304  min=  0.0000  max=  0.1198
+  pct_blocks_below_5            : mean=  0.6420  std=  0.1752  min=  0.0023  max=  0.6960
+  entropy_0th                   : mean=  4.6711  std=  0.1469  min=  4.6197  max=  5.3375
+  entropy_1st                   : mean=  4.4325  std=  0.1373  min=  4.3937  max=  5.1120
+  spatial_redundancy            : mean=  0.2386  std=  0.0299  min=  0.2255  max=  0.3914
+  png_bpp                       : mean=  4.2335  std=  0.1954  min=  4.1845  max=  5.2285
+  boundary_energy_8             : mean=  1.0669  std=  0.0139  min=  1.0609  max=  1.1256
+  boundary_energy_32            : mean=  1.0825  std=  0.0025  min=  1.0788  max=  1.0865
+  boundary_energy_64            : mean=  1.0900  std=  0.0121  min=  1.0369  max=  1.1034
+  fft_peak_ratio_8              : mean=  1.7471  std=  0.1491  min=  1.0803  max=  1.8783
+  fft_peak_ratio_32             : mean=  1.1084  std=  0.0090  min=  1.0822  max=  1.1187
+  col_var_autocorr_8            : mean=  0.6404  std=  0.0161  min=  0.6187  max=  0.7018
+  col_var_autocorr_32           : mean=  0.5418  std=  0.0225  min=  0.5203  max=  0.6405
+
+  INTERPRETATION:
+  • Autocorrelation lag-1:  0.5810  
+    → MODERATE spatial correlation — learned model may help
+  • Autocorrelation lag-16: 0.0649
+    → No long-range structure — only local patterns
+  • Spectral slope: 0.39
+    → Flat/white spectrum — noise-like, hard to compress beyond entropy
+  • Spatial redundancy (H0 - H1): 0.2386 bits/pixel
+    0th-order entropy: 4.6711 bpp
+    1st-order entropy: 4.4325 bpp
+    → MINIMAL spatial redundancy — context coding gives little benefit
+  • Block sparsity (% blocks with mean |residual| < 3): 10.9%
+    → Dense residuals — block-skip not helpful
+
+  JPEG ARTIFACT ANALYSIS:
+  • Boundary energy ratio (period 8):  1.0669  (1.0 = no artifacts, >1.05 = artifacts)
+  • Boundary energy ratio (period 32): 1.0825  (L2 JPEG blocks upsampled 4x)
+  • Boundary energy ratio (period 64): 1.0900
+  • FFT peak at 1/8 frequency:  1.7471x neighbors  (>1.5 = strong grid)
+  • FFT peak at 1/32 frequency: 1.1084x neighbors
+  • Column variance autocorrelation at lag 8:  0.6404
+  • Column variance autocorrelation at lag 32: 0.5418
+    → JPEG BLOCK ARTIFACTS DETECTED in residuals
+      L2 baseline JPEG compression creates periodic structure that
+      contaminates the residual. This is NOT tissue structure.
+
+  BOTTOM LINE:
+  ~ Residuals have some structure. A learned codec MIGHT beat JPEG by a small margin.
+    Better prediction (SR model) is likely more impactful than better compression.
+
+────────────────────────────────────────────────────────────────────────────────
+Group: other (2 images)
+────────────────────────────────────────────────────────────────────────────────
+  std                           : mean=  6.1842  std=  0.0000  min=  6.1842  max=  6.1842
+  pct_near_zero                 : mean=  0.3641  std=  0.0000  min=  0.3641  max=  0.3641
+  autocorr_lag1                 : mean=  0.5873  std=  0.0000  min=  0.5873  max=  0.5873
+  autocorr_lag4                 : mean= -0.0538  std=  0.0000  min= -0.0538  max= -0.0538
+  autocorr_lag8                 : mean=  0.1006  std=  0.0000  min=  0.1006  max=  0.1006
+  autocorr_lag16                : mean=  0.0485  std=  0.0000  min=  0.0485  max=  0.0485
+  spectral_slope                : mean=  0.5032  std=  0.0000  min=  0.5032  max=  0.5032
+  pct_blocks_below_1            : mean=  0.0019  std=  0.0000  min=  0.0019  max=  0.0019
+  pct_blocks_below_3            : mean=  0.1188  std=  0.0000  min=  0.1188  max=  0.1188
+  pct_blocks_below_5            : mean=  0.6899  std=  0.0000  min=  0.6899  max=  0.6899
+  entropy_0th                   : mean=  4.6350  std=  0.0000  min=  4.6350  max=  4.6350
+  entropy_1st                   : mean=  4.4005  std=  0.0000  min=  4.4005  max=  4.4005
+  spatial_redundancy            : mean=  0.2345  std=  0.0000  min=  0.2345  max=  0.2345
+  png_bpp                       : mean=  4.1888  std=  0.0000  min=  4.1888  max=  4.1888
+  boundary_energy_8             : mean=  1.0617  std=  0.0000  min=  1.0617  max=  1.0617
+  boundary_energy_32            : mean=  1.0870  std=  0.0000  min=  1.0870  max=  1.0870
+  boundary_energy_64            : mean=  1.1017  std=  0.0000  min=  1.1017  max=  1.1017
+  fft_peak_ratio_8              : mean=  1.8333  std=  0.0000  min=  1.8333  max=  1.8333
+  fft_peak_ratio_32             : mean=  1.1142  std=  0.0000  min=  1.1142  max=  1.1142
+  col_var_autocorr_8            : mean=  0.6383  std=  0.0000  min=  0.6383  max=  0.6383
+  col_var_autocorr_32           : mean=  0.5264  std=  0.0000  min=  0.5264  max=  0.5264
+
+  INTERPRETATION:
+  • Autocorrelation lag-1:  0.5873  
+    → MODERATE spatial correlation — learned model may help
+  • Autocorrelation lag-16: 0.0485
+    → No long-range structure — only local patterns
+  • Spectral slope: 0.50
+    → Flat/white spectrum — noise-like, hard to compress beyond entropy
+  • Spatial redundancy (H0 - H1): 0.2345 bits/pixel
+    0th-order entropy: 4.6350 bpp
+    1st-order entropy: 4.4005 bpp
+    → MINIMAL spatial redundancy — context coding gives little benefit
+  • Block sparsity (% blocks with mean |residual| < 3): 11.9%
+    → Dense residuals — block-skip not helpful
+
+  JPEG ARTIFACT ANALYSIS:
+  • Boundary energy ratio (period 8):  1.0617  (1.0 = no artifacts, >1.05 = artifacts)
+  • Boundary energy ratio (period 32): 1.0870  (L2 JPEG blocks upsampled 4x)
+  • Boundary energy ratio (period 64): 1.1017
+  • FFT peak at 1/8 frequency:  1.8333x neighbors  (>1.5 = strong grid)
+  • FFT peak at 1/32 frequency: 1.1142x neighbors
+  • Column variance autocorrelation at lag 8:  0.6383
+  • Column variance autocorrelation at lag 32: 0.5264
+    → JPEG BLOCK ARTIFACTS DETECTED in residuals
+      L2 baseline JPEG compression creates periodic structure that
+      contaminates the residual. This is NOT tissue structure.
+
+  BOTTOM LINE:
+  ~ Residuals have some structure. A learned codec MIGHT beat JPEG by a small margin.
+    Better prediction (SR model) is likely more impactful than better compression.

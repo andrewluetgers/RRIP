@@ -132,6 +132,47 @@ pub struct ServeArgs {
     /// Serve evals run images from this directory (e.g. evals/runs)
     #[arg(long)]
     runs_dir: Option<PathBuf>,
+
+    /// Path to SR ONNX model for learned 4x super-resolution (replaces upsample filter)
+    #[arg(long)]
+    sr_model: Option<String>,
+
+    /// Number of ONNX Runtime intra-op threads for SR model (default: 4)
+    #[arg(long, default_value_t = 4)]
+    sr_threads: usize,
+
+    /// Number of SR model session copies for concurrent inference (default: 8)
+    #[arg(long, default_value_t = 8)]
+    sr_pool: usize,
+
+    /// Path to refine ONNX model for same-resolution L0 tile enhancement
+    #[arg(long)]
+    refine_model: Option<String>,
+
+    /// Number of ONNX Runtime intra-op threads for refine model (default: 2)
+    #[arg(long, default_value_t = 2)]
+    refine_threads: usize,
+
+    /// Number of refine model session copies for concurrent inference (default: 4)
+    #[arg(long, default_value_t = 4)]
+    refine_pool: usize,
+
+    /// Enable wavelet-domain noise synthesis at decode time
+    #[arg(long)]
+    synth_noise: bool,
+
+    /// Noise synthesis strength (0.0-1.0, default: 0.5).
+    /// Controls how much of the removed noise is synthesized back.
+    #[arg(long, default_value_t = 0.5)]
+    synth_strength: f32,
+
+    /// Unsharp mask strength for decoded residual (applied before adding to prediction)
+    #[arg(long)]
+    l0_sharpen: Option<f32>,
+
+    /// Unsharp mask strength for reconstructed tiles (applied to Y plane after residual, before noise)
+    #[arg(long)]
+    tile_sharpen: Option<f32>,
 }
 
 #[derive(Clone)]
@@ -154,6 +195,14 @@ struct AppState {
     sharpen: Option<f32>,
     upsample_filter: ResampleFilter,
     singleflight: Arc<InflightMap>,
+    #[cfg(feature = "sr-model")]
+    sr_model: Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    #[cfg(feature = "sr-model")]
+    refine_model: Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    synth_noise: bool,
+    synth_strength: f32,
+    l0_sharpen: Option<f32>,
+    tile_sharpen: Option<f32>,
 }
 
 #[derive(serde::Deserialize)]
@@ -180,6 +229,9 @@ struct Slide {
     disk_size_mb: f64,
     /// JPEG-only slide (no residual packs — serve all levels from filesystem)
     jpeg_only: bool,
+    /// Source-1024 slide: L0 tiles are 1024px (JXL or JPEG) at the L0 level in filesystem.
+    /// Server slices to 256px for L0, downsamples for L1/L2. No packs needed.
+    source_1024: bool,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -377,6 +429,36 @@ async fn async_main(args: ServeArgs) -> Result<()> {
     } else {
         None
     };
+    // Load SR model if specified
+    #[cfg(feature = "sr-model")]
+    let sr_model_arc = if let Some(ref model_path) = args.sr_model {
+        Some(std::sync::Arc::new(
+            crate::core::sr_model::SRModel::load(model_path, args.sr_threads, args.sr_pool)
+                .with_context(|| format!("loading SR model from {}", model_path))?
+        ))
+    } else {
+        None
+    };
+    #[cfg(not(feature = "sr-model"))]
+    if args.sr_model.is_some() {
+        return Err(anyhow!("--sr-model requires building with --features sr-model"));
+    }
+
+    // Load refine model if specified
+    #[cfg(feature = "sr-model")]
+    let refine_model_arc = if let Some(ref model_path) = args.refine_model {
+        Some(std::sync::Arc::new(
+            crate::core::sr_model::SRModel::load(model_path, args.refine_threads, args.refine_pool)
+                .with_context(|| format!("loading refine model from {}", model_path))?
+        ))
+    } else {
+        None
+    };
+    #[cfg(not(feature = "sr-model"))]
+    if args.refine_model.is_some() {
+        return Err(anyhow!("--refine-model requires building with --features sr-model"));
+    }
+
     let inflight = Arc::new(InflightFamilies::new());
     let inflight_limit = Arc::new(Semaphore::new(args.max_inflight_families));
     let state = AppState {
@@ -398,6 +480,14 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         upsample_filter: args.upsample_filter.parse::<ResampleFilter>()
             .unwrap_or(ResampleFilter::Lanczos3),
         singleflight: Arc::new(PLMutex::new(HashMap::new())),
+        #[cfg(feature = "sr-model")]
+        sr_model: sr_model_arc,
+        #[cfg(feature = "sr-model")]
+        refine_model: refine_model_arc,
+        synth_noise: args.synth_noise,
+        synth_strength: args.synth_strength,
+        l0_sharpen: args.l0_sharpen,
+        tile_sharpen: args.tile_sharpen,
     };
 
     let metrics = state.metrics.clone();
@@ -713,53 +803,152 @@ async fn serve_tile(
         return Ok(jpeg_response(bytes));
     }
 
+    // Source-1024 slides: L0 tiles are 1024px at filesystem L0 level.
+    // For levels below L2, serve static thumbnails from filesystem.
+    // For L0/L1/L2, read the 1024px source and slice/downsample.
+    if slide.source_1024 && level < slide.l2 {
+        let path = baseline_tile_path(slide, level, x, y);
+        if path.exists() {
+            let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+            state.metrics.lock().unwrap().record_tile("baseline", start.elapsed().as_millis());
+            return Ok(jpeg_response(bytes));
+        }
+    }
+    if slide.source_1024 && level >= slide.l2 {
+        // Read the 1024px source tile from L0 level and slice/downsample
+        let (src_x, src_y) = if level == slide.l0 {
+            (x >> 2, y >> 2)
+        } else if level == slide.l1 {
+            (x >> 1, y >> 1)
+        } else {
+            (x, y)
+        };
+        let src_path = baseline_tile_path(slide, slide.l0, src_x, src_y);
+        if src_path.exists() {
+            let state2 = state.clone();
+            let slide2 = slide.clone();
+            let output_format = state.output_format;
+            let quality = state.tile_quality;
+            let upsample_filter = state.upsample_filter;
+
+            let bytes = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+                use image::{RgbImage, imageops};
+                use crate::core::ResampleFilter;
+
+                // Decode 1024px source
+                let src_data = fs::read(&src_path)?;
+                let src_img = crate::core::reconstruct::decode_l2_rgb_from_bytes(&src_data)?;
+                let (sw, sh) = (src_img.width(), src_img.height());
+
+                if level == slide2.l0 {
+                    // Slice 256px tile from 1024px source
+                    let dx = x % 4;
+                    let dy = y % 4;
+                    let tx = dx * 256;
+                    let ty = dy * 256;
+                    let tw = 256.min(sw - tx);
+                    let th = 256.min(sh - ty);
+                    let tile = imageops::crop_imm(&src_img, tx, ty, tw, th).to_image();
+                    let jpeg = crate::turbojpeg_optimized::encode_jpeg_turbo(tile.as_raw(), tw, th, quality)?;
+                    Ok(jpeg)
+                } else if level == slide2.l1 {
+                    // Downsample to 512px, then slice 256px tile
+                    let half = imageops::resize(&src_img, sw / 2, sh / 2, upsample_filter.to_image_filter());
+                    let dx = x % 2;
+                    let dy = y % 2;
+                    let tx = dx * 256;
+                    let ty = dy * 256;
+                    let tw = 256.min(half.width() - tx);
+                    let th = 256.min(half.height() - ty);
+                    let tile = imageops::crop_imm(&half, tx, ty, tw, th).to_image();
+                    let jpeg = crate::turbojpeg_optimized::encode_jpeg_turbo(tile.as_raw(), tw, th, quality)?;
+                    Ok(jpeg)
+                } else {
+                    // L2: downsample to 256px
+                    let quarter = imageops::resize(&src_img, sw / 4, sh / 4, upsample_filter.to_image_filter());
+                    let jpeg = crate::turbojpeg_optimized::encode_jpeg_turbo(quarter.as_raw(), quarter.width(), quarter.height(), quality)?;
+                    Ok(jpeg)
+                }
+            }).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+              .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            state.metrics.lock().unwrap().record_tile("source_1024", start.elapsed().as_millis());
+            info!("tile source_1024 slide_id={} level={} x={} y={} ms={}",
+                slide_id, level, x, y, start.elapsed().as_millis());
+            return Ok(jpeg_response(bytes));
+        }
+    }
+
     if level <= slide.l2 {
         // For L2 tiles, try loading from pack (bundle or individual .pack file)
+        // But only if the seed IS the L2 tile (v2 packs, or v3 with seed_w == tile_size).
+        // When seed > tile_size, L2 is generated during reconstruction instead.
         if level == slide.l2 {
             let pack = if let Some(ref bundle) = slide.bundle {
                 bundle.get_pack(x, y).ok()
             } else {
                 crate::core::pack::open_pack(&slide.pack_dir, x, y).ok()
             };
-            if let Some(pack) = pack {
-                if let Some(l2_bytes) = pack.get_l2() {
-                    let jpeg = ensure_l2_jpeg(l2_bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-                    if state.prewarm_on_l2 {
-                        spawn_family_prewarm(state.clone(), slide.clone(), x, y);
+            if let Some(ref pack) = pack {
+                let seed_is_l2 = pack.metadata.seed_w <= pack.metadata.tile_size
+                    || pack.metadata.tile_size == 0; // v1/v2 default
+                if seed_is_l2 {
+                    if let Some(l2_bytes) = pack.get_l2() {
+                        let jpeg = ensure_l2_jpeg(l2_bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                        if state.prewarm_on_l2 {
+                            spawn_family_prewarm(state.clone(), slide.clone(), x, y);
+                        }
+                        state
+                            .metrics
+                            .lock()
+                            .unwrap()
+                            .record_tile("baseline", start.elapsed().as_millis());
+                        info!(
+                            "tile baseline(pack) slide_id={} level={} x={} y={} ms={}",
+                            slide_id, level, x, y, start.elapsed().as_millis()
+                        );
+                        return Ok(jpeg_response(jpeg));
                     }
-                    state
-                        .metrics
-                        .lock()
-                        .unwrap()
-                        .record_tile("baseline", start.elapsed().as_millis());
-                    info!(
-                        "tile baseline(pack) slide_id={} level={} x={} y={} ms={}",
-                        slide_id, level, x, y, start.elapsed().as_millis()
-                    );
-                    return Ok(jpeg_response(jpeg));
                 }
+                // seed > tile_size: fall through to cache/reconstruction path
             }
         }
-        // Fallback to filesystem (for levels below L2, e.g. thumbnail pyramid)
-        let path = baseline_tile_path(slide, level, x, y);
-        let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
-        if level == slide.l2 && state.prewarm_on_l2 {
-            spawn_family_prewarm(state.clone(), slide.clone(), x, y);
+        if level < slide.l2 {
+            // For levels below L2 (thumbnail pyramid), serve from filesystem
+            let path = baseline_tile_path(slide, level, x, y);
+            let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+            state
+                .metrics
+                .lock()
+                .unwrap()
+                .record_tile("baseline", start.elapsed().as_millis());
+            info!(
+                "tile baseline slide_id={} level={} x={} y={} ms={}",
+                slide_id, level, x, y, start.elapsed().as_millis()
+            );
+            return Ok(jpeg_response(bytes));
         }
-        state
-            .metrics
-            .lock()
-            .unwrap()
-            .record_tile("baseline", start.elapsed().as_millis());
-        info!(
-            "tile baseline slide_id={} level={} x={} y={} ms={}",
-            slide_id,
-            level,
-            x,
-            y,
-            start.elapsed().as_millis()
-        );
-        return Ok(jpeg_response(bytes));
+        // L2 with seed > tile_size or no pack: try filesystem fallback, then fall through
+        if level == slide.l2 {
+            let path = baseline_tile_path(slide, level, x, y);
+            if path.exists() {
+                let bytes = read_baseline_as_jpeg(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+                if state.prewarm_on_l2 {
+                    spawn_family_prewarm(state.clone(), slide.clone(), x, y);
+                }
+                state
+                    .metrics
+                    .lock()
+                    .unwrap()
+                    .record_tile("baseline", start.elapsed().as_millis());
+                info!(
+                    "tile baseline slide_id={} level={} x={} y={} ms={}",
+                    slide_id, level, x, y, start.elapsed().as_millis()
+                );
+                return Ok(jpeg_response(bytes));
+            }
+            // No filesystem L2 either — fall through to reconstruction
+        }
     }
 
     let key = TileKey {
@@ -788,7 +977,11 @@ async fn serve_tile(
     }
 
     let slide = slide.clone();
-    let (x2, y2) = if level == slide.l1 {
+    let (x2, y2) = if level == slide.l2 {
+        // L2 tile requested but not served from pack/filesystem — needs reconstruction
+        // (only happens when seed > tile_size)
+        (x, y)
+    } else if level == slide.l1 {
         (x >> 1, y >> 1)
     } else if level == slide.l0 {
         (x >> 2, y >> 2)
@@ -867,6 +1060,14 @@ async fn serve_tile(
     let sharpen = state.sharpen;
     let upsample_filter = state.upsample_filter;
     let singleflight = state.singleflight.clone();
+    #[cfg(feature = "sr-model")]
+    let sr_model = state.sr_model.clone();
+    #[cfg(feature = "sr-model")]
+    let refine_model = state.refine_model.clone();
+    let synth_noise = state.synth_noise;
+    let synth_strength = state.synth_strength;
+    let l0_sharpen = state.l0_sharpen;
+    let tile_sharpen = state.tile_sharpen;
     let family_key_cleanup = family_key.clone();
     let watch_tx_clone = watch_tx.clone();
 
@@ -881,6 +1082,11 @@ async fn serve_tile(
         let result = generate_family_server(
             &slide, x2, y2, quality, timing, grayscale_only, output_format,
             sharpen, upsample_filter, &writer, &write_root, &buffer_pool,
+            #[cfg(feature = "sr-model")]
+            &sr_model,
+            #[cfg(feature = "sr-model")]
+            &refine_model,
+            synth_noise, synth_strength, l0_sharpen, tile_sharpen,
         );
         match result {
             Ok(result) => {
@@ -1013,6 +1219,14 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
     let inflight = state.inflight.clone();
     let inflight_limit = state.inflight_limit.clone();
     let singleflight = state.singleflight.clone();
+    #[cfg(feature = "sr-model")]
+    let sr_model = state.sr_model.clone();
+    #[cfg(feature = "sr-model")]
+    let refine_model = state.refine_model.clone();
+    let synth_noise = state.synth_noise;
+    let synth_strength = state.synth_strength;
+    let l0_sharpen = state.l0_sharpen;
+    let tile_sharpen = state.tile_sharpen;
     let family_key_cleanup = family_key;
 
     tokio::spawn(async move {
@@ -1033,6 +1247,11 @@ fn spawn_family_prewarm(state: AppState, slide: Slide, x2: u32, y2: u32) {
             let result = generate_family_server(
                 &slide, x2, y2, quality, false, grayscale_only, output_format,
                 sharpen, upsample_filter, &writer, &write_root, &buffer_pool,
+                #[cfg(feature = "sr-model")]
+                &sr_model,
+                #[cfg(feature = "sr-model")]
+                &refine_model,
+                synth_noise, synth_strength, l0_sharpen, tile_sharpen,
             );
             match result {
                 Ok(result) => {
@@ -1711,20 +1930,25 @@ fn discover_slides(
 
         // Compute label and disk size from summary.json
         let summary_path = slide_root.join("summary.json");
-        let (label, disk_size_mb, jpeg_only) = if let Ok(data) = fs::read_to_string(&summary_path) {
+        let (label, disk_size_mb, jpeg_only, source_1024) = if let Ok(data) = fs::read_to_string(&summary_path) {
             if let Ok(summary) = serde_json::from_str::<serde_json::Value>(&data) {
                 let mode = summary.get("mode").and_then(|v| v.as_str()).unwrap_or("");
                 let is_jpeg_only = mode == "ingest-jpeg-only";
-                let lbl = if is_jpeg_only {
-                    let q = summary.get("baseq").and_then(|v| v.as_u64()).unwrap_or(0);
+                let is_source_1024 = mode == "jxl-baseline";
+                let lbl = if let Some(label) = summary.get("label").and_then(|v| v.as_str()) {
+                    // Explicit label in summary.json (e.g. JXL baselines)
+                    label.to_string()
+                } else if is_jpeg_only {
+                    let q = summary.get("seedq").or_else(|| summary.get("baseq"))
+                        .and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("JPEG Q{}", q)
-                } else if summary.get("baseq").is_some() {
-                    // baseq may be a number or a string (v2 pipeline)
-                    let baseq = summary.get("baseq")
+                } else if summary.get("seedq").is_some() || summary.get("baseq").is_some() {
+                    // seedq (v3) or baseq (v2) — may be a number or a string
+                    let sq = summary.get("seedq").or_else(|| summary.get("baseq"))
                         .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
                         .unwrap_or(0);
                     let l0q = summary.get("l0q").and_then(|v| v.as_u64()).unwrap_or(0);
-                    format!("Origami {}/{}", baseq, l0q)
+                    format!("Origami {}/{}", sq, l0q)
                 } else if summary.get("residual_jpeg_q_L").is_some() {
                     // Legacy Python pipeline format
                     let q = summary.get("residual_jpeg_q_L").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1746,12 +1970,12 @@ fn discover_slides(
                 } else {
                     0.0
                 };
-                (lbl, size, is_jpeg_only)
+                (lbl, size, is_jpeg_only, is_source_1024)
             } else {
-                (slide_id.clone(), 0.0, false)
+                (slide_id.clone(), 0.0, false, false)
             }
         } else {
-            (slide_id.clone(), 0.0, false)
+            (slide_id.clone(), 0.0, false, false)
         };
 
         // Try to open a bundle file (preferred over individual .pack files)
@@ -1786,6 +2010,7 @@ fn discover_slides(
             label,
             disk_size_mb,
             jpeg_only,
+            source_1024,
         };
         slides.insert(slide_id, slide);
     }
@@ -1811,6 +2036,14 @@ fn generate_family_server(
     writer: &Option<mpsc::Sender<WriteJob>>,
     write_root: &Option<PathBuf>,
     buffer_pool: &BufferPool,
+    #[cfg(feature = "sr-model")]
+    sr_model: &Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    #[cfg(feature = "sr-model")]
+    refine_model: &Option<std::sync::Arc<crate::core::sr_model::SRModel>>,
+    synth_noise: bool,
+    synth_strength: f32,
+    l0_sharpen: Option<f32>,
+    tile_sharpen: Option<f32>,
 ) -> Result<ServerFamilyResult> {
     let input = ReconstructInput {
         files_dir: &slide.files_dir,
@@ -1828,12 +2061,32 @@ fn generate_family_server(
         output_format,
         sharpen,
         upsample_filter,
+        #[cfg(feature = "sr-model")]
+        sr_model: sr_model.clone(),
+        #[cfg(feature = "sr-model")]
+        refine_model: refine_model.clone(),
+        synth_noise,
+        synth_strength,
+        l0_sharpen,
+        tile_sharpen,
     };
 
     let core_result = reconstruct_family(&input, x2, y2, &opts, buffer_pool)?;
 
     // Map CoreFamilyResult → server HashMap<TileKey, Bytes>
     let mut out = HashMap::new();
+    // L2 tile (only present when seed > tile_size)
+    if let Some((x2_t, y2_t, ref bytes)) = core_result.l2 {
+        out.insert(
+            TileKey {
+                slide_id: slide.slide_id.clone(),
+                level: slide.l2,
+                x: x2_t,
+                y: y2_t,
+            },
+            Bytes::from(bytes.clone()),
+        );
+    }
     for (x1, y1, bytes) in &core_result.l1 {
         out.insert(
             TileKey {

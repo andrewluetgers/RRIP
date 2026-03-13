@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 from datetime import datetime
 from skimage.metrics import structural_similarity as ssim, mean_squared_error
-from skimage.color import rgb2lab, deltaE_cie76
+from skimage.color import rgb2lab, deltaE_ciede2000
 from jpeg_encoder import (
     JpegEncoder, encode_jpeg_to_file, encode_jpeg_to_bytes,
     parse_encoder_arg, is_jxl_encoder, is_webp_encoder, decode_jxl_to_image, file_extension,
@@ -89,7 +89,7 @@ def calculate_delta_e(img1, img2):
             lab2 = rgb2lab(img2_norm)
 
             # Calculate Delta E for each pixel
-            delta_e = deltaE_cie76(lab1, lab2)
+            delta_e = deltaE_ciede2000(lab1, lab2)
 
             # Return mean Delta E
             return float(np.mean(delta_e))

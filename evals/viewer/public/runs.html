@@ -367,7 +367,8 @@
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>BaseQ</th>
+                    <th>SeedQ</th>
+                    <th>Seed</th>
                     <th>L1Q</th>
                     <th>L0Q</th>
                     <th>OptL2</th>
@@ -389,7 +390,7 @@
             </thead>
             <tbody id="runs-body">
                 <tr>
-                    <td colspan="19" class="empty-state">
+                    <td colspan="20" class="empty-state">
                         <p>Loading runs...</p>
                     </td>
                 </tr>
@@ -413,16 +414,20 @@
                 </select>
             </div>
 
-            <div class="form-row">
+            <div class="form-row-3">
                 <div class="form-group">
-                    <label for="f-baseq">L2 Base Q</label>
+                    <label for="f-seedq">Seed Q</label>
                     <div style="display:flex;gap:8px;align-items:center">
-                        <input type="text" id="f-baseq" value="90" style="width:80px;padding:8px 12px;border:1px solid #ced4da;border-radius:6px;font-size:14px" placeholder="1-100 or L">
+                        <input type="text" id="f-seedq" value="90" style="width:80px;padding:8px 12px;border:1px solid #ced4da;border-radius:6px;font-size:14px" placeholder="1-100 or L">
                         <div class="checkbox-group" style="white-space:nowrap">
-                            <input type="checkbox" id="f-baseq-lossless">
-                            <label for="f-baseq-lossless" style="font-size:13px">Lossless</label>
+                            <input type="checkbox" id="f-seedq-lossless">
+                            <label for="f-seedq-lossless" style="font-size:13px">Lossless</label>
                         </div>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label for="f-seedsize">Seed Size (px)</label>
+                    <input type="number" id="f-seedsize" value="" min="64" max="1024" step="1" placeholder="Default (L2)">
                 </div>
                 <div class="form-group">
                     <label for="f-l0q">L0 Residual Q</label>
@@ -440,6 +445,36 @@
                 <div class="form-group">
                     <label for="f-maxdelta">Max Delta (±)</label>
                     <input type="number" id="f-maxdelta" value="20" min="1" max="255" step="1">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="f-splitseed">
+                    <label for="f-splitseed">Split Luma/Chroma Seed (v4)</label>
+                </div>
+            </div>
+
+            <div id="split-seed-fields" style="display:none">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="f-seed-luma-q">Seed Luma Q</label>
+                        <input type="number" id="f-seed-luma-q" value="90" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="f-seed-luma-size">Seed Luma Size (px)</label>
+                        <input type="number" id="f-seed-luma-size" value="512" min="64" max="1024" step="1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="f-seed-chroma-q">Seed Chroma Q</label>
+                        <input type="number" id="f-seed-chroma-q" value="70" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="f-seed-chroma-size">Seed Chroma Size (px)</label>
+                        <input type="number" id="f-seed-chroma-size" value="128" min="32" max="1024" step="1">
+                    </div>
                 </div>
             </div>
 
@@ -461,9 +496,43 @@
                 </div>
             </div>
 
+            <div class="form-group" style="margin-top:8px">
+                <label style="margin-bottom:8px">Post-Processing</label>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f-enhance">
+                        <label for="f-enhance">Enhancement (refine/enhance model)</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f-denoise">
+                        <label for="f-denoise">Noise Reduction (--denoise wavelet denoising)</label>
+                    </div>
+                    <div id="denoise-weight-field" style="display:none;margin-left:24px;margin-top:4px">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="f-denoise-weight">Denoise Weight</label>
+                            <input type="number" id="f-denoise-weight" value="1.0" min="0" max="1" step="0.1" style="width:100px">
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="f-synth-noise">
+                        <label for="f-synth-noise">Noise Synthesis (--synth-noise at decode time)</label>
+                    </div>
+                    <div id="synth-strength-field" style="display:none;margin-left:24px;margin-top:4px">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="f-synth-strength">Synth Strength</label>
+                            <input type="number" id="f-synth-strength" value="0.5" min="0" max="1" step="0.1" style="width:100px">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;margin-bottom:0">
+                        <label for="f-tile-sharpen">Tile Sharpen</label>
+                        <input type="number" id="f-tile-sharpen" value="" min="0" max="2" step="0.1" style="width:100px" placeholder="None">
+                    </div>
+                </div>
+            </div>
+
             <div class="name-preview">
                 <div class="label">Run Directory Name</div>
-                <div class="value" id="name-preview">v2_b90_l0q70_optl2</div>
+                <div class="value" id="name-preview">v2_b90_l0q70_optl2</div><!-- auto-updated -->
             </div>
 
             <div class="form-error" id="form-error"></div>
@@ -480,15 +549,20 @@
     let pollTimer = null;
 
     // ─── Lossless checkbox ↔ text input sync ───
-    function getBaseQ() {
-        const raw = document.getElementById('f-baseq').value.trim();
-        const ll = document.getElementById('f-baseq-lossless').checked;
+    function getSeedQ() {
+        const raw = document.getElementById('f-seedq').value.trim();
+        const ll = document.getElementById('f-seedq-lossless').checked;
         if (ll || raw.toLowerCase() === 'l' || raw.toLowerCase() === 'lossless') return 'L';
         return parseInt(raw) || 90;
     }
 
-    document.getElementById('f-baseq-lossless').addEventListener('change', function() {
-        const input = document.getElementById('f-baseq');
+    function getSeedSize() {
+        const val = parseInt(document.getElementById('f-seedsize').value);
+        return val > 0 ? val : null;
+    }
+
+    document.getElementById('f-seedq-lossless').addEventListener('change', function() {
+        const input = document.getElementById('f-seedq');
         if (this.checked) {
             input.dataset.prevValue = input.value;
             input.value = 'L';
@@ -500,30 +574,94 @@
         updatePreview();
     });
 
-    document.getElementById('f-baseq').addEventListener('input', function() {
+    document.getElementById('f-seedq').addEventListener('input', function() {
         const raw = this.value.trim().toLowerCase();
-        const cb = document.getElementById('f-baseq-lossless');
+        const cb = document.getElementById('f-seedq-lossless');
         cb.checked = (raw === 'l' || raw === 'lossless');
         updatePreview();
     });
 
+    // ─── Denoise toggle (shows denoise-weight; gates synth-noise strength visibility) ───
+    document.getElementById('f-denoise').addEventListener('change', function() {
+        document.getElementById('denoise-weight-field').style.display = this.checked ? 'block' : 'none';
+        // Synth-noise strength only visible when both denoise AND synth-noise are checked
+        const synthChecked = document.getElementById('f-synth-noise').checked;
+        document.getElementById('synth-strength-field').style.display = (this.checked && synthChecked) ? 'block' : 'none';
+        updatePreview();
+    });
+
+    // ─── Synth-noise toggle (strength only shown when denoise is also on) ───
+    document.getElementById('f-synth-noise').addEventListener('change', function() {
+        const denoiseChecked = document.getElementById('f-denoise').checked;
+        document.getElementById('synth-strength-field').style.display = (this.checked && denoiseChecked) ? 'block' : 'none';
+        updatePreview();
+    });
+
+    // ─── Split-seed toggle ───
+    document.getElementById('f-splitseed').addEventListener('change', function() {
+        document.getElementById('split-seed-fields').style.display = this.checked ? 'block' : 'none';
+        updatePreview();
+    });
+    // Update preview on split-seed field changes
+    ['f-seed-luma-q', 'f-seed-luma-size', 'f-seed-chroma-q', 'f-seed-chroma-size'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePreview);
+        document.getElementById(id).addEventListener('change', updatePreview);
+    });
+
+    function isSplitSeed() {
+        return document.getElementById('f-splitseed').checked;
+    }
+
     // ─── Name generation (mirrors server-side generateRunName) ───
     function generateRunName() {
-        const baseq = getBaseQ();
         const l0q = parseInt(document.getElementById('f-l0q').value) || 70;
         const optl2 = document.getElementById('f-optl2').checked;
-        const sh = parseFloat(document.getElementById('f-sharpen').value) || 0;
         const l0s = parseInt(document.getElementById('f-l0scale').value) || 100;
         const l0sh = parseFloat(document.getElementById('f-l0sharpen').value) || 0;
         const maxDelta = parseInt(document.getElementById('f-maxdelta').value) || 20;
+        const enhance = document.getElementById('f-enhance').checked;
+        const denoise = document.getElementById('f-denoise').checked;
+        const denoiseWeight = parseFloat(document.getElementById('f-denoise-weight').value);
+        const synthNoise = document.getElementById('f-synth-noise').checked;
+        const synthStrength = parseFloat(document.getElementById('f-synth-strength').value) || 0.5;
+        const tileSharpen = parseFloat(document.getElementById('f-tile-sharpen').value);
 
-        let name = `v2_b${baseq}_l0q${l0q}`;
-        if (optl2) name += '_optl2';
-        if (optl2 && maxDelta !== 20) name += `_d${maxDelta}`;
+        function appendPostProc(name) {
+            if (enhance) name += '_enh';
+            if (denoise) name += `_dn${Math.round((isNaN(denoiseWeight) ? 1.0 : denoiseWeight) * 100)}`;
+            if (synthNoise) name += `_sn${Math.round(synthStrength * 100)}`;
+            if (!isNaN(tileSharpen) && tileSharpen > 0) name += `_tsh${Math.round(tileSharpen * 10)}`;
+            return name;
+        }
+
+        if (isSplitSeed()) {
+            const lq = parseInt(document.getElementById('f-seed-luma-q').value) || 90;
+            const ls = parseInt(document.getElementById('f-seed-luma-size').value) || 512;
+            const cq = parseInt(document.getElementById('f-seed-chroma-q').value) || 70;
+            const cs = parseInt(document.getElementById('f-seed-chroma-size').value) || 128;
+            let name = `v4_sl${lq}x${ls}_sc${cq}x${cs}_l0q${l0q}`;
+            if (optl2) name += '_optl2';
+            if (optl2 && maxDelta !== 20) name += `_d${maxDelta}`;
+            if (l0s < 100) name += `_l0s${l0s}`;
+            if (l0sh > 0) name += `_l0sh${Math.round(l0sh * 10)}`;
+            return appendPostProc(name);
+        }
+
+        const seedq = getSeedQ();
+        const seedSize = getSeedSize();
+        const sh = parseFloat(document.getElementById('f-sharpen').value) || 0;
+        let name = `v2_b${seedq}_l0q${l0q}`;
+        if (seedSize) name += `_ss${seedSize}`;
+        if (optl2) {
+            name += '_optl2';
+            if (maxDelta !== 20) name += `_d${maxDelta}`;
+        } else {
+            name += '_nooptl2';
+        }
         if (sh > 0) name += `_sh${Math.round(sh * 10)}`;
         if (l0s < 100) name += `_l0s${l0s}`;
         if (l0sh > 0) name += `_l0sh${Math.round(l0sh * 10)}`;
-        return name;
+        return appendPostProc(name);
     }
 
     function updatePreview() {
@@ -531,7 +669,7 @@
     }
 
     // Attach change listeners to all form fields
-    ['f-baseq', 'f-l0q', 'f-optl2', 'f-maxdelta', 'f-sharpen', 'f-l0sharpen', 'f-l0scale'].forEach(id => {
+    ['f-seedq', 'f-seedsize', 'f-l0q', 'f-optl2', 'f-maxdelta', 'f-sharpen', 'f-l0sharpen', 'f-l0scale', 'f-enhance', 'f-denoise', 'f-denoise-weight', 'f-synth-noise', 'f-synth-strength', 'f-tile-sharpen'].forEach(id => {
         document.getElementById(id).addEventListener('input', updatePreview);
         document.getElementById(id).addEventListener('change', updatePreview);
     });
@@ -644,7 +782,7 @@
     function renderRuns(runs) {
         const tbody = document.getElementById('runs-body');
         if (runs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="19" class="empty-state">
+            tbody.innerHTML = `<tr><td colspan="20" class="empty-state">
                 <p>No runs yet.</p>
                 <button class="btn btn-primary" onclick="openModal()">Create your first run</button>
             </td></tr>`;
@@ -674,7 +812,8 @@
 
             return `<tr>
                 <td class="mono">${run.dirName}</td>
-                <td>${run.baseq || '-'}</td>
+                <td>${run.seedq || '-'}</td>
+                <td>${run.seed_size || '-'}</td>
                 <td>${run.l1q || '-'}</td><!-- legacy v1 -->
                 <td>${run.l0q || '-'}</td>
                 <td>${optl2Label}</td>
@@ -712,16 +851,35 @@
 
         const sh = parseFloat(document.getElementById('f-sharpen').value);
         const l0sh = parseFloat(document.getElementById('f-l0sharpen').value);
+        const seedSize = getSeedSize();
         const params = {
             image,
-            baseq: getBaseQ(),
+            seedq: getSeedQ(),
+            seed_size: seedSize,
             l0q: parseInt(document.getElementById('f-l0q').value) || 70,
             optl2: document.getElementById('f-optl2').checked,
             max_delta: parseInt(document.getElementById('f-maxdelta').value) || 20,
             sharpen: sh > 0 ? sh : null,
             l0_scale: parseInt(document.getElementById('f-l0scale').value) || 100,
             l0_sharpen: l0sh > 0 ? l0sh : null,
+            enhance: document.getElementById('f-enhance').checked,
+            denoise: document.getElementById('f-denoise').checked,
+            denoise_weight: document.getElementById('f-denoise').checked
+                ? (isNaN(parseFloat(document.getElementById('f-denoise-weight').value)) ? 1.0 : parseFloat(document.getElementById('f-denoise-weight').value))
+                : null,
+            synth_noise: document.getElementById('f-synth-noise').checked,
+            synth_strength: document.getElementById('f-synth-noise').checked
+                ? parseFloat(document.getElementById('f-synth-strength').value) || 0.5
+                : null,
+            tile_sharpen: (() => { const v = parseFloat(document.getElementById('f-tile-sharpen').value); return !isNaN(v) && v > 0 ? v : null; })(),
         };
+
+        if (isSplitSeed()) {
+            params.seed_luma_q = parseInt(document.getElementById('f-seed-luma-q').value) || 90;
+            params.seed_luma_size = parseInt(document.getElementById('f-seed-luma-size').value) || 512;
+            params.seed_chroma_q = parseInt(document.getElementById('f-seed-chroma-q').value) || 70;
+            params.seed_chroma_size = parseInt(document.getElementById('f-seed-chroma-size').value) || 128;
+        }
 
         const btn = document.getElementById('btn-start');
         btn.disabled = true;

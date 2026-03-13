@@ -1,0 +1,19 @@
+{
+  "experiment_id": "separation_rs_444_b95_l0q50",
+  "timestamp": "2026-03-11T15:18:23Z",
+  "source_run": "evals/runs/rs_444_b95_l0q50",
+  "has_three_signal": true,
+  "params": {
+    "methods": [
+      "wavelet_fusion_db4+sym4+coif2_l2_s0.25",
+      "wavelet_fusion_db4+sym4+coif2_l2_s0.35",
+      "wavelet_fusion_db4+sym4+coif2_l2_s0.5",
+      "wavelet_fusion_db4+sym4+coif2_l2_s1.0",
+      "wavelet_fusion_db6+sym6+coif3_l2_s0.35",
+      "wavelet_fusion_db6+sym6+coif3_l2_s0.5",
+      "wavelet_fusion_db8+sym8+coif3_l2_s0.35",
+      "wavelet_fusion_db8+sym8+coif3_l2_s0.5"
+    ]
+  },
+  "notes": ""
+}

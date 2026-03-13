@@ -1,0 +1,85 @@
+{
+  "image": "../evals/test-images/L0-1024.jpg",
+  "base_quality": 50,
+  "patch": 64,
+  "zdim": 8,
+  "ch": 64,
+  "latent_raw_bytes": 2198,
+  "latent_zlib_bytes": 539,
+  "latent_scale": 0.0011150286657603708,
+  "note": "Encode-time z is computed using true residual (amortized inversion). To simulate a codec, you would transmit the packed latents and decode to regenerate residual.",
+  "results": [
+    {
+      "method": "Base only (JPEG q50)",
+      "base_bytes": 129968,
+      "extra_bytes": 0,
+      "total_bytes": 129968,
+      "Y_PSNR": 36.87097635833294,
+      "Y_MSE": 0.00020554284532718276,
+      "Y_MAE": 0.011320797317125653,
+      "Y_SSIM": 0.9381261806184337,
+      "Delta_E": 1.4769583168731673,
+      "LPIPS": 0.07723818719387054
+    },
+    {
+      "method": "True residual JPEG90 + apply",
+      "base_bytes": 129968,
+      "extra_bytes": 171864,
+      "total_bytes": 301832,
+      "Y_PSNR": 42.631769339664665,
+      "Y_MSE": 5.455355616156463e-05,
+      "Y_MAE": 0.005831781854087836,
+      "Y_SSIM": 0.982830545850739,
+      "Delta_E": 1.1757030356905729,
+      "LPIPS": 0.01127106137573719
+    },
+    {
+      "method": "True residual JPEG95 + apply",
+      "base_bytes": 129968,
+      "extra_bytes": 282279,
+      "total_bytes": 412247,
+      "Y_PSNR": 46.205335201368875,
+      "Y_MSE": 2.395887820877138e-05,
+      "Y_MAE": 0.003850858625773057,
+      "Y_SSIM": 0.9924480212677059,
+      "Delta_E": 1.0907264818461067,
+      "LPIPS": 0.009433379396796227
+    },
+    {
+      "method": "Latent-only + apply (zdim=8, patch=64)",
+      "base_bytes": 129968,
+      "extra_bytes": 539,
+      "total_bytes": 130507,
+      "Y_PSNR": 37.689122996178085,
+      "Y_MSE": 0.00017025022728948234,
+      "Y_MAE": 0.01031797113292754,
+      "Y_SSIM": 0.9455160669251326,
+      "Delta_E": 1.4191035084933528,
+      "LPIPS": 0.13786527514457703
+    },
+    {
+      "method": "Latent + correction JPEG90 + apply",
+      "base_bytes": 129968,
+      "extra_bytes": 160119,
+      "total_bytes": 290087,
+      "Y_PSNR": 42.79346697027773,
+      "Y_MSE": 5.255975146844438e-05,
+      "Y_MAE": 0.005739532665124614,
+      "Y_SSIM": 0.9833426277112692,
+      "Delta_E": 1.1731453671688599,
+      "LPIPS": 0.011227337643504143
+    },
+    {
+      "method": "Latent + correction JPEG95 + apply",
+      "base_bytes": 129968,
+      "extra_bytes": 269608,
+      "total_bytes": 399576,
+      "Y_PSNR": 46.35668920088902,
+      "Y_MSE": 2.3138280408924543e-05,
+      "Y_MAE": 0.00381920271428271,
+      "Y_SSIM": 0.9926608479603287,
+      "Delta_E": 1.091043926904397,
+      "LPIPS": 0.00918746367096901
+    }
+  ]
+}

@@ -371,10 +371,11 @@ class WSIEnhanceNet(nn.Module):
              Still fast with only 16 channels (~5-15ms on server CPU for collapsed model).
     """
 
-    def __init__(self, channels: int = 16, num_blocks: int = 5):
+    def __init__(self, channels: int = 16, num_blocks: int = 5, in_channels: int = 3):
         super().__init__()
+        self.in_channels = in_channels
         self.head = nn.Sequential(
-            nn.Conv2d(3, channels, 3, padding=1),
+            nn.Conv2d(in_channels, channels, 3, padding=1),
             nn.ReLU(inplace=True),
         )
         self.body = nn.Sequential(
@@ -383,10 +384,13 @@ class WSIEnhanceNet(nn.Module):
         self.tail = nn.Conv2d(channels, 3, 3, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # When using extra input channels (e.g. edge map), the RGB portion
+        # is x[:, :3] for the global residual skip connection
+        rgb = x[:, :3] if self.in_channels > 3 else x
         h = self.head(x)
         h = self.body(h)
         h = self.tail(h)
-        return x + h  # global residual: predict the correction
+        return rgb + h  # global residual: predict the correction
 
 
 # ---------------------------------------------------------------------------

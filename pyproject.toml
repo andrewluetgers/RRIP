@@ -19,6 +19,8 @@ dependencies = [
   "lpips",
   "sewar",
   "lz4",
+  "opencv-contrib-python>=4.13.0.92",
+  "pywavelets>=1.8.0",
 ]
 
 [project.scripts]

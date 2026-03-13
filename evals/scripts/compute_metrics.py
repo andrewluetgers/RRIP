@@ -14,14 +14,17 @@ If no run_dirs given, processes all rs_* runs in evals/runs/.
 import argparse
 import json
 import pathlib
+import shutil
+import subprocess
 import sys
 import re
+import tempfile
 
 import numpy as np
 from PIL import Image
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
-from skimage.color import rgb2lab, deltaE_cie76
+from skimage.color import rgb2lab, deltaE_ciede2000
 from scipy import ndimage
 
 try:
@@ -37,6 +40,12 @@ try:
     HAS_LPIPS = True
 except ImportError:
     HAS_LPIPS = False
+
+
+HAS_SSIMULACRA = shutil.which("ssimulacra_main") is not None
+HAS_SSIMULACRA2 = shutil.which("ssimulacra2") is not None
+HAS_BUTTERAUGLI = shutil.which("butteraugli_main") is not None
+HAS_DSSIM = shutil.which("dssim") is not None
 
 
 def calculate_mse(a, b):
@@ -56,10 +65,11 @@ def calculate_vif(img1, img2):
 
 
 def calculate_delta_e(img1, img2):
+    """Compute mean CIEDE2000 color difference between two RGB images."""
     try:
         lab1 = rgb2lab(img1.astype(np.float64) / 255.0)
         lab2 = rgb2lab(img2.astype(np.float64) / 255.0)
-        return float(np.mean(deltaE_cie76(lab1, lab2)))
+        return float(np.mean(deltaE_ciede2000(lab1, lab2)))
     except Exception:
         return None
 
@@ -140,6 +150,69 @@ def _compute_ms_ssim(img1, img2, weights=None):
     return float(np.clip(result, 0.0, 1.0))
 
 
+def calculate_ssimulacra(ref_path, test_path):
+    """Compute SSIMULACRA v1 score via CLI. Returns float (lower=better, 0=identical)."""
+    if not HAS_SSIMULACRA:
+        return None
+    try:
+        result = subprocess.run(
+            ["ssimulacra_main", str(ref_path), str(test_path)],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return float(result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
+def calculate_ssimulacra2(ref_path, test_path):
+    """Compute SSIMULACRA2 score via CLI. Returns float (higher=better, max 100)."""
+    if not HAS_SSIMULACRA2:
+        return None
+    try:
+        result = subprocess.run(
+            ["ssimulacra2", str(ref_path), str(test_path)],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return float(result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
+def calculate_dssim(ref_path, test_path):
+    """Compute DSSIM via CLI. Returns float (lower=better, 0=identical)."""
+    if not HAS_DSSIM:
+        return None
+    try:
+        result = subprocess.run(
+            ["dssim", str(ref_path), str(test_path)],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            # Output format: "0.00162377\tpath/to/file"
+            return float(result.stdout.strip().split('\t')[0])
+    except Exception:
+        pass
+    return None
+
+
+def calculate_butteraugli(ref_path, test_path):
+    """Compute Butteraugli distance via CLI. Returns float (lower=better)."""
+    if not HAS_BUTTERAUGLI:
+        return None
+    try:
+        result = subprocess.run(
+            ["butteraugli_main", str(ref_path), str(test_path)],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            # First line is the max distance, second line is 3-norm
+            lines = result.stdout.strip().split('\n')
+            return float(lines[0])
+    except Exception:
+        pass
+    return None
+
+
 def calculate_blockiness(img):
     """Average Sobel gradient magnitude at 8x8 JPEG block boundaries."""
     if img.ndim == 3:
@@ -170,8 +243,12 @@ def find_file(directory, pattern):
     return None
 
 
-def compute_tile_metrics(original_rgb, reconstructed_rgb):
-    """Compute all metrics between original and reconstructed RGB tiles."""
+def compute_tile_metrics(original_rgb, reconstructed_rgb, ref_path=None, test_path=None):
+    """Compute all metrics between original and reconstructed RGB tiles.
+
+    ref_path/test_path: optional file paths for CLI-based metrics (ssimulacra2, butteraugli).
+    If not provided and CLI tools are available, temp files are created.
+    """
     metrics = {}
 
     # PSNR on luminance
@@ -207,11 +284,65 @@ def compute_tile_metrics(original_rgb, reconstructed_rgb):
     metrics["blockiness"] = calculate_blockiness(reconstructed_rgb)
     metrics["blockiness_delta"] = metrics["blockiness"] - calculate_blockiness(original_rgb)
 
+    # CLI-based perceptual metrics (dssim, ssimulacra, ssimulacra2, butteraugli)
+    if HAS_DSSIM or HAS_SSIMULACRA or HAS_SSIMULACRA2 or HAS_BUTTERAUGLI:
+        tmp_ref = None
+        tmp_test = None
+        try:
+            if ref_path is None or test_path is None:
+                tmp_ref = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+                tmp_test = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+                Image.fromarray(original_rgb).save(tmp_ref.name)
+                Image.fromarray(reconstructed_rgb).save(tmp_test.name)
+                tmp_ref.close()
+                tmp_test.close()
+                ref_path = tmp_ref.name
+                test_path = tmp_test.name
+
+            ds = calculate_dssim(ref_path, test_path)
+            if ds is not None:
+                metrics["final_dssim"] = ds
+
+            s1 = calculate_ssimulacra(ref_path, test_path)
+            if s1 is not None:
+                metrics["final_ssimulacra"] = s1
+
+            s2 = calculate_ssimulacra2(ref_path, test_path)
+            if s2 is not None:
+                metrics["final_ssimulacra2"] = s2
+
+            ba = calculate_butteraugli(ref_path, test_path)
+            if ba is not None:
+                metrics["final_butteraugli"] = ba
+        finally:
+            if tmp_ref is not None:
+                pathlib.Path(tmp_ref.name).unlink(missing_ok=True)
+            if tmp_test is not None:
+                pathlib.Path(tmp_test.name).unlink(missing_ok=True)
+
     return metrics
 
 
-def process_run(run_dir):
-    """Process a single Rust encoder run, computing metrics from debug images."""
+def simulate_jpeg_serve(img_array, quality=95):
+    """Re-encode an RGB image through JPEG at the given quality, return decoded RGB array.
+
+    This simulates what the tile server does: encode the reconstructed tile as JPEG
+    for delivery, introducing additional quantization loss.
+    """
+    from io import BytesIO
+    pil_img = Image.fromarray(img_array)
+    buf = BytesIO()
+    pil_img.save(buf, format="JPEG", quality=quality)
+    buf.seek(0)
+    return np.array(Image.open(buf).convert("RGB"))
+
+
+def process_run(run_dir, serve_quality=None):
+    """Process a single Rust encoder run, computing metrics from debug images.
+
+    If serve_quality is set, reconstructed tiles are re-encoded through JPEG at that
+    quality before computing metrics, to simulate tile server delivery loss.
+    """
     run_dir = pathlib.Path(run_dir)
     manifest_path = run_dir / "manifest.json"
     compress_dir = run_dir / "compress"
@@ -232,7 +363,8 @@ def process_run(run_dir):
         print(f"  Skipping {run_dir.name}: not a Rust manifest")
         return
 
-    print(f"  Processing {run_dir.name}...")
+    quality_label = f" (serve Q{serve_quality})" if serve_quality else ""
+    print(f"  Processing {run_dir.name}{quality_label}...")
 
     # Build decompression_phase structure matching Python format
     decompression = {"L1": {}, "L0": {}}
@@ -257,11 +389,18 @@ def process_run(run_dir):
         original = np.array(Image.open(orig_file).convert("RGB"))
         reconstructed = np.array(Image.open(recon_file).convert("RGB"))
 
-        metrics = compute_tile_metrics(original, reconstructed)
+        # Optionally re-encode through JPEG to simulate tile server delivery
+        if serve_quality is not None:
+            reconstructed = simulate_jpeg_serve(reconstructed, serve_quality)
+
+        metrics = compute_tile_metrics(original, reconstructed,
+                                       ref_path=str(orig_file), test_path=str(recon_file))
         decompression[level][tile_key] = metrics
 
     # Add decompression_phase to manifest
     manifest["decompression_phase"] = decompression
+    if serve_quality is not None:
+        manifest["serve_quality"] = serve_quality
 
     # Also add size_comparison for viewer compatibility
     l2_bytes = manifest.get("l2_bytes", 0)
@@ -306,6 +445,9 @@ def process_run(run_dir):
 def main():
     parser = argparse.ArgumentParser(description="Compute visual metrics for Rust encoder runs")
     parser.add_argument("runs", nargs="*", help="Run directories to process (default: all rs_* in evals/runs/)")
+    parser.add_argument("--serve-quality", type=int, default=None,
+                        help="Re-encode reconstructed tiles through JPEG at this quality before "
+                             "computing metrics, simulating tile server delivery (e.g. 95)")
     args = parser.parse_args()
 
     if args.runs:
@@ -319,14 +461,15 @@ def main():
         print("No runs found to process.")
         return
 
-    print(f"Computing metrics for {len(run_dirs)} run(s)...")
+    sq_label = f" (serve Q{args.serve_quality})" if args.serve_quality else ""
+    print(f"Computing metrics for {len(run_dirs)} run(s){sq_label}...")
     if not HAS_VIF:
         print("  (VIF unavailable — install sewar)")
     if not HAS_LPIPS:
         print("  (LPIPS unavailable — install lpips + torch)")
 
     for run_dir in run_dirs:
-        process_run(run_dir)
+        process_run(run_dir, serve_quality=args.serve_quality)
 
     print("\nDone.")
 

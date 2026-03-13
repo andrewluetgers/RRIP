@@ -200,6 +200,7 @@
             left: 0;
             z-index: 5;
             min-width: 240px;
+            max-width: 512px;
             vertical-align: middle;
         }
 
@@ -212,9 +213,21 @@
 
         .row-label .stage-desc {
             font-weight: normal;
-            font-size: 13px;
+            font-size: 12px;
             color: #6c757d;
             line-height: 1.4;
+            max-height: 256px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 12;
+            -webkit-box-orient: vertical;
+        }
+
+        .row-label .stage-desc a {
+            color: #6c757d;
+            text-decoration: underline;
+            text-decoration-style: dotted;
         }
 
         .image-cell {
@@ -840,10 +853,12 @@
                 <select id="filterCodec" onchange="updateFilteredDropdown()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
                     <option value="">All Codecs</option>
                 </select>
-                <select id="addColumn">
-                    <option value="">Select run...</option>
-                </select>
-                <button onclick="addSelectedColumn()">Add</button>
+                <div style="position: relative; display: inline-block;">
+                    <input id="runSearch" type="text" placeholder="Search runs..." autocomplete="off"
+                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; width: 320px;"
+                        oninput="updateRunSearchResults()" onfocus="updateRunSearchResults()" />
+                    <div id="runSearchResults" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:400px; overflow-y:auto; background:#fff; border:1px solid #ddd; border-radius:0 0 4px 4px; z-index:200; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+                </div>
                 <button onclick="addAllFiltered()" title="Add all runs matching current filters">Add Filtered</button>
                 <button onclick="clearAllColumns()" style="background: #6c757d;" title="Remove all columns">Clear All</button>
             </div>
@@ -1057,6 +1072,46 @@
                 file: 'reconstructed'
             },
             {
+                id: 'noise_map',
+                label: 'Noise Map',
+                stage: 'Analysis',
+                desc: 'Noise removed during denoising step (brighter = more noise removed)',
+                type: 'compress_file',
+                file: '023_L0_removed_noise.png'
+            },
+            {
+                id: 'residual_sharpened',
+                label: 'Residual Sharpened',
+                stage: 'Decode',
+                desc: 'Decoded residual after unsharp mask (decode-time L0 sharpen)',
+                type: 'decompress_file',
+                file: '025_L0_residual_sharpened.png'
+            },
+            {
+                id: 'prediction_delta',
+                label: 'SR \u2212 Lanczos3',
+                stage: 'Analysis',
+                desc: 'Difference between SR model prediction and Lanczos3 interpolation (gray=zero, brighter=SR higher, darker=SR lower)',
+                type: 'decompress_file',
+                file: '090_prediction_delta.png'
+            },
+            {
+                id: 'prediction_delta_color',
+                label: 'SR \u2212 Lanczos3 (color)',
+                stage: 'Analysis',
+                desc: 'RGB difference between SR and Lanczos3 prediction, amplified 4x and centered at 128',
+                type: 'decompress_file',
+                file: '091_prediction_delta_color.png'
+            },
+            {
+                id: 'prediction_delta_abs',
+                label: '|SR \u2212 Lanczos3|',
+                stage: 'Analysis',
+                desc: 'Absolute difference between SR and Lanczos3 prediction, amplified 4x (black=identical, bright=different)',
+                type: 'decompress_file',
+                file: '092_prediction_delta_abs.png'
+            },
+            {
                 id: 'tile_size',
                 label: 'Tile Size \u2193',
                 stage: 'Metric',
@@ -1071,6 +1126,22 @@
                 desc: '(source \u00F7 20) \u00F7 tile size',
                 type: 'metric',
                 metric: 'tile_ratio'
+            },
+            {
+                id: 'total_stored',
+                label: 'Total Stored \u2193',
+                stage: 'Metric',
+                desc: 'Bytes stored on disk: ORIGAMI = seed + residual, JXL server = single JXL file, JPEG baseline = sum of all tiles',
+                type: 'metric',
+                metric: 'total_stored'
+            },
+            {
+                id: 'total_stored_ratio',
+                label: 'Storage Ratio \u2191',
+                stage: 'Metric',
+                desc: 'Original 1024px source \u00F7 total stored bytes',
+                type: 'metric',
+                metric: 'total_stored_ratio'
             },
             {
                 id: 'family_size',
@@ -1100,7 +1171,9 @@
                 id: 'psnr',
                 label: 'Avg PSNR \u2191',
                 stage: 'Metric',
-                desc: 'Peak Signal-to-Noise Ratio (dB) \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>\u2265 40: lossless</b> \u2022 30\u201340: good \u2022 < 30: poor. 1 dB shift below 35 is significant; above 42 dB imperceptible.',
+                tooltip: 'Peak Signal-to-Noise Ratio measures pixel-level fidelity as the ratio of maximum signal power to distortion. Widely used but poorly correlated with human perception \u2014 it treats all pixel errors equally regardless of visual importance. Best used alongside perceptual metrics. Computed on Y (luma) channel.',
+                ref: 'https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio',
                 type: 'metric',
                 metric: 'psnr'
             },
@@ -1108,7 +1181,9 @@
                 id: 'ssim',
                 label: 'Avg SSIM \u2191',
                 stage: 'Metric',
-                desc: 'Structural Similarity Index (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>\u2265 0.99: lossless</b> \u2022 0.95: excellent \u2022 0.90\u20130.95: good \u2022 < 0.80: poor. 3rd decimal changes not perceptible.',
+                tooltip: 'Structural Similarity Index compares luminance, contrast, and structure between image patches using a sliding window. Better correlated with human perception than PSNR because it models structural distortion rather than pixel error. Computed on Y (luma) channel. Proposed by Wang et al. (IEEE TIP 2004).',
+                ref: 'https://en.wikipedia.org/wiki/Structural_similarity_index_measure',
                 type: 'metric',
                 metric: 'ssim'
             },
@@ -1116,7 +1191,9 @@
                 id: 'ms_ssim',
                 label: 'Avg MS-SSIM \u2191',
                 stage: 'Metric',
-                desc: 'Multi-Scale Structural Similarity (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>\u2265 0.997: lossless</b> \u2022 0.995: excellent \u2022 0.990: good. More reliable than SSIM. 4th decimal changes not perceptible.',
+                tooltip: 'Multi-Scale SSIM evaluates structural similarity at multiple resolutions by iteratively downsampling, capturing both fine detail and global structure. More reliable than single-scale SSIM for predicting visual losslessness because human vision processes images at multiple scales. Proposed by Wang, Simoncelli & Bovik (2003).',
+                ref: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC9918960/',
                 type: 'metric',
                 metric: 'ms_ssim'
             },
@@ -1124,7 +1201,9 @@
                 id: 'mse',
                 label: 'Avg MSE \u2193',
                 stage: 'Metric',
-                desc: 'Mean Squared Error \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>< 6.5: lossless</b> (PSNR > 40 dB) \u2022 6.5\u201365: good \u2022 > 65: poor.',
+                tooltip: 'Mean Squared Error is the average squared difference between corresponding pixels. Simple and fast but poorly correlated with perceived quality \u2014 equal MSE can look very different depending on whether errors are spread evenly or concentrated in salient regions. PSNR = 10\u00b7log10(255\u00b2/MSE).',
+                ref: 'https://en.wikipedia.org/wiki/Mean_squared_error',
                 type: 'metric',
                 metric: 'mse'
             },
@@ -1132,15 +1211,19 @@
                 id: 'vif',
                 label: 'Avg VIF \u2191',
                 stage: 'Metric',
-                desc: 'Visual Information Fidelity (0-1) \u2014 averaged across 20 L0+L1 tiles',
+                desc: 'No widely published JND. Higher = more shared visual information with original.',
+                tooltip: 'Visual Information Fidelity quantifies how much of the reference image\'s visual information is preserved in the distorted image, using natural scene statistics and a model of the human visual system. Can exceed 1.0 if processing adds information (e.g. sharpening). Proposed by Sheikh & Bovik (IEEE TIP 2006).',
+                ref: 'https://en.wikipedia.org/wiki/Visual_Information_Fidelity',
                 type: 'metric',
                 metric: 'vif'
             },
             {
                 id: 'delta_e',
-                label: 'Avg Delta E \u2193',
+                label: 'Avg \u0394E00 \u2193',
                 stage: 'Metric',
-                desc: 'CIE Delta E color difference \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>\u2264 1.0: lossless</b> (JND) \u2022 1\u20132: excellent \u2022 2\u20133.5: good \u2022 > 5: obvious. Photography < 1, printing < 2.',
+                tooltip: 'CIEDE2000 measures perceptual color difference in Lab space with corrections for lightness, chroma, and hue that match human color discrimination. The gold standard for color accuracy \u2014 a \u0394E00 of 1.0 is the just-noticeable difference for an average observer. Unlike pixel metrics, this captures color-specific distortions invisible to luma-only metrics.',
+                ref: 'https://en.wikipedia.org/wiki/Color_difference#CIEDE2000',
                 type: 'metric',
                 metric: 'delta_e'
             },
@@ -1148,7 +1231,9 @@
                 id: 'lpips',
                 label: 'Avg LPIPS \u2193',
                 stage: 'Metric',
-                desc: 'Learned Perceptual Image Patch Similarity (0=identical) \u2014 averaged across 20 L0+L1 tiles',
+                desc: '<b>\u2264 0.02: lossless</b> \u2022 0.02\u20130.05: excellent \u2022 0.05\u20130.10: good \u2022 > 0.15: poor. No standardized JND.',
+                tooltip: 'Learned Perceptual Image Patch Similarity computes distance in the feature space of a pretrained deep network (AlexNet). Captures high-level perceptual differences that pixel metrics miss \u2014 e.g. texture changes, spatial shifts. Matches human 2AFC judgments 74% of the time vs 62% for SSIM. Not validated specifically for medical imaging. Zhang et al. (CVPR 2018).',
+                ref: 'https://richzhang.github.io/PerceptualSimilarity/',
                 type: 'metric',
                 metric: 'lpips'
             },
@@ -1156,9 +1241,50 @@
                 id: 'blockiness',
                 label: 'Blockiness \u2193',
                 stage: 'Metric',
-                desc: 'JPEG block boundary artifact strength (delta vs original) \u2014 averaged across 20 L0+L1 tiles',
+                desc: 'Sobel gradient at 8x8 block edges (delta vs original). No published JND.',
+                tooltip: 'Measures JPEG blocking artifact severity by computing the average Sobel gradient magnitude at 8x8 DCT block boundaries. The delta (compressed minus original) isolates artifacts from image content. Useful for detecting block-boundary ringing specific to JPEG/DCT-based codecs.',
                 type: 'metric',
                 metric: 'blockiness'
+            },
+            {
+                id: 'dssim',
+                label: 'DSSIM \u2193',
+                stage: 'Metric',
+                desc: '<b>\u2264 0.003: lossless</b> (from MS-SSIM \u2265 0.997). Best for relative comparison.',
+                tooltip: 'Structural dissimilarity based on multi-scale SSIM in Lab color space. DSSIM = 1/MS_SSIM \u2212 1. Designed for comparing encoders at matched quality or matched bitrate rather than absolute quality classification. Agrees with human judgments ~82% of the time. By Kornel Lesi\u0144ski.',
+                ref: 'https://github.com/kornelski/dssim',
+                type: 'metric',
+                metric: 'dssim'
+            },
+            {
+                id: 'ssimulacra',
+                label: 'SSIMULACRA \u2193',
+                stage: 'Metric',
+                desc: 'v1 (0=identical). Superseded by v2.',
+                tooltip: 'SSIMULACRA v1 combines multi-scale SSIM with edge-weighted error maps to focus on perceptually important regions. Superseded by SSIMULACRA2 which has better calibration to human opinion scores. By Jon Sneyers (Cloudinary/JPEG XL team).',
+                ref: 'https://github.com/cloudinary/ssimulacra',
+                type: 'metric',
+                metric: 'ssimulacra'
+            },
+            {
+                id: 'ssimulacra2',
+                label: 'SSIMULACRA2 \u2191',
+                stage: 'Metric',
+                desc: '<b>\u2265 90: lossless</b> (flicker) \u2022 85: excellent (A/B) \u2022 80: very good \u2022 70: good \u2022 50: fair \u2022 < 30: poor.',
+                tooltip: 'Perceptual quality metric calibrated to ITU-R BT.500 Mean Opinion Scores using the Absolute Category Rating methodology. The primary metric JPEG XL was optimized against. Uses multi-scale error maps weighted by a human visual system model. Score of 90 = average observer cannot detect difference in a flicker test. By Jon Sneyers (Cloudinary).',
+                ref: 'https://github.com/cloudinary/ssimulacra2',
+                type: 'metric',
+                metric: 'ssimulacra2'
+            },
+            {
+                id: 'butteraugli',
+                label: 'Butteraugli \u2193',
+                stage: 'Metric',
+                desc: '<b>< 1.0: lossless</b> \u2022 ~1.1: just noticeable \u2022 > 1.1: visible. JXL target = 1.0.',
+                tooltip: 'Models human color vision sensitivity to compute a perceptual difference map, returning the maximum local difference. Accounts for spatial masking, color opponent channels, and viewing distance. The default quality target for JPEG XL encoding (distance=1.0). Most reliable in the Q90\u201395 compression range it was tuned for. By Jyrki Alakuijala (Google).',
+                ref: 'https://github.com/google/butteraugli',
+                type: 'metric',
+                metric: 'butteraugli'
             }
         ];
 
@@ -1264,6 +1390,9 @@
             if (key.startsWith('GPU ')) {
                 type = 'GPU ORIGAMI Split';
                 codec = 'nvjpeg';
+            } else if (classKey.startsWith('JXL Served')) {
+                type = 'Baseline';
+                codec = 'jpegxl';
             } else if (classKey.startsWith('JPEG ') || classKey.startsWith('JP2 ') || key.startsWith('JP2 ')) {
                 type = 'Baseline';
             } else if (classKey.startsWith('OPTL2 ')) {
@@ -1337,7 +1466,9 @@
         }
 
         function updateAddColumnDropdown() {
+            // Legacy dropdown removed — search input handles this now
             const select = document.getElementById('addColumn');
+            if (!select) return;
             select.innerHTML = '<option value="">Select run...</option>';
 
             getFilteredKeys().forEach(key => {
@@ -1410,8 +1541,12 @@
             // Data rows for each image stage
             imageStages.forEach(stage => {
                 html += '<tr>';
-                html += `<td class="row-label">
-                    <div class="stage-name">${stage.label}</div>
+                const tipAttr = stage.tooltip ? ` title="${stage.tooltip.replace(/"/g, '&quot;')}"` : '';
+                const nameHtml = stage.ref
+                    ? `<a href="${stage.ref}" target="_blank" style="color: #007bff; text-decoration: none;">${stage.label}</a>`
+                    : stage.label;
+                html += `<td class="row-label"${tipAttr}>
+                    <div class="stage-name">${nameHtml}</div>
                     <div class="stage-desc">${stage.desc}</div>`;
                 if (stage.id === 'reconstructed_rgb') {
                     html += `<div class="flicker-controls">
@@ -1441,6 +1576,10 @@
                     if (stage.metric === 'tile_size') {
                         html += `<span class="metric-value">${sourcePerTileKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(source \u00F7 20)</span>`;
                     } else if (stage.metric === 'tile_ratio') {
+                        html += '<span class="metric-value">1:1</span>';
+                    } else if (stage.metric === 'total_stored') {
+                        html += `<span class="metric-value">${sourceKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(1024px source)</span>`;
+                    } else if (stage.metric === 'total_stored_ratio') {
                         html += '<span class="metric-value">1:1</span>';
                     } else if (stage.metric === 'family_size') {
                         html += `<span class="metric-value">${sourceKB}</span><span class="metric-unit">KB</span><br><span class="metric-unit">(1024px source)</span>`;
@@ -1514,20 +1653,24 @@
             // Load original column - use the highest quality ORIGAMI run as reference
             let referenceCapture = null;
 
-            // Prefer highest quality ORIGAMI run, then highest JPEG baseline
-            const origamiRuns = Object.keys(captures)
-                .filter(k => captures[k].type === 'origami')
-                .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
-                .sort((a, b) => b.quality - a.quality);
-            if (origamiRuns.length > 0) {
-                referenceCapture = origamiRuns[0].key;
+            // Use _originals reference if available, else highest quality ORIGAMI run
+            if (captures['_originals']) {
+                referenceCapture = '_originals';
             } else {
-                const baselineRuns = Object.keys(captures)
-                    .filter(k => captures[k].type === 'jpeg_baseline')
-                    .map(k => ({ key: k, quality: parseInt(k.match(/(\d+)$/)?.[1] || '0') }))
+                const origamiRuns = Object.keys(captures)
+                    .filter(k => captures[k].type === 'origami' && captures[k].has_compress)
+                    .map(k => ({ key: k, quality: captures[k].q || 0 }))
                     .sort((a, b) => b.quality - a.quality);
-                if (baselineRuns.length > 0) {
-                    referenceCapture = baselineRuns[0].key;
+                if (origamiRuns.length > 0) {
+                    referenceCapture = origamiRuns[0].key;
+                } else {
+                    const baselineRuns = Object.keys(captures)
+                        .filter(k => captures[k].type === 'jpeg_baseline')
+                        .map(k => ({ key: k, quality: captures[k].q || 0 }))
+                        .sort((a, b) => b.quality - a.quality);
+                    if (baselineRuns.length > 0) {
+                        referenceCapture = baselineRuns[0].key;
+                    }
                 }
             }
 
@@ -1563,6 +1706,8 @@
         const metricDirection = {
             tile_size: false,
             tile_ratio: true,
+            total_stored: false,
+            total_stored_ratio: true,
             family_size: false,
             family_ratio: true,
             psnr: true,
@@ -1573,6 +1718,10 @@
             delta_e: false,
             lpips: false,
             blockiness: false,
+            dssim: false,
+            ssimulacra: false,
+            ssimulacra2: true,
+            butteraugli: false,
         };
 
         function colorizeMetrics() {
@@ -1917,6 +2066,43 @@
                             }
                             break;
                         }
+                        case 'total_stored': {
+                            // Total bytes stored on disk
+                            // ORIGAMI: total_bytes (seed + residual)
+                            // JXL server: total_bytes (single JXL file)
+                            // JPEG baseline: sum of all tile files
+                            let storedBytes = null;
+                            if (manifest.total_bytes) {
+                                storedBytes = manifest.total_bytes;
+                            } else if (isJpegBaseline && manifest.tiles) {
+                                storedBytes = 0;
+                                for (const k in manifest.tiles) {
+                                    storedBytes += manifest.tiles[k].size_bytes || 0;
+                                }
+                            }
+                            if (storedBytes) {
+                                value = storedBytes;
+                                const kb = (storedBytes / 1024).toFixed(1);
+                                html = `<span class="metric-value">${kb}</span><span class="metric-unit">KB</span>`;
+                            }
+                            break;
+                        }
+                        case 'total_stored_ratio': {
+                            let storedBytes = null;
+                            if (manifest.total_bytes) {
+                                storedBytes = manifest.total_bytes;
+                            } else if (isJpegBaseline && manifest.tiles) {
+                                storedBytes = 0;
+                                for (const k in manifest.tiles) {
+                                    storedBytes += manifest.tiles[k].size_bytes || 0;
+                                }
+                            }
+                            if (storedBytes) {
+                                value = sourceBytes / storedBytes;
+                                html = `<span class="metric-value">${value.toFixed(1)}:1</span>`;
+                            }
+                            break;
+                        }
                         case 'family_size': {
                             const familyBytes = getFamilyBytes(manifest, isJpegBaseline);
                             if (familyBytes) {
@@ -2015,6 +2201,34 @@
                             if (distHtml) html = distHtml;
                             break;
                         }
+                        case 'dssim': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'dssim', 'final_dssim');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 6, '', true);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
+                        case 'ssimulacra': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'ssimulacra', 'final_ssimulacra');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 4, '', true);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
+                        case 'ssimulacra2': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'ssimulacra2', 'final_ssimulacra2');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 2, '', false);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
+                        case 'butteraugli': {
+                            const vals = collectFamilyMetricValues(manifest, isJpegBaseline, 'butteraugli', 'final_butteraugli');
+                            value = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                            const distHtml = renderDistHtml(vals, 2, '', true);
+                            if (distHtml) html = distHtml;
+                            break;
+                        }
                     }
 
                     if (html) {
@@ -2069,8 +2283,8 @@
                 const stageMap = isSingleOrigami ? singleOrigamiStageMap : singleYcbcrStageMap;
                 let imageKey = stageMap[stage.id];
 
-                // For non-original columns, skip showing original/reference data
-                if (!isOriginal && (stage.id === 'original_rgb' || stage.id === 'y_original')) {
+                // For non-original columns, skip showing the original RGB (redundant with Original column)
+                if (!isOriginal && stage.id === 'original_rgb') {
                     return;
                 }
 
@@ -2118,6 +2332,18 @@
                 const parentX = tile.level === 'L2' ? tile.x : Math.floor(tile.x / (tile.level === 'L0' ? 4 : 2));
                 const parentY = tile.level === 'L2' ? tile.y : Math.floor(tile.y / (tile.level === 'L0' ? 4 : 2));
                 imagePath = `/image/L2_${parentX}_${parentY}_${stage.file}.png?capture=${encodeURIComponent(captureKey)}`;
+            } else if (stage.type === 'decompress_file') {
+                // Direct file from the decompress/ directory (e.g. prediction delta images)
+                const capture = captures[captureKey];
+                if (capture) {
+                    imagePath = `/run-image/${capture.name}/decompress/${stage.file}`;
+                }
+            } else if (stage.type === 'compress_file') {
+                // Direct file from the compress/ directory (e.g. noise map images)
+                const capture = captures[captureKey];
+                if (capture) {
+                    imagePath = `/run-image/${capture.name}/compress/${stage.file}`;
+                }
             } else if (stage.type === 'image') {
                 imagePath = `/image/${tile.id}_${stage.file}.png?capture=${encodeURIComponent(captureKey)}`;
             } else if (stage.type === 'array') {
@@ -2125,8 +2351,8 @@
             }
 
             if (imagePath) {
-                // For non-original columns showing original data, skip
-                if (!isOriginal && (stage.id === 'original_rgb' || stage.id === 'y_original')) {
+                // For non-original columns, skip showing the original RGB (redundant with Original column)
+                if (!isOriginal && stage.id === 'original_rgb') {
                     return;
                 }
 
@@ -2144,7 +2370,7 @@
 
         function addSelectedColumn() {
             const select = document.getElementById('addColumn');
-            const col = select.value;
+            const col = select ? select.value : null;
 
             if (col && !activeColumns.includes(col)) {
                 activeColumns.push(col);
@@ -2154,6 +2380,66 @@
                 loadTile(currentTileIndex);
             }
         }
+
+        function addRunFromSearch(key) {
+            if (key && !activeColumns.includes(key)) {
+                activeColumns.push(key);
+                activeColumns = sortColumns(activeColumns);
+                updateAddColumnDropdown();
+                saveState();
+                loadTile(currentTileIndex);
+            }
+            document.getElementById('runSearch').value = '';
+            document.getElementById('runSearchResults').style.display = 'none';
+        }
+
+        function updateRunSearchResults() {
+            const input = document.getElementById('runSearch');
+            const resultsDiv = document.getElementById('runSearchResults');
+            const query = input.value.toLowerCase().trim();
+
+            if (!query) {
+                // Show all filtered, limited
+                const all = getFilteredKeys().filter(k => !activeColumns.includes(k));
+                if (all.length === 0) {
+                    resultsDiv.style.display = 'none';
+                    return;
+                }
+                resultsDiv.innerHTML = all.map(k =>
+                    `<div style="padding:6px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;" onmousedown="addRunFromSearch('${k.replace(/'/g, "\\'")}')" onmouseover="this.style.background='#e8f4fd'" onmouseout="this.style.background=''">${k}</div>`
+                ).join('');
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const terms = query.split(/\s+/);
+            const matches = getFilteredKeys()
+                .filter(k => !activeColumns.includes(k))
+                .filter(k => {
+                    const lower = k.toLowerCase();
+                    return terms.every(t => lower.includes(t));
+                });
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:13px;">No matches</div>';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            resultsDiv.innerHTML = matches.map(k =>
+                `<div style="padding:6px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;" onmousedown="addRunFromSearch('${k.replace(/'/g, "\\'")}')" onmouseover="this.style.background='#e8f4fd'" onmouseout="this.style.background=''">${k}</div>`
+            ).join('');
+            resultsDiv.style.display = 'block';
+        }
+
+        // Close search results when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            const search = document.getElementById('runSearch');
+            const results = document.getElementById('runSearchResults');
+            if (search && results && !search.contains(e.target) && !results.contains(e.target)) {
+                results.style.display = 'none';
+            }
+        });
 
         function removeColumn(col) {
             const index = activeColumns.indexOf(col);

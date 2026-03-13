@@ -7,6 +7,7 @@
 /// The decoder is unchanged — it just sees an L2 tile and residuals.
 
 use super::ResampleFilter;
+use super::color::{ycbcr_planes_from_rgb, rgb_from_ycbcr_planes};
 
 use super::upsample_2x;
 
@@ -160,6 +161,79 @@ pub fn optimize_l2_for_prediction(
         result[i * 3 + 2] = best_channels[2][i].round().clamp(0.0, 255.0) as u8;
     }
     result
+}
+
+/// Optimize L2 RGB for better luma predictions, preserving chroma exactly.
+///
+/// Converts to YCbCr, optimizes only Y channel via gradient descent,
+/// then converts back to RGB with original Cb/Cr. This avoids the color
+/// shifts caused by optimizing R/G/B independently.
+pub fn optimize_l2_luma_only(
+    l2_rgb: &[u8],
+    l1_rgb: &[u8],
+    l2_w: u32, l2_h: u32,
+    l1_w: u32, l1_h: u32,
+    max_delta: u8,
+    n_iterations: u32,
+    lr: f32,
+    filter: ResampleFilter,
+) -> Vec<u8> {
+    let l2_size = (l2_w * l2_h) as usize;
+
+    // Convert L2 and L1 to YCbCr
+    let (l2_y, l2_cb, l2_cr) = ycbcr_planes_from_rgb(l2_rgb, l2_w, l2_h);
+    let (l1_y, _, _) = ycbcr_planes_from_rgb(l1_rgb, l1_w, l1_h);
+
+    // Work in f32 for Y channel
+    let orig_y: Vec<f32> = l2_y.iter().map(|&v| v as f32).collect();
+    let mut cur_y = orig_y.clone();
+    let l1_y_f32: Vec<f32> = l1_y.iter().map(|&v| v as f32).collect();
+
+    let max_d = max_delta as f32;
+    let mut best_energy = f32::INFINITY;
+    let mut best_y = cur_y.clone();
+
+    for _ in 0..n_iterations {
+        // Forward: upsample current Y
+        let src_u8: Vec<u8> = cur_y.iter()
+            .map(|&v| v.round().clamp(0.0, 255.0) as u8)
+            .collect();
+        let upsampled = upsample_2x(&src_u8, l2_w as usize, l2_h as usize, filter);
+
+        // Compute residual: L1_Y - upsample(L2_Y)
+        let up_len = upsampled.len().min(l1_y_f32.len());
+        let mut residual = vec![0.0f32; l1_w as usize * l1_h as usize];
+        let mut energy: f32 = 0.0;
+        for i in 0..up_len.min(residual.len()) {
+            residual[i] = l1_y_f32[i] - upsampled[i] as f32;
+            energy += residual[i] * residual[i];
+        }
+
+        if energy < best_energy {
+            best_energy = energy;
+            best_y = cur_y.clone();
+        }
+
+        // Gradient: downsample residual
+        let gradient = downsample_2x(&residual, l1_w as usize, l1_h as usize,
+                                      l2_w as usize, l2_h as usize, filter);
+
+        // Update Y only, clamp to max_delta from original
+        for i in 0..l2_size {
+            cur_y[i] += lr * gradient[i];
+            cur_y[i] = cur_y[i]
+                .max(orig_y[i] - max_d)
+                .min(orig_y[i] + max_d)
+                .max(0.0)
+                .min(255.0);
+        }
+    }
+
+    // Convert back to RGB with optimized Y + original Cb/Cr
+    let best_y_u8: Vec<u8> = best_y.iter()
+        .map(|&v| v.round().clamp(0.0, 255.0) as u8)
+        .collect();
+    rgb_from_ycbcr_planes(&best_y_u8, &l2_cb, &l2_cr, l2_w, l2_h)
 }
 
 #[cfg(test)]
