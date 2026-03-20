@@ -1,7 +1,6 @@
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
+try*.py[cod]
+*$pddon'dont uy.class
 *.so
 .Python
 
@@ -105,3 +104,4 @@ vendor/
 notebooks/pipeline_demo_out/
 .agents/
 .claude/
+/data/

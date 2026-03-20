@@ -1237,18 +1237,14 @@ app.post('/api/denoise/experiment/:id/notes', async (req, res) => {
 });
 
 // Proxy tile server routes to Rust tile server (same origin for browser)
+const tileProxyPaths = ['/dzi', '/tiles', '/viewer', '/compare2', '/compare', '/compare4', '/slides.json', '/healthz', '/metrics'];
 const tileProxy = createProxyMiddleware({
   target: TILE_SERVER,
   changeOrigin: true,
   ws: false,
+  pathFilter: tileProxyPaths,
 });
-app.use('/dzi', tileProxy);
-app.use('/tiles', tileProxy);
-app.use('/viewer', tileProxy);
-app.use('/compare2', tileProxy);
-app.use('/compare', tileProxy);
-app.use('/compare4', tileProxy);
-app.use('/slides.json', tileProxy);
+app.use(tileProxy);
 
 // Start server (HTTPS for HTTP/2 tile multiplexing)
 const https = require('https');

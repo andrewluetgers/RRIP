@@ -21,6 +21,7 @@ dependencies = [
   "lz4",
   "opencv-contrib-python>=4.13.0.92",
   "pywavelets>=1.8.0",
+  "pydicom>=3.0.1",
 ]
 
 [project.scripts]

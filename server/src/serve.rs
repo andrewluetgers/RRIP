@@ -211,6 +211,104 @@ struct ModeQuery {
 }
 
 #[derive(Clone)]
+/// Parsed .tissue.map file for blank color substitution.
+/// See scripts/tissue_filter.py for the TMAP v1 format.
+struct TissueMap {
+    l0_w: u32,
+    l0_h: u32,
+    grid_cols: u8,
+    grid_rows: u8,
+    blank_colors: Vec<[u8; 3]>,     // grid_cols * grid_rows RGB values
+    tissue_bitmap: Vec<u8>,          // packed bits, LSB first
+    margin_bitmap: Option<Vec<u8>>,  // packed bits, LSB first
+}
+
+impl TissueMap {
+    fn load(path: &Path) -> Option<Self> {
+        let data = std::fs::read(path).ok()?;
+        if data.len() < 20 || &data[0..4] != b"TMAP" {
+            return None;
+        }
+        let version = u16::from_le_bytes([data[4], data[5]]);
+        if version != 1 {
+            return None;
+        }
+        let _max_level = u16::from_le_bytes([data[6], data[7]]);
+        let l0_w = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
+        let l0_h = u32::from_le_bytes([data[12], data[13], data[14], data[15]]);
+        let grid_cols = data[16];
+        let grid_rows = data[17];
+        let flags = u16::from_le_bytes([data[18], data[19]]);
+
+        let color_size = (grid_cols as usize) * (grid_rows as usize) * 3;
+        let bitmap_size = ((l0_w as usize * l0_h as usize) + 7) / 8;
+
+        let color_start = 20;
+        let tissue_start = color_start + color_size;
+        let margin_start = tissue_start + bitmap_size;
+
+        if data.len() < tissue_start + bitmap_size {
+            return None;
+        }
+
+        let mut blank_colors = Vec::with_capacity(grid_cols as usize * grid_rows as usize);
+        for i in 0..(grid_cols as usize * grid_rows as usize) {
+            let off = color_start + i * 3;
+            blank_colors.push([data[off], data[off + 1], data[off + 2]]);
+        }
+
+        let tissue_bitmap = data[tissue_start..tissue_start + bitmap_size].to_vec();
+
+        let margin_bitmap = if flags & 1 != 0 && data.len() >= margin_start + bitmap_size {
+            Some(data[margin_start..margin_start + bitmap_size].to_vec())
+        } else {
+            None
+        };
+
+        Some(TissueMap {
+            l0_w,
+            l0_h,
+            grid_cols,
+            grid_rows,
+            blank_colors,
+            tissue_bitmap,
+            margin_bitmap,
+        })
+    }
+
+    /// Get the interpolated blank color for an L0 tile position.
+    fn blank_color(&self, tx: u32, ty: u32) -> [u8; 3] {
+        if self.l0_w == 0 || self.l0_h == 0 || self.grid_cols < 2 || self.grid_rows < 2 {
+            return [255, 255, 255];
+        }
+        let gc = self.grid_cols as f32;
+        let gr = self.grid_rows as f32;
+        let gx = (tx as f32 / self.l0_w as f32) * (gc - 1.0);
+        let gy = (ty as f32 / self.l0_h as f32) * (gr - 1.0);
+
+        let gx0 = (gx as usize).min(self.grid_cols as usize - 2);
+        let gy0 = (gy as usize).min(self.grid_rows as usize - 2);
+        let fx = gx - gx0 as f32;
+        let fy = gy - gy0 as f32;
+
+        let cols = self.grid_cols as usize;
+        let c00 = self.blank_colors[gy0 * cols + gx0];
+        let c10 = self.blank_colors[gy0 * cols + gx0 + 1];
+        let c01 = self.blank_colors[(gy0 + 1) * cols + gx0];
+        let c11 = self.blank_colors[(gy0 + 1) * cols + gx0 + 1];
+
+        let mut rgb = [0u8; 3];
+        for ch in 0..3 {
+            let v = c00[ch] as f32 * (1.0 - fx) * (1.0 - fy)
+                + c10[ch] as f32 * fx * (1.0 - fy)
+                + c01[ch] as f32 * (1.0 - fx) * fy
+                + c11[ch] as f32 * fx * fy;
+            rgb[ch] = v.round().clamp(0.0, 255.0) as u8;
+        }
+        rgb
+    }
+}
+
 struct Slide {
     slide_id: String,
     dzi_path: PathBuf,
@@ -232,6 +330,8 @@ struct Slide {
     /// Source-1024 slide: L0 tiles are 1024px (JXL or JPEG) at the L0 level in filesystem.
     /// Server slices to 256px for L0, downsamples for L1/L2. No packs needed.
     source_1024: bool,
+    /// Tissue map for blank color substitution (loaded from .tissue.map)
+    tissue_map: Option<TissueMap>,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -566,6 +666,7 @@ async fn async_main(args: ServeArgs) -> Result<()> {
         .route("/compare/:left/:right", get(compare_viewer))
         .route("/compare/:a/:b/:c/:d", get(compare4_viewer))
         .route("/slides.json", get(list_slides))
+        .route("/slides/:slide_id/assets/*path", get(get_slide_asset))
         .with_state(state)
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http());
@@ -696,6 +797,12 @@ async fn get_dzi(
     let slide_id = slide_id_raw.trim_end_matches(".dzi");
     let slide = state.slides.get(slide_id).ok_or(StatusCode::NOT_FOUND)?;
     let mut body = fs::read_to_string(&slide.dzi_path).map_err(|_| StatusCode::NOT_FOUND)?;
+    // Source-1024 slides store 1024px JXL tiles but serve 256px JPEG tiles.
+    // Rewrite the DZI manifest so OpenSeadragon requests 256px tile coordinates.
+    if slide.source_1024 {
+        body = body.replace("TileSize=\"1024\"", "TileSize=\"256\"");
+        body = body.replace("Format=\"jxl\"", "Format=\"jpeg\"");
+    }
     if let Some(mode) = query.mode.as_deref() {
         if mode == "residual" {
             let needle = "Url=\"";
@@ -877,6 +984,32 @@ async fn serve_tile(
                 slide_id, level, x, y, start.elapsed().as_millis());
             return Ok(jpeg_response(bytes));
         }
+        // Source tile doesn't exist — blank/non-tissue region.
+        // Return a solid-color JPEG using the tissue map's blank color grid
+        // (interpolated for this tile position), or white as fallback.
+        if let Some(ref tmap) = slide.tissue_map {
+            let rgb = tmap.blank_color(x, y);
+            let tile_sz = slide.tile_size as usize;
+            let mut buf = vec![0u8; tile_sz * tile_sz * 3];
+            for i in 0..tile_sz * tile_sz {
+                buf[i * 3] = rgb[0];
+                buf[i * 3 + 1] = rgb[1];
+                buf[i * 3 + 2] = rgb[2];
+            }
+            // Encode as minimal JPEG (solid color compresses to ~1KB)
+            let encoder = turbojpeg::Compressor::new().unwrap();
+            let image = turbojpeg::Image {
+                pixels: buf.as_slice(),
+                width: tile_sz,
+                pitch: tile_sz * 3,
+                height: tile_sz,
+                format: turbojpeg::PixelFormat::RGB,
+            };
+            if let Ok(jpeg) = encoder.compress_to_vec(image) {
+                return Ok(jpeg_response(jpeg));
+            }
+        }
+        return Err(StatusCode::NOT_FOUND);
     }
 
     if level <= slide.l2 {
@@ -1322,7 +1455,7 @@ async fn viewer(
           dblClickToZoom: true,
           pinchToZoom: true
         }},
-        maxZoomPixelRatio: 2,
+        maxZoomPixelRatio: 8,
         pixelsPerWheelLine: 60,
         zoomPerScroll: 1.2,
         zoomPerClick: 2.0,
@@ -1391,12 +1524,12 @@ async fn compare_viewer(
       constrainDuringPan: false,
       immediateRender: false,
       blendTime: 0.15,
-      maxZoomPixelRatio: 2,
+      maxZoomPixelRatio: 8,
       pixelsPerWheelLine: 60,
       zoomPerScroll: 1.2,
       zoomPerClick: 2.0,
       minZoomImageRatio: 0.5,
-      maxZoomLevel: 40,
+      maxZoomLevel: 800,
       gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
         dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
       gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
@@ -1492,12 +1625,12 @@ async fn compare4_viewer(
       constrainDuringPan: false,
       immediateRender: false,
       blendTime: 0.15,
-      maxZoomPixelRatio: 2,
+      maxZoomPixelRatio: 8,
       pixelsPerWheelLine: 60,
       zoomPerScroll: 1.2,
       zoomPerClick: 2.0,
       minZoomImageRatio: 0.5,
-      maxZoomLevel: 40,
+      maxZoomLevel: 800,
       gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
         dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
       gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
@@ -1580,9 +1713,29 @@ async fn compare_dynamic(
     }}
     .picker select:hover {{ border-color: #888; }}
     .picker select option {{ background: #222; }}
+    .zoom-bar {{
+      position: fixed; bottom: 16px; right: 16px; z-index: 200;
+      display: flex; align-items: center; gap: 8px;
+    }}
+    .zoom-indicator {{
+      background: rgba(0,0,0,0.8); color: #8ecae6;
+      padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      font-family: ui-monospace, monospace; pointer-events: none;
+      border: 1px solid #333; min-width: 70px; text-align: center;
+    }}
+    .zoom-btn {{
+      background: rgba(0,0,0,0.8); color: #fff; border: 1px solid #555;
+      padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }}
+    .zoom-btn:hover {{ border-color: #8ecae6; color: #8ecae6; }}
   </style>
 </head>
 <body>
+  <div class="zoom-bar">
+    <span class="zoom-indicator" id="zoom-level"></span>
+    <button class="zoom-btn" id="zoom-1to1">1:1</button>
+  </div>
   <div class="container">
     <div class="panel">
       <div class="picker"><select id="sel-0"></select></div>
@@ -1611,12 +1764,12 @@ async fn compare_dynamic(
       constrainDuringPan: false,
       immediateRender: false,
       blendTime: 0.15,
-      maxZoomPixelRatio: 2,
+      maxZoomPixelRatio: 8,
       pixelsPerWheelLine: 60,
       zoomPerScroll: 1.2,
       zoomPerClick: 2.0,
       minZoomImageRatio: 0.5,
-      maxZoomLevel: 40,
+      maxZoomLevel: 800,
       gestureSettingsMouse: {{ flickEnabled: true, flickMinSpeed: 180, flickMomentum: 0.15,
         dragToPan: true, scrollToZoom: true, clickToZoom: true, dblClickToZoom: true, pinchToZoom: true }},
       gestureSettingsTouch: {{ flickEnabled: true, flickMinSpeed: 120, flickMomentum: 0.15,
@@ -1701,6 +1854,30 @@ async fn compare_dynamic(
 
     // Initialize all three viewers
     for (var i = 0; i < 3; i++) createViewer(i);
+
+    // 1:1 zoom button — zoom to native pixel resolution
+    document.getElementById('zoom-1to1').addEventListener('click', function() {{
+      var v = viewers[0];
+      if (!v) return;
+      var oneToOne = v.viewport.imageToViewportZoom(1);
+      v.viewport.zoomTo(oneToOne);
+    }});
+
+    // Zoom indicator — show magnification relative to 1:1
+    function updateZoomIndicator() {{
+      var v = viewers[0];
+      if (!v || !v.viewport) return;
+      var oneToOne = v.viewport.imageToViewportZoom(1);
+      var current = v.viewport.getZoom(false);
+      var ratio = current / oneToOne;
+      var el = document.getElementById('zoom-level');
+      if (ratio >= 1) {{
+        el.textContent = ratio.toFixed(1) + 'x';
+      }} else {{
+        el.textContent = '1/' + (1 / ratio).toFixed(0);
+      }}
+    }}
+    setInterval(updateZoomIndicator, 100);
   </script>
 </body>
 </html>"##,
@@ -1728,6 +1905,8 @@ async fn list_slides(
 fn parse_tile_name(name: &str) -> Option<(u32, u32)> {
     let trimmed = name
         .strip_suffix(".jpg")
+        .or_else(|| name.strip_suffix(".jpeg"))
+        .or_else(|| name.strip_suffix(".jxl"))
         .or_else(|| name.strip_suffix(".webp"))
         .unwrap_or(name);
     let mut parts = trimmed.split('_');
@@ -1748,15 +1927,23 @@ fn jpeg_response(bytes: Vec<u8>) -> Response {
 }
 
 fn baseline_tile_path(slide: &Slide, level: u32, x: u32, y: u32) -> PathBuf {
+    let level_dir = slide.files_dir.join(level.to_string());
+    let base = format!("{}_{}", x, y);
     // Check for JXL first (L2 may be stored as JXL for space savings)
-    let jxl = slide.files_dir.join(level.to_string()).join(format!("{}_{}.jxl", x, y));
+    let jxl = level_dir.join(format!("{}.jxl", base));
     if jxl.exists() {
         return jxl;
     }
-    slide
-        .files_dir
-        .join(level.to_string())
-        .join(format!("{}_{}.jpg", x, y))
+    let jpg = level_dir.join(format!("{}.jpg", base));
+    if jpg.exists() {
+        return jpg;
+    }
+    // DICOM-extracted tiles use .jpeg extension
+    let jpeg = level_dir.join(format!("{}.jpeg", base));
+    if jpeg.exists() {
+        return jpeg;
+    }
+    jpg // fallback to .jpg (will 404 naturally)
 }
 
 /// Ensure L2 bytes from a pack are servable as JPEG.
@@ -1872,6 +2059,45 @@ fn read_jxl_as_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
 #[cfg(not(feature = "jpegxl"))]
 fn read_jxl_as_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
     anyhow::bail!("JXL baseline tile at {} but built without --features jpegxl", path.display());
+}
+
+/// Serve static assets from a slide's directory (tissue maps, SVGs, debug images).
+/// Route: GET /slides/:slide_id/assets/*path
+async fn get_slide_asset(
+    State(state): State<AppState>,
+    AxumPath((slide_id, asset_path)): AxumPath<(String, String)>,
+) -> Result<Response, StatusCode> {
+    let slide = state.slides.get(&slide_id).ok_or(StatusCode::NOT_FOUND)?;
+    let slide_root = slide.dzi_path.parent().unwrap_or(&slide.files_dir);
+
+    // Sanitize: no .. traversal
+    if asset_path.contains("..") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let file_path = slide_root.join(&asset_path);
+    if !file_path.exists() || !file_path.is_file() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let data = fs::read(&file_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let content_type = match ext {
+        "json" => "application/json",
+        "svg" => "image/svg+xml",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "map" | "tmap" | "bitmap" => "application/octet-stream",
+        "html" | "htm" => "text/html",
+        _ => "application/octet-stream",
+    };
+
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", content_type)
+        .header("cache-control", "public, max-age=3600")
+        .body(axum::body::Body::from(data))
+        .unwrap())
 }
 
 // residual_tile_path removed in v2 pipeline (no per-tile loose residuals)
@@ -1996,6 +2222,41 @@ fn discover_slides(
             None
         };
 
+        // Load tissue map (try slide root first, then parent of files_dir)
+        let tissue_map = {
+            let map_candidates = [
+                slide_root.join(format!("{}.tissue.map", slide_id)),
+                slide_root.join("tissue.map"),
+            ];
+            let mut tm = None;
+            for p in &map_candidates {
+                if p.exists() {
+                    if let Some(m) = TissueMap::load(p) {
+                        info!("Loaded tissue map for {} ({}x{} grid, {}x{} L0)",
+                              slide_id, m.grid_cols, m.grid_rows, m.l0_w, m.l0_h);
+                        tm = Some(m);
+                        break;
+                    }
+                }
+            }
+            if tm.is_none() {
+                if let Some(parent) = files_dir.parent() {
+                    for entry in fs::read_dir(parent).into_iter().flatten().flatten() {
+                        let name = entry.file_name();
+                        if name.to_string_lossy().ends_with(".tissue.map") {
+                            if let Some(m) = TissueMap::load(&entry.path()) {
+                                info!("Loaded tissue map for {} from {}",
+                                      slide_id, entry.path().display());
+                                tm = Some(m);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            tm
+        };
+
         let slide = Slide {
             slide_id: slide_id.clone(),
             dzi_path,
@@ -2011,6 +2272,7 @@ fn discover_slides(
             disk_size_mb,
             jpeg_only,
             source_1024,
+            tissue_map,
         };
         slides.insert(slide_id, slide);
     }
